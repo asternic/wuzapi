@@ -67,7 +67,7 @@ func main() {
 	}
 	defer db.Close()
 
-	sqlStmt := `CREATE TABLE IF NOT EXISTS users (id INTEGER NOT NULL PRIMARY KEY, name TEXT, token TEXT, webhook TEXT, jid TEXT, qrcode TEXT, connected INTEGER, expiration INTEGER, events TEXT);`
+	sqlStmt := `CREATE TABLE IF NOT EXISTS users (id INTEGER NOT NULL PRIMARY KEY, name TEXT NOT NULL, token TEXT NOT NULL, webhook TEXT NOT NULL default "", jid TEXT NOT NULL default "", qrcode TEXT NOT NULL default "", connected INTEGER, expiration INTEGER, events TEXT NOT NULL default "All");`
 	_, err = db.Exec(sqlStmt)
 	if err != nil {
 		panic(fmt.Sprintf("%q: %s\n", err, sqlStmt))
