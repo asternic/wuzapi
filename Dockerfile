@@ -5,4 +5,4 @@ WORKDIR /app
 RUN go build -o server .
 VOLUME [ "/app/dbdata", "/app/files" ]
 ENTRYPOINT [ "/app/server" ]
-CMD [ "-logtype json" ]
+CMD [ "-logtype", "json" ]
