@@ -1,0 +1,972 @@
+openapi: 3.0.0
+info:
+  title: WUZAPI
+  description: "WUZAPI implements a REST API for WhatsApp.\n\nFor authentication you must pass the 'token' header with a token that will be matched with the 'users' table on sqlite dbdata/users.db database).\n\nYou can insert a sample user with this command:\n\n<pre>sqlite3 settings.db \"insert into users ('name','token') values ('John','1234ABCD')\"</pre>\n\nYou will need to scan the QR code using your own front end or you could use the provided one [here](/login?token=1234ABCD).\n\nTo receive messages you will need to create your own server and set its URL as hook using the [webhook](#Webhook) API call.\n\n <b>PS:</b> Phone numbers should have country code with or without the <b>+</b> sign eg: <b>5491155553934</b> or <b>+5491155553934</b>, but natively whatsapp requires no plus sign prefix."
+  version: '3.0'
+  termsOfService: ''
+   
+schemes:
+  - http
+
+paths:
+  /webhook:
+    get:
+      tags:
+        - Webhook
+      summary: Shows webhook 
+      description: Gets the configured webhook and subscribed events 
+      responses:
+        200:
+          description: Response
+          content:
+            application/json:
+              schema:
+                example: { "code": 200, "data": { "subscribe": [ "Message" ], "webhook": "https://example.net/webhook" }, "success": true }
+    post:
+      tags:
+        - Webhook
+      summary: Sets webhook 
+      description: Sets the webhook that will be used to POST information when messages are received
+      consumes:
+        - application/json
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#definitions/Webhook'
+
+      responses:
+        200:
+          description: Response
+          content:
+            application/json:
+              schema:
+                example: { "code": 200, "data": { "webhook": "https://example.net/webhook" }, "success": true }
+
+  /session/connect:
+    post:
+      tags:
+        - Session 
+      summary: connects to WhatsApp servers
+      description: "Initiates connection to WhatsApp servers.\n\nIf there is no previous session created, it will generate a QR code that can be retrieved via the [qr](#/Session/get_session_qr) API call.\n\nIf the optional Subscribe is supplied it will limit webhooks to the specified event types: Message,ReadReceipt,Presence,HistorySync,ChatPresence.\n\nIf no Subscribe is supplied it will subscribe to All events.\n\nIf Immediate is set to false, the action will wait for 10 seconds to retrieve actual connection status from whatsapp, otherwise it will return immediatly.\n\nWhen setting Immediate to true you should check for actual connection status after a few seconds via the [status](#/Session/get_session_status) API call as your connection might fail if the session was closed from another device."
+
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#definitions/Connect'
+
+      responses:
+        200:
+          description: Response
+
+          content:
+            application/json:
+              schema:
+                example: { "code": 200, "data": { "details": "Connected!", "events": "Message", "jid": "5491155555555.0:53@s.whatsapp.net", "webhook": "https://some.site/webhook?request=parameter" }, "success": true }
+  /session/disconnect:
+    post:
+      tags:
+        - Session 
+      summary: disconnects from WhatsApp servers
+      description: Closes connection to WhatsApp servers. Session is not terminated, that means that calling connect again will reuse the previous session avoiding QR code scanning 
+      responses:
+        200:
+          description: Response
+          content:
+            application/json:
+              schema:
+                example: { "code": 200, "data": { "Details": "Disconnected" }, "success": true }
+  /session/logout:
+    post:
+      tags:
+        - Session 
+      summary: Logs out from WhatsApp 
+      description: Closes connection to WhatsApp servers and terminate session. That means that next time connect is issued, QR scan will be needed from phone to connect again
+      responses:
+        200:
+          description: Response
+          content:
+            application/json:
+              schema:
+                example: { "code": 200, "data": { "Details": "Logged out" }, "success": true }
+  /session/status:
+    get:
+      tags:
+        - Session 
+      summary: Gets connection and session status
+      description: Gets status from connection, including websocket connection and logged in status (session)
+      responses:
+        200:
+          description: Response
+          content:
+            application/json:
+              schema:
+                example: { "code": 200, "data": { "Connected": true, "LoggedIn": true }, "success": true }
+  /session/qr:
+    get:
+      tags:
+        - Session 
+      summary: Gets QR code for scanning
+      description: Gets QR code if the user is connected but not logged in. If the user is already logged in, QRCode will be empty.
+      responses:
+        200:
+          description: Response
+          content:
+            application/json:
+              schema:
+                example: { "code": 200, "data": { "QRCode": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAQAAAAEAAQMAAABmvDolAAAABlBMVEX///8AAABVwtN+AAAEw0lEQVR42uyZPa7zqhaGX0ThLmsCkZlGCktMKaU76FxmSkgUmQZWJkA6CuT3avlLvrNvvRMX9x6KXWQ/UhCsn2cR/Lv+v5YhudQ6njEs1bBjqGYDwlJJpoOAArtUbK4Pi5jN3qPAlCkstcAeBazMUaoj78RpxGW4yWYzWVfmzwFLlLX4O+VkkucN5tFDOxiIAvfoA/X4uVQ4sgUcCBTYCG7AEGGKvbdrBabQ8OOyvg3ovm4ynqfLXJ9rvi+303ie5vm/gvZXgK6BLC7fo5hiG4KwW7b6I/2+DJi1+ybVFQyx6o6bbKPVDCyjTwcBZB9uevBtAEafhiosCFH/4kNA8i1gg02B3KxezGbzEjUCDgIwYppR3SNdgtY3H0M1j8xFzCscvg/8uQvZAB9piidv1RXfZhbHdAwAlzsCNCaJDdMF4WQeeSGACZ8BMNl4FZYJA7j2YalPPhhngetHAaZPcyBg2wyYdAk0fKQ5yPja5PcBzTZW4uxJ2bTGwmxnu/BH4vwSgEsYItcCH+VZJt/AYhmHatbXdX8d2JvaTVzxCVW2aVhqheXSqvnR9b4L6AoUx3zX+jZd5rDB5jbLuv0txd8GRs+liuv+TsKloQWujxxRYf5s8gOA7fMVK9PQuDtMNCx2ibIdCMCy1s0yQU6Od9bqim1BuzoOAgzTHOiKv0d5Mt+XClN8DBxN/wxg2G2DbDYNJExCqE+Ne8poXoLxdUA/w5VrnxBQ9fjlqaJMwWgPAzLjtfKRW4A21ojnStX0dX2d5PeB0fawu2pChcuM4bk+tLmbMn0GMJslb5ptDXySbb5W1+0SyVcJOgRIQxSc7X0RUSvGs2DSeaz4gwCMNi/7XNACZc0KbPBtruv2KQA+DVFladBvt4xywhmh1Xd2fx8wzGTUltqCWrHWgqL7Jg8E0hSiFJfbUJ/Fpx3L1OHsVR8+APgoZMclUKvcft2+zTBrwjHArosim4ZcfW4Y4lVWnYXg2A8C9C5aEFXDoEJzmXFyfZoH/p0Wvw7oXoZbNQ823ase1wk2DQ3u7XK/BkzOqovwpM68Ko+jUyPFu6F8H4DvqsAuaUMZJ6+azjTPdS32KMBkLnpQ3VPnbsZgiktALW91/wDQEV5V7gT4JT6L62GRzeV0EDDC7rVFax2ZW6Aa6V5h/FEAgBlSbLrMVScU1s09+jxwG/9q87cB/Yxw3acBsk2Yw+nPf9Y1p88ARlNPtvPkF3LlPQYp8MtSx/FtpF8H4DNrZd8fOtTOxJSzXdo/c/fXAbN2DLeKs1dxHeEZZVWaju/3h18CcDk3qePZpllglDZ89MCq8nIQoDPAVaPi3iAFFwS1xjjr+HcYwD+hri216vBZzQbbZsE44RhAp+sQxfTpApGCoV1NOfsl4pX+nwC65a1uLnkK9TSuVTOhaQ4cBOzvtDcZXU5Bdl28SrF9HqrZJhwD7O/VsZpi7xSz7pXW6ahQ1/dB/RrYf2QhLBmr1lNINVRZfw9BBwArc4SszGlWWd2fxB9cFvJQYKnUUWAgV22y5v1e/ffHpiOAqMLCiOpymwNGtxvk9s8mfwcU2CiydqvJbdKuSX0K8a/KHQDsMQkyeVbtISFif8mRcfwRtF8F/l3/O+s/AQAA///lM0dZSaTeTQAAAABJRU5ErkJggg==" }, "success": true }
+  /user/info:
+    get:
+      tags:
+        - User
+      summary: Gets information about users on WhatsApp
+      description: Gets extra information about users on WhatsApp
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#definitions/Checkuser'
+
+
+      responses:
+        200:
+          description: Response
+          content:
+            application/json:
+              schema:
+                example: { "code": 200, "data": { "Users": { "5491155553935@s.whatsapp.net": { "Devices": [], "PictureID": "", "Status": "", "VerifiedName": null }, "5491155553934@s.whatsapp.net": { "Devices": [ "5491155553934.0:0@s.whatsapp.net", "5491155955934.0:6@s.whatsapp.net", ], "PictureID": "1582328807", "Status": "🇦🇷", "VerifiedName": null } } }, "success": true } 
+  /user/check:
+    post:
+      tags:
+        - User
+      summary: Checks if user has WhatsApp
+      description: Checks if users have an account with WhatsApp
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#definitions/Checkuser'
+
+
+      responses:
+        200:
+          description: Response
+          content:
+            application/json:
+              schema:
+                example: { "code": 200, "data": { "Users": [ { "IsInWhatsapp": true, "JID": "5491155553934@s.whatsapp.net", "Query": "5491155553934", "VerifiedName": "Company Name" }, { "IsInWhatsapp": false, "JID": "5491155553935@s.whatsapp.net", "Query": "5491155553935", "VerifiedName": "" } ] }, "success": true }
+
+  /user/avatar:
+    get:
+      tags:
+        - User
+      summary: Gets profile picture information
+      description: Gets information about users profile pictures on WhatsApp, either a thumbnail (Preview=true) or full picture.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#definitions/Checkavatar'
+
+
+      responses:
+        200:
+          description: Response
+          content:
+            application/json:
+              schema:
+                example: { "URL": "https://pps.whatsapp.net/v/t61.24694-24/227295214_112447507729487_4643695328050510566_n.jpg?stp=dst-jpg_s96x96&ccb=11-4&oh=ja432434a91e8f41d86d341bx889c217&oe=543222A4", "ID": "1645308319", "Type": "preview", "DirectPath": "/v/t61.24694-24/227295214_112447507729487_4643695328050510566_n.jpg?stp=dst-jpg_s96x96&ccb=11-4&oh=ja432434a91e8f41d86d341ba889c217&oe=543222A4" }
+  /user/contacts:
+    get:
+      tags:
+        - User
+      summary: Gets all contacts for the account
+      description: Gets complete list of contacts for the connected account
+
+      responses:
+        200:
+          description: Response
+          content:
+            application/json:
+              schema:
+                example: { "code": 200, "data": { "5491122223333@s.whatsapp.net": { "BusinessName": "", "FirstName": "", "Found": true, "FullName": "", "PushName": "FOP2" }, "549113334444@s.whatsapp.net": { "BusinessName": "", "FirstName": "", "Found": true, "FullName": "", "PushName": "Asternic" } } }
+  /chat/markread:
+    post:
+      tags:
+        - Chat 
+      summary: Marks a message as read
+      description: Marks one or more received messages as read
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#definitions/Markread'
+
+      responses:
+        200:
+          description: Response
+          content:
+            application/json:
+              schema:
+                example: { "code": 200, "data": { "Details": "Message(s) marked as read" }, "success": true }
+  /chat/send/text:
+    post:
+      tags:
+        - Chat 
+      summary: Sends a text message
+      description: Sends a text message. Phone and Body are mandatory. If no Id is supplied, a random one will be generated. ContextInfo is optional and used when repyling to some message. StanzaId is the message id we are replying to and participant who wrote that message. If sending a new message, ContextInfo can be ommited altogether.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#definitions/MessageText'
+
+      responses:
+        200:
+          description: Response
+          content:
+            application/json:
+              schema:
+                example: {"code":200,"data":{"Details":"Sent","Id":"90B2F8B13FAC8A9CF6B06E99C7834DC5","Timestamp":"2022-04-20T12:49:08-03:00"},"success":true}
+  /chat/send/image:
+    post:
+      tags:
+        - Chat 
+      summary: Sends an image/picture message
+      description: Sends an image message (must be base64 encoded in image/png or image/jpeg formats)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#definitions/MessageImage'
+
+      responses:
+        200:
+          description: Response
+          content:
+            application/json:
+              schema:
+                example: {"code":200,"data":{"Details":"Sent","Id":"90B2F8B13FAC8A9CF6B06E99C7834DC5","Timestamp":"2022-04-20T12:49:08-03:00"},"success":true}
+  /chat/send/audio:
+    post:
+      tags:
+        - Chat 
+      summary: Sends an audio message
+      description: Sends an audio message (must be base64 encoded in opus format, mime type audio/ogg)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#definitions/MessageAudio'
+
+      responses:
+        200:
+          description: Response
+          content:
+            application/json:
+              schema:
+                example: {"code":200,"data":{"Details":"Sent","Id":"90B2F8B13FAC8A9CF6B06E99C7834DC5","Timestamp":"2022-04-20T12:49:08-03:00"},"success":true}
+  /chat/send/document:
+    post:
+      tags:
+        - Chat 
+      summary: Sends a document message
+      description: Sends any document (must be base64 encoded using application/octet-stream mime)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#definitions/MessageDocument'
+
+      responses:
+        200:
+          description: Response
+          content:
+            application/json:
+              schema:
+                example: {"code":200,"data":{"Details":"Sent","Id":"90B2F8B13FAC8A9CF6B06E99C7834DC5","Timestamp":"2022-04-20T12:49:08-03:00"},"success":true}
+ 
+  /chat/send/template:
+    post:
+      tags:
+        - Chat 
+      summary: Sends a template message 
+      description: Sends a template message, that can contain quick reply buttons, url buttons and call buttons
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#definitions/MessageTemplate'
+
+      responses:
+        200:
+          description: Response
+          content:
+            application/json:
+              schema:
+                example: {"code":200,"data":{"Details":"Sent","Id":"90B2F8B13FAC8A9CF6B06E99C7834DC5","Timestamp":"2022-04-20T12:49:08-03:00"},"success":true}
+  /chat/send/video:
+    post:
+      tags:
+        - Chat 
+      summary: Sends a video message
+      description: Sends a video message (must be base64 encoded in video/mp4 or video/3gpp format. Only H.264 video codec and AAC audio codec is supported.)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#definitions/MessageVideo'
+
+      responses:
+        200:
+          description: Response
+          content:
+            application/json:
+              schema:
+                example: {"code":200,"data":{"Details":"Sent","Id":"90B2F8B13FAC8A9CF6B06E99C7834DC5","Timestamp":"2022-04-20T12:49:08-03:00"},"success":true}
+  /chat/send/sticker:
+    post:
+      tags:
+        - Chat 
+      summary: Sends a sticker message
+      description: Sends a sticker message (must be base64 encoded in image/webp format)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#definitions/MessageSticker'
+
+      responses:
+        200:
+          description: Response
+          content:
+            application/json:
+              schema:
+                example: {"code":200,"data":{"Details":"Sent","Id":"90B2F8B13FAC8A9CF6B06E99C7834DC5","Timestamp":"2022-04-20T12:49:08-03:00"},"success":true}
+ 
+  /chat/send/location:
+    post:
+      tags:
+        - Chat 
+      summary: Sends a location message
+      description: Sends a location message
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#definitions/MessageLocation'
+
+      responses:
+        200:
+          description: Response
+          content:
+            application/json:
+              schema:
+                example: {"code":200,"data":{"Details":"Sent","Id":"90B2F8B13FAC8A9CF6B06E99C7834DC5","Timestamp":"2022-04-20T12:49:08-03:00"},"success":true}
+ 
+  /chat/send/contact:
+    post:
+      tags:
+        - Chat 
+      summary: Sends a contact message
+      description: Sends a contact message in VCARD format
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#definitions/MessageContact'
+
+      responses:
+        200:
+          description: Response
+          content:
+            application/json:
+              schema:
+                example: {"code":200,"data":{"Details":"Sent","Id":"90B2F8B13FAC8A9CF6B06E99C7834DC5","Timestamp":"2022-04-20T12:49:08-03:00"},"success":true}
+ 
+  /chat/downloadimage:
+    post:
+      tags:
+        - Chat 
+      summary: Downloads Image from message
+      description: Downloads an Image from a message and returns it Base64 media encoded
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#definitions/DownloadImage'
+
+      responses:
+        200:
+          description: Response
+          content:
+            application/json:
+              schema:
+                example: {"code":200,"data":{"Data":"data:image/jpeg;base64,iVBORw0KGgoA5CYII...=","Mimetype":"image/jpeg"},"success":true}
+
+  /chat/presence:
+    post:
+      tags:
+        - Chat 
+      summary: Sets chat presence
+      description: Sends indication if you are writing or not (state could be either "composing" or "paused"). Optional Media can be set to "audio" for indicating recording a message
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#definitions/ChatPresence'
+
+      responses:
+        200:
+          description: Response
+          content:
+            application/json:
+              schema:
+                example: { "code": 200, "data": { "Details": "Chat presence set successfuly" }, "success": true } 
+
+  /group/list:
+    get:
+      tags:
+        - Group 
+      summary: List subscribed groups
+      description: Returns complete list of subscribed groups
+
+      responses:
+        200:
+          description: Response
+          content:
+            application/json:
+              schema:
+                example: { "code": 200, "data": { "Groups": [ { "AnnounceVersionID": "1650572126123738", "DisappearingTimer": 0, "GroupCreated": "2022-04-21T17:15:26-03:00", "IsAnnounce": false, "IsEphemeral": false, "IsLocked": false, "JID": "120362023605733675@g.us", "Name": "Super Group", "NameSetAt": "2022-04-21T17:15:26-03:00", "NameSetBy": "5491155554444@s.whatsapp.net", "OwnerJID": "5491155554444@s.whatsapp.net", "ParticipantVersionID": "1650234126145738", "Participants": [ { "IsAdmin": true, "IsSuperAdmin": true, "JID": "5491155554444@s.whatsapp.net" }, { "IsAdmin": false, "IsSuperAdmin": false, "JID": "5491155553333@s.whatsapp.net" }, { "IsAdmin": false, "IsSuperAdmin": false, "JID": "5491155552222@s.whatsapp.net" } ], "Topic": "", "TopicID": "", "TopicSetAt": "0001-01-01T00:00:00Z", "TopicSetBy": "" } ] }, "success": true }
+  /group/invitelink:
+    get:
+      tags:
+        - Group 
+      summary: Get Group Invite Link
+      description: Gets the invite link for a group, optionally resetting it to create a new/different one
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#definitions/GroupInviteLink'
+      responses:
+        200:
+          description: Response
+          content:
+            application/json:
+              schema:
+                example: { "code": 200, "data": { "InviteLink": "https://chat.whatsapp.com/HffXhYmzzyJGec61oqMXiz" }, "success": true }
+  /group/info:
+    get:
+      tags:
+        - Group 
+      summary: Gets group information
+      description: Retrieves information about a specific group
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#definitions/GroupInfo'
+ 
+      responses:
+        200:
+          description: Response
+          content:
+            application/json:
+              schema:
+                example: { "code": 200, "data": { "AnnounceVersionID": "1650572126123738", "DisappearingTimer": 0, "GroupCreated": "2022-04-21T17:15:26-03:00", "IsAnnounce": false, "IsEphemeral": false, "IsLocked": false, "JID": "120362023605733675@g.us", "Name": "Super Group", "NameSetAt": "2022-04-21T17:15:26-03:00", "NameSetBy": "5491155554444@s.whatsapp.net", "OwnerJID": "5491155554444@s.whatsapp.net", "ParticipantVersionID": "1650234126145738", "Participants": [ { "IsAdmin": true, "IsSuperAdmin": true, "JID": "5491155554444@s.whatsapp.net" }, { "IsAdmin": false, "IsSuperAdmin": false, "JID": "5491155553333@s.whatsapp.net" }, { "IsAdmin": false, "IsSuperAdmin": false, "JID": "5491155552222@s.whatsapp.net" } ], "Topic": "", "TopicID": "", "TopicSetAt": "0001-01-01T00:00:00Z", "TopicSetBy": "" }, "success": true }
+
+  /group/name:
+    post:
+      tags:
+        - Group 
+      summary: Changes group name
+      description: Allows you to change a group name
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#definitions/GroupName'
+ 
+      responses:
+        200:
+          description: Response
+          content:
+            application/json:
+              schema:
+                example: { "code": 200, "data": { "Details": "Group Name set successfully" }, "success": true }
+  /group/photo:
+    post:
+      tags:
+        - Group 
+      summary: Changes group photo
+      description: Allows you to change a group photo/image. Returns the Picture ID number
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#definitions/GroupPhoto'
+ 
+      responses:
+        200:
+          description: Response
+          content:
+            application/json:
+              schema:
+                example: { "code": 200, "data": { "Details": "Group Photo set successfully", "PictureID": "1222332123" }, "success": true }
+
+
+definitions:
+  GroupPhoto:
+    type: object
+    properties:
+      GroupJID:
+        type: string
+        example: "120362023605733675@g.us"
+      Image:
+        type: string
+        example: "data:image/jpeg;base64,Akd9300..."
+  GroupName:
+    type: object
+    properties:
+      GroupJID:
+        type: string
+        example: "120362023605733675@g.us"
+      Name:
+        type: string
+        example: "My group name"
+  GroupInfo:
+    type: object
+    properties:
+      GroupJID:
+        type: string
+        example: "120362023605733675@g.us"
+  GroupInviteLink:
+    type: object
+    properties:
+      GroupJID:
+        type: string
+        example: "120362023605733675@g.us"
+      Reset:
+        type: boolean
+        example: false
+  Connect:
+    type: object
+    properties:
+      Subscribe:
+        type: string
+        example: ["Message","ChatPresence"]
+      Immediate:
+        type: boolean
+  DownloadImage:
+    type: object
+    required:
+      - Url
+      - MediaKey
+      - Mimetype
+      - FileSHA256
+      - FileLength
+    properties:
+      Url:
+        type: string
+      DirectPath:
+        type: string
+      MediaKey:
+        type: string
+      Mimetype:
+        type: string
+      FileEncSHA256:
+        type: string
+      FileSHA256:
+        type: string
+      FileLength:
+        type: number
+  ChatPresence:
+    type: object
+    required: 
+      - Phone
+      - State
+    properties:
+      Phone:
+        type: string
+        example: "5491155553935"
+      State:
+        type: string
+        example: composing
+      Media: 
+        type: string
+        example: audio
+  MessageContact:
+    type: object
+    required: 
+      - Phone
+      - Name
+      - Vcard
+    properties:
+      Phone:
+        type: string
+        example: "5491155553935"
+      Name:
+        type: string
+        example: John
+      Id:
+        type: string
+        example: "ABCDABCD1234"
+      Vcard:
+        type: string
+        example: "BEGIN:VCARD\nVERSION:3.0\nN:Doe;John;;;\nFN:John Doe\nORG:Example.com Inc.;\nTITLE:Imaginary test person\nEMAIL;type=INTERNET;type=WORK;type=pref:johnDoe@example.org\nTEL;type=WORK;type=pref:+1 617 555 1212\nTEL;type=WORK:+1 (617) 555-1234\nTEL;type=CELL:+1 781 555 1212\nTEL;type=HOME:+1 202 555 1212\nitem1.ADR;type=WORK:;;2 Enterprise Avenue;Worktown;NY;01111;USA\nitem1.X-ABADR:us\nitem2.ADR;type=HOME;type=pref:;;3 Acacia Avenue;Hoitem2.X-ABADR:us\nEND:VCARD"
+      ContextInfo:
+        type: object
+        required:
+          - StanzaId
+          - Participant
+        properties:
+          StanzaId: 
+            type: string
+            example: "3EB06F9067F80BAB89FF" 
+          Participant: 
+            type: string
+            example: "5491155553935@s.whatsapp.net"
+
+
+  MessageLocation:
+    type: object
+    required: 
+      - Phone
+      - Latitude
+      - Longitude
+    properties:
+      Phone:
+        type: string
+        example: "5491155553935"
+      Name:
+        type: string
+        example: Party
+      Id:
+        type: string
+        example: "ABCDABCD1234"
+      Latitude:
+        type: float
+        example: 48.858370
+      Longitude:
+        type: float
+        example: 2.294481
+      ContextInfo:
+        type: object
+        required:
+          - StanzaId
+          - Participant
+        properties:
+          StanzaId: 
+            type: string
+            example: "3EB06F9067F80BAB89FF" 
+          Participant: 
+            type: string
+            example: "5491155553935@s.whatsapp.net"
+
+  MessageText:
+    type: object
+    required: 
+      - Phone
+      - Body
+    properties:
+      Phone:
+        type: string
+        example: "5491155553935"
+      Body:
+        type: string
+        example: How you doin
+      Id:
+        type: string
+        example: "ABCDABCD1234"
+      ContextInfo:
+        type: object
+        required:
+          - StanzaId
+          - Participant
+        properties:
+          StanzaId: 
+            type: string
+            example: "3EB06F9067F80BAB89FF" 
+          Participant: 
+            type: string
+            example: "5491155553935@s.whatsapp.net"
+  MessageImage:
+    type: object
+    required: 
+      - Phone
+      - Image 
+    properties:
+      Phone:
+        type: string
+        example: "5491155553935"
+      Image:
+        type: string
+        example: data:image/jpeg;base64,iVBORw0
+      Caption:
+        type: string
+        example: Image Description
+      Id:
+        type: string
+        example: "ABCDABCD1234"
+      ContextInfo:
+        type: object
+        required:
+          - StanzaId
+          - Participant
+        properties:
+          StanzaId: 
+            type: string
+            example: "3EB06F9067F80BAB89FF" 
+          Participant: 
+            type: string
+            example: "5491155553935@s.whatsapp.net"
+  MessageAudio:
+    type: object
+    required: 
+      - Phone
+      - Audio
+    properties:
+      Phone:
+        type: string
+        example: "5491155553935"
+      Audio:
+        type: string
+        example: "data:audio/ogg;base64,iVBORw0a"
+      Id:
+        type: string
+        example: "ABCDABCD1234"
+      ContextInfo:
+        type: object
+        required:
+          - StanzaId
+          - Participant
+        properties:
+          StanzaId: 
+            type: string
+            example: "3EB06F9067F80BAB89FF" 
+          Participant: 
+            type: string
+            example: "5491155553935@s.whatsapp.net"
+  MessageVideo:
+    type: object
+    required: 
+      - Phone
+      - Video 
+    properties:
+      Phone:
+        type: string
+        example: "5491155553935"
+      Video:
+        type: string
+        example: "data:video/mp4;base64,iVBORw0"
+      Caption:
+        type: string
+        example: "my video"
+      Id:
+        type: string
+        example: "ABCDABCD1234"
+      JpegThumbnail:
+        type: string
+        example: "AA00D010"
+      ContextInfo:
+        type: object
+        required:
+          - StanzaId
+          - Participant
+        properties:
+          StanzaId: 
+            type: string
+            example: "3EB06F9067F80BAB89FF" 
+          Participant: 
+            type: string
+            example: "5491155553935@s.whatsapp.net"
+  MessageSticker:
+    type: object
+    required: 
+      - Phone
+      - Sticker
+    properties:
+      Phone:
+        type: string
+        example: "5491155553935"
+      Sticker:
+        type: string
+        example: "data:image/webp;base64,iVBORw0"
+      Id:
+        type: string
+        example: "ABCDABCD1234"
+      PngThumbnail:
+        type: string
+        example: "AA00D010"
+      ContextInfo:
+        type: object
+        required:
+          - StanzaId
+          - Participant
+        properties:
+          StanzaId: 
+            type: string
+            example: "3EB06F9067F80BAB89FF" 
+          Participant: 
+            type: string
+            example: "5491155553935@s.whatsapp.net"
+ 
+
+  MessageDocument:
+    type: object
+    required: 
+      - Phone
+      - Document 
+      - FileName 
+    properties:
+      Phone:
+        type: string
+        example: "5491155553935"
+      Document:
+        type: string
+        example: data:application/octet-stream;base64,aG9sYSBxdWUKdGFsCmNvbW8KZXN0YXMK
+      FileName:
+        type: string
+        example: file.txt
+      Id:
+        type: string
+        example: "ABCDABCD1234"
+      ContextInfo:
+        type: object
+        required:
+          - StanzaId
+          - Participant
+        properties:
+          StanzaId:
+            type: string
+            example: "3EB06F9067F80BAB89FF"
+          Participant:
+            type: string
+            example: "5491155553935@s.whatsapp.net"
+  MessageTemplate:
+    type: object
+    required: 
+      - Phone
+      - Content 
+    properties:
+      Phone:
+        type: string
+        example: "5491155553935"
+      Content:
+        type: string
+        example: Message title
+      Footer:
+        type: string
+        example: Text below title, above buttons
+      Buttons:
+          type: object
+          example: [{"DisplayText":"Yes","Type":"quickreply"},{"DisplayText":"No","Type":"quickreply"},{"DisplayText":"Visit Site","Type":"url","Url":"https://www.fop2.com"},{"DisplayText":"Callme","Type":"call","PhoneNumber":"1155553934"}]
+          properties:
+            DisplayText:
+              type: string
+              example: Text for Button
+            Type:
+              type: quickreply|url|call
+      Id:
+        type: string
+        example: "ABCDABCD1234"
+      ContextInfo:
+        type: object
+        required:
+          - StanzaId
+          - Participant
+        properties:
+          StanzaId:
+            type: string
+            example: "3EB06F9067F80BAB89FF"
+          Participant:
+            type: string
+            example: "5491155553935@s.whatsapp.net"
+  Markread:
+    type: object
+    required:
+      - Id
+      - Chat
+    properties:
+      Id:
+        type: object
+        example: ["AABBCC11223344","DDEEFF55667788"]
+      Chat:
+        type: string
+        example: 5491155553934.0:1@s.whatsapp.net
+      Sender:
+        type: string
+        example: 5491155553111.0:1@s.whatsapp.net
+  Checkuser:
+    type: object
+    required:
+      - Phone
+    properties:
+      Phone:
+        type: object
+        example: ["5491155553934","5491155553935"]
+  Checkavatar:
+    type: object
+    required:
+      - Phone
+      - Preview
+    properties:
+      Phone:
+        type: string 
+        example: "5491155553934"
+      Preview:
+        type: bool
+        example: true
+  Webhook:
+    type: object
+    required:
+      - WebhookURL
+    properties:
+      WebhookURL:
+        type: string
+        example: http://server/webhook
+  TextMessage:
+     type: object
+     required:
+       - sessionId
+       - text
+     properties:
+       sessionId:
+         type: string
+         format: uuid4
+       text:
+         type: string
+ 
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: token
+
+security:
+  - ApiKeyAuth: []

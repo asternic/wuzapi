@@ -1,0 +1,122 @@
+package main
+
+import (
+	"context"
+	"database/sql"
+	"flag"
+	"fmt"
+	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
+	"path/filepath"
+
+	"github.com/gorilla/mux"
+	"github.com/patrickmn/go-cache"
+	"github.com/rs/zerolog"
+	_ "modernc.org/sqlite"
+)
+
+type server struct {
+	db     *sql.DB
+	router *mux.Router
+}
+
+var (
+	address    = flag.String("address", "0.0.0.0", "Bind IP Address")
+	port       = flag.String("port", "8080", "Listen Port")
+	waDebug    = flag.String("wadebug", "", "Enable whatsmeow debug (INFO or DEBUG)")
+	logType    = flag.String("logtype", "console", "Type of log output (console or json)")
+	sslcert    = flag.String("sslcertificate", "", "SSL Certificate File")
+	sslprivkey = flag.String("sslprivatekey", "", "SSL Certificate Private Key File")
+
+	killchannel   = make(map[int](chan bool))
+	userinfocache = cache.New(5*time.Minute, 10*time.Minute)
+	log zerolog.Logger
+)
+
+func init() {
+
+	flag.Parse()
+
+	if(*logType=="json") {
+        log = zerolog.New(os.Stdout).With().Timestamp().Str("role",filepath.Base(os.Args[0])).Logger()
+    } else {
+        output := zerolog.ConsoleWriter{Out: os.Stdout, TimeFormat: time.RFC3339}
+        log = zerolog.New(output).With().Timestamp().Str("role",filepath.Base(os.Args[0])).Logger()
+    }
+}
+
+func main() {
+
+
+	dbDirectory := "dbdata"
+	_, err := os.Stat(dbDirectory)
+	if os.IsNotExist(err) {
+		errDir := os.MkdirAll(dbDirectory, 0751)
+		if errDir != nil {
+			panic("Could not create dbdata directory")
+		}
+	}
+
+	db, err := sql.Open("sqlite", "./dbdata/users.db")
+	if err != nil {
+		log.Fatal().Err(err).Msg("Could not open/create ./dbdata/users.db")
+		os.Exit(1)
+	}
+	defer db.Close()
+
+	sqlStmt := `CREATE TABLE IF NOT EXISTS users (id INTEGER NOT NULL PRIMARY KEY, name TEXT, token TEXT, webhook TEXT, jid TEXT, qrcode TEXT, connected INTEGER, expiration INTEGER, events TEXT);`
+	_, err = db.Exec(sqlStmt)
+	if err != nil {
+		panic(fmt.Sprintf("%q: %s\n", err, sqlStmt))
+	}
+
+	s := &server{
+		router: mux.NewRouter(),
+		db:     db,
+	}
+	s.routes()
+
+	s.connectOnStartup()
+
+	srv := &http.Server{
+		Addr:    *address + ":" + *port,
+		Handler: s.router,
+	}
+
+	done := make(chan os.Signal, 1)
+	signal.Notify(done, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
+
+	go func() {
+		if *sslcert != "" {
+			if err := srv.ListenAndServeTLS(*sslcert, *sslprivkey); err != nil && err != http.ErrServerClosed {
+				//log.Fatalf("listen: %s\n", err)
+log.Fatal().Err(err).Msg("Startup failed")
+			}
+		} else {
+			if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+				//log.Fatalf("listen: %s\n", err)
+log.Fatal().Err(err).Msg("Startup failed")
+			}
+		}
+	}()
+//	wlog.Infof("Server Started. Listening on %s:%s", *address, *port)
+log.Info().Str("address", *address).Str("port",*port).Msg("Server Started")
+
+	<-done
+	log.Info().Msg("Server Stoped")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer func() {
+		// extra handling here
+		cancel()
+	}()
+
+	if err := srv.Shutdown(ctx); err != nil {
+		log.Error().Str("error",fmt.Sprintf("%+v",err)).Msg("Server Shutdown Failed")
+		os.Exit(1)
+	}
+	log.Info().Msg("Server Exited Properly")
+}
