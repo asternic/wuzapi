@@ -30,7 +30,7 @@ retrieve full contact list.
 * Chat: set presence (typing/paused,recording media), mark messages as read, 
 download images from messages.
 * Groups: list subscribed, get info, get invite links, change photo and name.
-* Webhooks: set and get webhook that will be called whenever an event/message 
+* Webhooks: set and get webhook that will be called whenever events/messages 
 are received.
 
 ## Prerequisites
