@@ -1931,6 +1931,102 @@ func (s *server) DownloadImage() http.HandlerFunc {
 	}
 }
 
+// React
+func (s *server) React() http.HandlerFunc {
+
+	type textStruct struct {
+		Phone string
+		Body  string
+		Id    string
+	}
+
+	return func(w http.ResponseWriter, r *http.Request) {
+
+		txtid := r.Context().Value("userinfo").(Values).Get("Id")
+		userid, _ := strconv.Atoi(txtid)
+
+		if clientPointer[userid] == nil {
+			s.Respond(w, r, http.StatusInternalServerError, errors.New("No session"))
+			return
+		}
+
+		msgid := ""
+		var ts time.Time
+
+		decoder := json.NewDecoder(r.Body)
+		var t textStruct
+		err := decoder.Decode(&t)
+		if err != nil {
+			s.Respond(w, r, http.StatusBadRequest, errors.New("Could not decode Payload"))
+			return
+		}
+
+		if t.Phone == "" {
+			s.Respond(w, r, http.StatusBadRequest, errors.New("Missing Phone in Payload"))
+			return
+		}
+
+		if t.Body == "" {
+			s.Respond(w, r, http.StatusBadRequest, errors.New("Missing Body in Payload"))
+			return
+		}
+
+		recipient, ok := parseJID(t.Phone)
+		if !ok {
+			log.Error().Msg(fmt.Sprintf("%s", err))
+			s.Respond(w, r, http.StatusBadRequest, errors.New("Could not parse Group JID"))
+			return
+		}
+
+		if t.Id == "" {
+			s.Respond(w, r, http.StatusBadRequest, errors.New("Missing Id in Payload"))
+			return
+		} else {
+			msgid = t.Id
+		}
+
+		fromMe := false
+		if strings.HasPrefix(msgid, "me:") {
+			fromMe = true
+			msgid = msgid[len("me:"):]
+		}
+		reaction := t.Body
+		if reaction == "remove" {
+			reaction = ""
+		}
+
+		msg := &waProto.Message{
+			ReactionMessage: &waProto.ReactionMessage{
+				Key: &waProto.MessageKey{
+					RemoteJid: proto.String(recipient.String()),
+					FromMe:    proto.Bool(fromMe),
+					Id:        proto.String(msgid),
+				},
+				Text:              proto.String(reaction),
+				GroupingKey:       proto.String(reaction),
+				SenderTimestampMs: proto.Int64(time.Now().UnixMilli()),
+			},
+		}
+
+		ts, err = clientPointer[userid].SendMessage(recipient, msgid, msg)
+		if err != nil {
+			s.Respond(w, r, http.StatusInternalServerError, errors.New(fmt.Sprintf("Error sending message: %v", err)))
+			return
+		}
+
+		log.Info().Str("timestamp", fmt.Sprintf("%d", ts)).Str("id", msgid).Msg("Message sent")
+		response := map[string]interface{}{"Details": "Sent", "Timestamp": ts, "Id": msgid}
+		responseJson, err := json.Marshal(response)
+		if err != nil {
+			s.Respond(w, r, http.StatusInternalServerError, err)
+		} else {
+			s.Respond(w, r, http.StatusOK, string(responseJson))
+		}
+
+		return
+	}
+}
+
 // Mark messages as read
 func (s *server) MarkRead() http.HandlerFunc {
 
