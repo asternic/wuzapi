@@ -28,7 +28,7 @@ location and contact messages.
 * Users: check if phones have whatsapp, get user information, get user avatar, 
 retrieve full contact list.
 * Chat: set presence (typing/paused,recording media), mark messages as read, 
-download images from messages.
+download images from messages, send reactions.
 * Groups: list subscribed, get info, get invite links, change photo and name.
 * Webhooks: set and get webhook that will be called whenever events/messages 
 are received.
