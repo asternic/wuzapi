@@ -567,6 +567,20 @@ curl -X POST -H 'Token: 1234ABCD' -H 'Content-Type: application/json' --data '{"
 
 ---
 
+## React to messages
+
+Sends a reaction for an existing message. Id is the message Id to react to, if its your own message, prefix the Id with the string 'me:'
+
+endpoint: _/chat/react_
+
+method: **POST**
+
+```
+curl -X POST -H 'Token: 1234ABCD' -H 'Content-Type: application/json' --data '{"Phone":"5491155554444","Body":"❤️","Id":"me:069EDE53E81CB5A4773587FB96CB3ED3"}' http://localhost:8080/chat/react
+```
+
+---
+
 ## Download Image
 
 Downloads an Image from a message and retrieves it Base64 media encoded. Required request parameters are: Url, MediaKey, Mimetype, FileSHA256 and FileLength

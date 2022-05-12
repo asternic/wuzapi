@@ -216,6 +216,27 @@ paths:
             application/json:
               schema:
                 example: { "code": 200, "data": { "Details": "Message(s) marked as read" }, "success": true }
+  /chat/react:
+    post:
+      tags:
+        - Chat 
+      summary: Reacts to a message
+      description: Sends a reaction to some message. Phone, Body and Id are mandatory. If reaction is for your own message, prefix Phone with 'me:'. Body should be the reaction emoji.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#definitions/ReactionText'
+
+      responses:
+        200:
+          description: Response
+          content:
+            application/json:
+              schema:
+                example: {"code":200,"data":{"Details":"Sent","Id":"3EB06F9067F80BAB89FF","Timestamp":"2022-05-10T12:49:08-03:00"},"success":true}
+ 
   /chat/send/text:
     post:
       tags:
@@ -685,7 +706,23 @@ definitions:
           Participant: 
             type: string
             example: "5491155553935@s.whatsapp.net"
-
+  ReactionText:
+    type: object
+    required: 
+      - Phone
+      - Body
+      - Id 
+    properties:
+      Phone:
+        type: string
+        example: "5491155553935"
+      Body:
+        type: string
+        example: "❤️"
+      Id:
+        type: string
+        example: "me:3EB06F9067F80BAB89FF"
+ 
   MessageText:
     type: object
     required: 
