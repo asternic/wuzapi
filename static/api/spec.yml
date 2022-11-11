@@ -162,7 +162,7 @@ paths:
                 example: { "code": 200, "data": { "Users": [ { "IsInWhatsapp": true, "JID": "5491155553934@s.whatsapp.net", "Query": "5491155553934", "VerifiedName": "Company Name" }, { "IsInWhatsapp": false, "JID": "5491155553935@s.whatsapp.net", "Query": "5491155553935", "VerifiedName": "" } ] }, "success": true }
 
   /user/avatar:
-    get:
+    post:
       tags:
         - User
       summary: Gets profile picture information

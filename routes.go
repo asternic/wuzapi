@@ -63,7 +63,7 @@ func (s *server) routes() {
 
 	s.router.Handle("/user/info", c.Then(s.GetUser())).Methods("GET")
 	s.router.Handle("/user/check", c.Then(s.CheckUser())).Methods("POST")
-	s.router.Handle("/user/avatar", c.Then(s.GetAvatar())).Methods("GET")
+	s.router.Handle("/user/avatar", c.Then(s.GetAvatar())).Methods("POST")
 	s.router.Handle("/user/contacts", c.Then(s.GetContacts())).Methods("GET")
 
 	s.router.Handle("/chat/presence", c.Then(s.ChatPresence())).Methods("POST")
