@@ -595,6 +595,34 @@ curl -s -X POST -H 'Token: 1234ABCD' -H 'Content-Type: application/json' --data 
 
 ---
 
+## Download Video
+
+Downloads a Video from a message and retrieves it Base64 media encoded. Required request parameters are: Url, MediaKey, Mimetype, FileSHA256 and FileLength
+
+endpoint: _/chat/downloadvideo_
+
+method: **POST**
+
+```
+curl -s -X POST -H 'Token: 1234ABCD' -H 'Content-Type: application/json' --data '{"Url":"https://mmg.whatsapp.net/d/f/Apah954sUug5I9GnQsmXKPUdUn3ZPKGYFnscJU02dpuD.enc","Mimetype":"video/mp4", "FileSHA256":"nMthnfkUWQiMfNJpA6K9+ft+Dx9Mb1STs+9wMHjeo/M=","FileLength":2039,"MediaKey":"vq0RR0nYGkxm2HrpwUp3sK8A7Nr1KUcOiBHrT1hg+PU=","FileEncSHA256":"6bMVZ5dRf9JKxJSUgg4w1h3iSYA3dM8gEQxaMPwoONc="}' http://localhost:8080/chat/downloadvideo
+```
+
+---
+
+## Download Document
+
+Downloads a Document from a message and retrieves it Base64 media encoded. Required request parameters are: Url, MediaKey, Mimetype, FileSHA256 and FileLength
+
+endpoint: _/chat/downloadvideo_
+
+method: **POST**
+
+```
+curl -s -X POST -H 'Token: 1234ABCD' -H 'Content-Type: application/json' --data '{"Url":"https://mmg.whatsapp.net/d/f/Apah954sUug5I9GnQsmXKPUdUn3ZPKGYFnscJU02dpuD.enc","Mimetype":"application/pdf", "FileSHA256":"nMthnfkUWQiMfNJpA6K9+ft+Dx9Mb1STs+9wMHjeo/M=","FileLength":2039,"MediaKey":"vq0RR0nYGkxm2HrpwUp3sK8A7Nr1KUcOiBHrT1hg+PU=","FileEncSHA256":"6bMVZ5dRf9JKxJSUgg4w1h3iSYA3dM8gEQxaMPwoONc="}' http://localhost:8080/chat/downloaddocument
+```
+
+---
+
 ## Group
 
 The following _group_ endpoints are used to gather information or perfrom actions in chat groups.

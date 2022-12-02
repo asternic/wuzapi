@@ -1,6 +1,6 @@
 module wuzapi
 
-go 1.17
+go 1.18
 
 require (
 	github.com/go-resty/resty/v2 v2.7.0
@@ -11,13 +11,13 @@ require (
 	github.com/rs/zerolog v1.26.1
 	github.com/skip2/go-qrcode v0.0.0-20200617195104-da1b6568686e
 	github.com/vincent-petithory/dataurl v1.0.0
-	go.mau.fi/whatsmeow v0.0.0-20220412075936-8f75ccfd2425
-	google.golang.org/protobuf v1.28.0
+	go.mau.fi/whatsmeow v0.0.0-20221122081206-059049466d44
+	google.golang.org/protobuf v1.28.1
 	modernc.org/sqlite v1.16.0
 )
 
 require (
-	filippo.io/edwards25519 v1.0.0-rc.1 // indirect
+	filippo.io/edwards25519 v1.0.0 // indirect
 	github.com/google/go-cmp v0.5.7 // indirect
 	github.com/google/uuid v1.3.0 // indirect
 	github.com/gorilla/websocket v1.5.0 // indirect
@@ -25,8 +25,8 @@ require (
 	github.com/mattn/go-isatty v0.0.14 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20200410134404-eec4a21b6bb0 // indirect
 	github.com/rs/xid v1.3.0 // indirect
-	go.mau.fi/libsignal v0.0.0-20220315232917-871a40435d3b // indirect
-	golang.org/x/crypto v0.0.0-20220411220226-7b82a4e95df4 // indirect
+	go.mau.fi/libsignal v0.0.0-20221015105917-d970e7c3c9cf // indirect
+	golang.org/x/crypto v0.0.0-20221012134737-56aed061732a // indirect
 	golang.org/x/mod v0.4.2 // indirect
 	golang.org/x/net v0.0.0-20220412020605-290c469a71a5 // indirect
 	golang.org/x/sys v0.0.0-20220412211240-33da011f77ad // indirect

@@ -28,7 +28,7 @@ import (
 	"go.mau.fi/whatsmeow/types"
 	"go.mau.fi/whatsmeow/types/events"
 	waLog "go.mau.fi/whatsmeow/util/log"
-	"google.golang.org/protobuf/proto"
+	//"google.golang.org/protobuf/proto"
 )
 
 //var wlog waLog.Logger
@@ -198,8 +198,14 @@ func (s *server) startClient(userID int, textjid string, token string, subscript
 		deviceStore = container.NewDevice()
 	}
 
-	store.CompanionProps.PlatformType = waProto.CompanionProps_CHROME.Enum()
-	store.CompanionProps.Os = proto.String("Mac OS")
+	//store.CompanionProps.PlatformType = waProto.CompanionProps_CHROME.Enum()
+	//store.CompanionProps.Os = proto.String("Mac OS")
+
+	osName := "Mac OS 10"
+	store.DeviceProps.PlatformType = waProto.DeviceProps_UNKNOWN.Enum()
+	store.DeviceProps.Os = &osName
+
+
 	clientLog := waLog.Stdout("Client", *waDebug, true)
 	var client *whatsmeow.Client
 	if(*waDebug!="") {

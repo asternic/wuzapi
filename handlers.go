@@ -498,7 +498,7 @@ func (s *server) SendDocument() http.HandlerFunc {
 		txtid := r.Context().Value("userinfo").(Values).Get("Id")
 		userid, _ := strconv.Atoi(txtid)
 		msgid := ""
-		var ts time.Time
+		var resp whatsmeow.SendResponse
 
 		if clientPointer[userid] == nil {
 			s.Respond(w, r, http.StatusInternalServerError, errors.New("No session"))
@@ -581,14 +581,14 @@ func (s *server) SendDocument() http.HandlerFunc {
 			}
 		}
 
-		ts, err = clientPointer[userid].SendMessage(recipient, msgid, msg)
+		resp, err = clientPointer[userid].SendMessage(context.Background(),recipient, msgid, msg)
 		if err != nil {
 			s.Respond(w, r, http.StatusInternalServerError, errors.New(fmt.Sprintf("Error sending message: %v", err)))
 			return
 		}
 
-		log.Info().Str("timestamp", fmt.Sprintf("%d", ts)).Str("id", msgid).Msg("Message sent")
-		response := map[string]interface{}{"Details": "Sent", "Timestamp": ts, "Id": msgid}
+		log.Info().Str("timestamp", fmt.Sprintf("%d", resp.Timestamp)).Str("id", msgid).Msg("Message sent")
+		response := map[string]interface{}{"Details": "Sent", "Timestamp": resp.Timestamp, "Id": msgid}
 		responseJson, err := json.Marshal(response)
 		if err != nil {
 			s.Respond(w, r, http.StatusInternalServerError, err)
@@ -615,7 +615,7 @@ func (s *server) SendAudio() http.HandlerFunc {
 		txtid := r.Context().Value("userinfo").(Values).Get("Id")
 		userid, _ := strconv.Atoi(txtid)
 		msgid := ""
-		var ts time.Time
+		var resp whatsmeow.SendResponse
 
 		if clientPointer[userid] == nil {
 			s.Respond(w, r, http.StatusInternalServerError, errors.New("No session"))
@@ -692,14 +692,14 @@ func (s *server) SendAudio() http.HandlerFunc {
 			}
 		}
 
-		ts, err = clientPointer[userid].SendMessage(recipient, msgid, msg)
+		resp, err = clientPointer[userid].SendMessage(context.Background(),recipient, msgid, msg)
 		if err != nil {
 			s.Respond(w, r, http.StatusInternalServerError, errors.New(fmt.Sprintf("Error sending message: %v", err)))
 			return
 		}
 
-		log.Info().Str("timestamp", fmt.Sprintf("%d", ts)).Str("id", msgid).Msg("Message sent")
-		response := map[string]interface{}{"Details": "Sent", "Timestamp": ts, "Id": msgid}
+		log.Info().Str("timestamp", fmt.Sprintf("%d", resp.Timestamp)).Str("id", msgid).Msg("Message sent")
+		response := map[string]interface{}{"Details": "Sent", "Timestamp": resp.Timestamp, "Id": msgid}
 		responseJson, err := json.Marshal(response)
 		if err != nil {
 			s.Respond(w, r, http.StatusInternalServerError, err)
@@ -726,7 +726,7 @@ func (s *server) SendImage() http.HandlerFunc {
 		txtid := r.Context().Value("userinfo").(Values).Get("Id")
 		userid, _ := strconv.Atoi(txtid)
 		msgid := ""
-		var ts time.Time
+		var resp whatsmeow.SendResponse
 
 		if clientPointer[userid] == nil {
 			s.Respond(w, r, http.StatusInternalServerError, errors.New("No session"))
@@ -804,14 +804,14 @@ func (s *server) SendImage() http.HandlerFunc {
 			}
 		}
 
-		ts, err = clientPointer[userid].SendMessage(recipient, msgid, msg)
+		resp, err = clientPointer[userid].SendMessage(context.Background(),recipient, msgid, msg)
 		if err != nil {
 			s.Respond(w, r, http.StatusInternalServerError, errors.New(fmt.Sprintf("Error sending message: %v", err)))
 			return
 		}
 
-		log.Info().Str("timestamp", fmt.Sprintf("%d", ts)).Str("id", msgid).Msg("Message sent")
-		response := map[string]interface{}{"Details": "Sent", "Timestamp": ts, "Id": msgid}
+		log.Info().Str("timestamp", fmt.Sprintf("%d", resp.Timestamp)).Str("id", msgid).Msg("Message sent")
+		response := map[string]interface{}{"Details": "Sent", "Timestamp": resp.Timestamp, "Id": msgid}
 		responseJson, err := json.Marshal(response)
 		if err != nil {
 			s.Respond(w, r, http.StatusInternalServerError, err)
@@ -838,7 +838,7 @@ func (s *server) SendSticker() http.HandlerFunc {
 		txtid := r.Context().Value("userinfo").(Values).Get("Id")
 		userid, _ := strconv.Atoi(txtid)
 		msgid := ""
-		var ts time.Time
+		var resp whatsmeow.SendResponse
 
 		if clientPointer[userid] == nil {
 			s.Respond(w, r, http.StatusInternalServerError, errors.New("No session"))
@@ -916,14 +916,14 @@ func (s *server) SendSticker() http.HandlerFunc {
 			}
 		}
 
-		ts, err = clientPointer[userid].SendMessage(recipient, msgid, msg)
+		resp, err = clientPointer[userid].SendMessage(context.Background(),recipient, msgid, msg)
 		if err != nil {
 			s.Respond(w, r, http.StatusInternalServerError, errors.New(fmt.Sprintf("Error sending message: %v", err)))
 			return
 		}
 
-		log.Info().Str("timestamp", fmt.Sprintf("%d", ts)).Str("id", msgid).Msg("Message sent")
-		response := map[string]interface{}{"Details": "Sent", "Timestamp": ts, "Id": msgid}
+		log.Info().Str("timestamp", fmt.Sprintf("%d", resp.Timestamp)).Str("id", msgid).Msg("Message sent")
+		response := map[string]interface{}{"Details": "Sent", "Timestamp": resp.Timestamp, "Id": msgid}
 		responseJson, err := json.Marshal(response)
 		if err != nil {
 			s.Respond(w, r, http.StatusInternalServerError, err)
@@ -951,7 +951,7 @@ func (s *server) SendVideo() http.HandlerFunc {
 		txtid := r.Context().Value("userinfo").(Values).Get("Id")
 		userid, _ := strconv.Atoi(txtid)
 		msgid := ""
-		var ts time.Time
+		var resp whatsmeow.SendResponse
 
 		if clientPointer[userid] == nil {
 			s.Respond(w, r, http.StatusInternalServerError, errors.New("No session"))
@@ -1030,14 +1030,14 @@ func (s *server) SendVideo() http.HandlerFunc {
 			}
 		}
 
-		ts, err = clientPointer[userid].SendMessage(recipient, msgid, msg)
+		resp, err = clientPointer[userid].SendMessage(context.Background(),recipient, msgid, msg)
 		if err != nil {
 			s.Respond(w, r, http.StatusInternalServerError, errors.New(fmt.Sprintf("Error sending message: %v", err)))
 			return
 		}
 
-		log.Info().Str("timestamp", fmt.Sprintf("%d", ts)).Str("id", msgid).Msg("Message sent")
-		response := map[string]interface{}{"Details": "Sent", "Timestamp": ts, "Id": msgid}
+		log.Info().Str("timestamp", fmt.Sprintf("%d", resp.Timestamp)).Str("id", msgid).Msg("Message sent")
+		response := map[string]interface{}{"Details": "Sent", "Timestamp": resp.Timestamp, "Id": msgid}
 		responseJson, err := json.Marshal(response)
 		if err != nil {
 			s.Respond(w, r, http.StatusInternalServerError, err)
@@ -1070,7 +1070,7 @@ func (s *server) SendContact() http.HandlerFunc {
 		}
 
 		msgid := ""
-		var ts time.Time
+		var resp whatsmeow.SendResponse
 
 		decoder := json.NewDecoder(r.Body)
 		var t contactStruct
@@ -1118,14 +1118,14 @@ func (s *server) SendContact() http.HandlerFunc {
 			}
 		}
 
-		ts, err = clientPointer[userid].SendMessage(recipient, msgid, msg)
+		resp, err = clientPointer[userid].SendMessage(context.Background(),recipient, msgid, msg)
 		if err != nil {
 			s.Respond(w, r, http.StatusInternalServerError, errors.New(fmt.Sprintf("Error sending message: %v", err)))
 			return
 		}
 
-		log.Info().Str("timestamp", fmt.Sprintf("%d", ts)).Str("id", msgid).Msg("Message sent")
-		response := map[string]interface{}{"Details": "Sent", "Timestamp": ts, "Id": msgid}
+		log.Info().Str("timestamp", fmt.Sprintf("%d", resp.Timestamp)).Str("id", msgid).Msg("Message sent")
+		response := map[string]interface{}{"Details": "Sent", "Timestamp": resp.Timestamp, "Id": msgid}
 		responseJson, err := json.Marshal(response)
 		if err != nil {
 			s.Respond(w, r, http.StatusInternalServerError, err)
@@ -1159,7 +1159,7 @@ func (s *server) SendLocation() http.HandlerFunc {
 		}
 
 		msgid := ""
-		var ts time.Time
+		var resp whatsmeow.SendResponse
 
 		decoder := json.NewDecoder(r.Body)
 		var t locationStruct
@@ -1208,14 +1208,14 @@ func (s *server) SendLocation() http.HandlerFunc {
 			}
 		}
 
-		ts, err = clientPointer[userid].SendMessage(recipient, msgid, msg)
+		resp, err = clientPointer[userid].SendMessage(context.Background(),recipient, msgid, msg)
 		if err != nil {
 			s.Respond(w, r, http.StatusInternalServerError, errors.New(fmt.Sprintf("Error sending message: %v", err)))
 			return
 		}
 
-		log.Info().Str("timestamp", fmt.Sprintf("%d", ts)).Str("id", msgid).Msg("Message sent")
-		response := map[string]interface{}{"Details": "Sent", "Timestamp": ts, "Id": msgid}
+		log.Info().Str("timestamp", fmt.Sprintf("%d", resp.Timestamp)).Str("id", msgid).Msg("Message sent")
+		response := map[string]interface{}{"Details": "Sent", "Timestamp": resp.Timestamp, "Id": msgid}
 		responseJson, err := json.Marshal(response)
 		if err != nil {
 			s.Respond(w, r, http.StatusInternalServerError, err)
@@ -1227,6 +1227,7 @@ func (s *server) SendLocation() http.HandlerFunc {
 }
 
 // Sends Buttons (not implemented, does not work)
+/*
 func (s *server) SendButtons() http.HandlerFunc {
 
 	type textStruct struct {
@@ -1246,7 +1247,7 @@ func (s *server) SendButtons() http.HandlerFunc {
 		}
 
 		msgid := ""
-		var ts time.Time
+		var resp whatsmeow.SendResponse
 
 		decoder := json.NewDecoder(r.Body)
 		var t textStruct
@@ -1297,14 +1298,14 @@ func (s *server) SendButtons() http.HandlerFunc {
 			FooterText: proto.String("Footer Text"),
 		}}
 
-		ts, err = clientPointer[userid].SendMessage(recipient, msgid, msg)
+		resp, err = clientPointer[userid].SendMessage(context.Background(),recipient, msgid, msg)
 		if err != nil {
 			s.Respond(w, r, http.StatusInternalServerError, errors.New(fmt.Sprintf("Error sending message: %v", err)))
 			return
 		}
 
-		log.Info().Str("timestamp", fmt.Sprintf("%d", ts)).Str("id", msgid).Msg("Message sent")
-		response := map[string]interface{}{"Details": "Sent", "Timestamp": ts, "Id": msgid}
+		log.Info().Str("timestamp", fmt.Sprintf("%d", resp.Timestamp)).Str("id", msgid).Msg("Message sent")
+		response := map[string]interface{}{"Details": "Sent", "Timestamp": resp.Timestamp, "Id": msgid}
 		responseJson, err := json.Marshal(response)
 		if err != nil {
 			s.Respond(w, r, http.StatusInternalServerError, err)
@@ -1314,6 +1315,7 @@ func (s *server) SendButtons() http.HandlerFunc {
 		return
 	}
 }
+*/
 
 // Sends a regular text message
 func (s *server) SendMessage() http.HandlerFunc {
@@ -1336,7 +1338,7 @@ func (s *server) SendMessage() http.HandlerFunc {
 		}
 
 		msgid := ""
-		var ts time.Time
+		var resp whatsmeow.SendResponse
 
 		decoder := json.NewDecoder(r.Body)
 		var t textStruct
@@ -1385,14 +1387,14 @@ func (s *server) SendMessage() http.HandlerFunc {
 			}
 		}
 
-		ts, err = clientPointer[userid].SendMessage(recipient, msgid, msg)
+		resp, err = clientPointer[userid].SendMessage(context.Background(),recipient, msgid, msg)
 		if err != nil {
 			s.Respond(w, r, http.StatusInternalServerError, errors.New(fmt.Sprintf("Error sending message: %v", err)))
 			return
 		}
 
-		log.Info().Str("timestamp", fmt.Sprintf("%d", ts)).Str("id", msgid).Msg("Message sent")
-		response := map[string]interface{}{"Details": "Sent", "Timestamp": ts, "Id": msgid}
+		log.Info().Str("timestamp", fmt.Sprintf("%d", resp.Timestamp)).Str("id", msgid).Msg("Message sent")
+		response := map[string]interface{}{"Details": "Sent", "Timestamp": resp.Timestamp, "Id": msgid}
 		responseJson, err := json.Marshal(response)
 		if err != nil {
 			s.Respond(w, r, http.StatusInternalServerError, err)
@@ -1404,6 +1406,7 @@ func (s *server) SendMessage() http.HandlerFunc {
 	}
 }
 
+/*
 // Sends a Template message
 func (s *server) SendTemplate() http.HandlerFunc {
 
@@ -1434,7 +1437,8 @@ func (s *server) SendTemplate() http.HandlerFunc {
 		}
 
 		msgid := ""
-		var ts time.Time
+		var resp whatsmeow.SendResponse
+//var ts time.Time
 
 		decoder := json.NewDecoder(r.Body)
 		var t templateStruct
@@ -1543,14 +1547,14 @@ func (s *server) SendTemplate() http.HandlerFunc {
 		},
 		}
 
-		ts, err = clientPointer[userid].SendMessage(recipient, msgid, msg)
+		resp, err = clientPointer[userid].SendMessage(context.Background(),recipient, msgid, msg)
 		if err != nil {
 			s.Respond(w, r, http.StatusInternalServerError, errors.New(fmt.Sprintf("Error sending message: %v", err)))
 			return
 		}
 
-		log.Info().Str("timestamp", fmt.Sprintf("%d", ts)).Str("id", msgid).Msg("Message sent")
-		response := map[string]interface{}{"Details": "Sent", "Timestamp": ts, "Id": msgid}
+		log.Info().Str("timestamp", fmt.Sprintf("%d", resp.Timestamp)).Str("id", msgid).Msg("Message sent")
+		response := map[string]interface{}{"Details": "Sent", "Timestamp": resp.Timestamp, "Id": msgid}
 		responseJson, err := json.Marshal(response)
 		if err != nil {
 			s.Respond(w, r, http.StatusInternalServerError, err)
@@ -1560,7 +1564,7 @@ func (s *server) SendTemplate() http.HandlerFunc {
 		return
 	}
 }
-
+*/
 // checks if users/phones are on Whatsapp
 func (s *server) CheckUser() http.HandlerFunc {
 
@@ -1735,7 +1739,8 @@ func (s *server) GetAvatar() http.HandlerFunc {
 
 		var pic *types.ProfilePictureInfo
 
-		pic, err = clientPointer[userid].GetProfilePictureInfo(jid, t.Preview)
+		existingID := ""
+		pic, err = clientPointer[userid].GetProfilePictureInfo(jid, t.Preview, existingID)
 		if err != nil {
 			msg := fmt.Sprintf("Failed to get avatar: %v", err)
 			log.Error().Msg(msg)
@@ -1931,6 +1936,167 @@ func (s *server) DownloadImage() http.HandlerFunc {
 	}
 }
 
+// Downloads Document and returns base64 representation
+func (s *server) DownloadDocument() http.HandlerFunc {
+
+	type downloadDocumentStruct struct {
+		Url           string
+		DirectPath    string
+		MediaKey      []byte
+		Mimetype      string
+		FileEncSHA256 []byte
+		FileSHA256    []byte
+		FileLength    uint64
+	}
+
+	return func(w http.ResponseWriter, r *http.Request) {
+
+		txtid := r.Context().Value("userinfo").(Values).Get("Id")
+		userid, _ := strconv.Atoi(txtid)
+
+		mimetype := ""
+		var docdata []byte
+
+		if clientPointer[userid] == nil {
+			s.Respond(w, r, http.StatusInternalServerError, errors.New("No session"))
+			return
+		}
+
+		// check/creates user directory for files
+		userDirectory := fmt.Sprintf("files/user_%s", txtid)
+		_, err := os.Stat(userDirectory)
+		if os.IsNotExist(err) {
+			errDir := os.MkdirAll(userDirectory, 0751)
+			if errDir != nil {
+				s.Respond(w, r, http.StatusInternalServerError, errors.New(fmt.Sprintf("Could not create user directory (%s)", userDirectory)))
+				return
+			}
+		}
+
+		decoder := json.NewDecoder(r.Body)
+		var t downloadDocumentStruct
+		err = decoder.Decode(&t)
+		if err != nil {
+			s.Respond(w, r, http.StatusBadRequest, errors.New("Could not decode Payload"))
+			return
+		}
+
+		msg := &waProto.Message{DocumentMessage: &waProto.DocumentMessage{
+			Url:           proto.String(t.Url),
+			DirectPath:    proto.String(t.DirectPath),
+			MediaKey:      t.MediaKey,
+			Mimetype:      proto.String(t.Mimetype),
+			FileEncSha256: t.FileEncSHA256,
+			FileSha256:    t.FileSHA256,
+			FileLength:    &t.FileLength,
+		}}
+
+		doc := msg.GetDocumentMessage()
+
+		if doc != nil {
+			docdata, err = clientPointer[userid].Download(doc)
+			if err != nil {
+				log.Error().Str("error", fmt.Sprintf("%v", err)).Msg("Failed to download document")
+				msg := fmt.Sprintf("Failed to download document %v", err)
+				s.Respond(w, r, http.StatusInternalServerError, errors.New(msg))
+				return
+			}
+			mimetype = doc.GetMimetype()
+		}
+
+		dataURL := dataurl.New(docdata, mimetype)
+		response := map[string]interface{}{"Mimetype": mimetype, "Data": dataURL.String()}
+		responseJson, err := json.Marshal(response)
+		if err != nil {
+			s.Respond(w, r, http.StatusInternalServerError, err)
+		} else {
+			s.Respond(w, r, http.StatusOK, string(responseJson))
+		}
+		return
+	}
+}
+
+// Downloads Video and returns base64 representation
+func (s *server) DownloadVideo() http.HandlerFunc {
+
+	type downloadVideoStruct struct {
+		Url           string
+		DirectPath    string
+		MediaKey      []byte
+		Mimetype      string
+		FileEncSHA256 []byte
+		FileSHA256    []byte
+		FileLength    uint64
+	}
+
+	return func(w http.ResponseWriter, r *http.Request) {
+
+		txtid := r.Context().Value("userinfo").(Values).Get("Id")
+		userid, _ := strconv.Atoi(txtid)
+
+		mimetype := ""
+		var docdata []byte
+
+		if clientPointer[userid] == nil {
+			s.Respond(w, r, http.StatusInternalServerError, errors.New("No session"))
+			return
+		}
+
+		// check/creates user directory for files
+		userDirectory := fmt.Sprintf("files/user_%s", txtid)
+		_, err := os.Stat(userDirectory)
+		if os.IsNotExist(err) {
+			errDir := os.MkdirAll(userDirectory, 0751)
+			if errDir != nil {
+				s.Respond(w, r, http.StatusInternalServerError, errors.New(fmt.Sprintf("Could not create user directory (%s)", userDirectory)))
+				return
+			}
+		}
+
+		decoder := json.NewDecoder(r.Body)
+		var t downloadVideoStruct
+		err = decoder.Decode(&t)
+		if err != nil {
+			s.Respond(w, r, http.StatusBadRequest, errors.New("Could not decode Payload"))
+			return
+		}
+
+		msg := &waProto.Message{VideoMessage: &waProto.VideoMessage{
+			Url:           proto.String(t.Url),
+			DirectPath:    proto.String(t.DirectPath),
+			MediaKey:      t.MediaKey,
+			Mimetype:      proto.String(t.Mimetype),
+			FileEncSha256: t.FileEncSHA256,
+			FileSha256:    t.FileSHA256,
+			FileLength:    &t.FileLength,
+		}}
+
+		doc := msg.GetVideoMessage()
+
+		if doc != nil {
+			docdata, err = clientPointer[userid].Download(doc)
+			if err != nil {
+				log.Error().Str("error", fmt.Sprintf("%v", err)).Msg("Failed to download video")
+				msg := fmt.Sprintf("Failed to download video %v", err)
+				s.Respond(w, r, http.StatusInternalServerError, errors.New(msg))
+				return
+			}
+			mimetype = doc.GetMimetype()
+		}
+
+		dataURL := dataurl.New(docdata, mimetype)
+		response := map[string]interface{}{"Mimetype": mimetype, "Data": dataURL.String()}
+		responseJson, err := json.Marshal(response)
+		if err != nil {
+			s.Respond(w, r, http.StatusInternalServerError, err)
+		} else {
+			s.Respond(w, r, http.StatusOK, string(responseJson))
+		}
+		return
+	}
+}
+
+
 // React
 func (s *server) React() http.HandlerFunc {
 
@@ -1951,7 +2117,7 @@ func (s *server) React() http.HandlerFunc {
 		}
 
 		msgid := ""
-		var ts time.Time
+		var resp whatsmeow.SendResponse
 
 		decoder := json.NewDecoder(r.Body)
 		var t textStruct
@@ -2008,14 +2174,14 @@ func (s *server) React() http.HandlerFunc {
 			},
 		}
 
-		ts, err = clientPointer[userid].SendMessage(recipient, msgid, msg)
+		resp, err = clientPointer[userid].SendMessage(context.Background(),recipient, msgid, msg)
 		if err != nil {
 			s.Respond(w, r, http.StatusInternalServerError, errors.New(fmt.Sprintf("Error sending message: %v", err)))
 			return
 		}
 
-		log.Info().Str("timestamp", fmt.Sprintf("%d", ts)).Str("id", msgid).Msg("Message sent")
-		response := map[string]interface{}{"Details": "Sent", "Timestamp": ts, "Id": msgid}
+		log.Info().Str("timestamp", fmt.Sprintf("%d", resp.Timestamp)).Str("id", msgid).Msg("Message sent")
+		response := map[string]interface{}{"Details": "Sent", "Timestamp": resp.Timestamp, "Id": msgid}
 		responseJson, err := json.Marshal(response)
 		if err != nil {
 			s.Respond(w, r, http.StatusInternalServerError, err)

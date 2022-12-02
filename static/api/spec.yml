@@ -442,6 +442,48 @@ paths:
               schema:
                 example: {"code":200,"data":{"Data":"data:image/jpeg;base64,iVBORw0KGgoA5CYII...=","Mimetype":"image/jpeg"},"success":true}
 
+  /chat/downloadvideo:
+    post:
+      tags:
+        - Chat 
+      summary: Downloads Video from message
+      description: Downloads a Video from a message and returns it Base64 media encoded
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#definitions/DownloadImage'
+
+      responses:
+        200:
+          description: Response
+          content:
+            application/json:
+              schema:
+                example: {"code":200,"data":{"Data":"data:video/mp4;base64,iVBORw0KGgoA5CYII...=","Mimetype":"video/mp4"},"success":true}
+
+  /chat/downloaddocument:
+    post:
+      tags:
+        - Chat 
+      summary: Downloads Document from message
+      description: Downloads a Document from a message and returns it Base64 media encoded
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#definitions/DownloadImage'
+
+      responses:
+        200:
+          description: Response
+          content:
+            application/json:
+              schema:
+                example: {"code":200,"data":{"Data":"data:application/pdf;base64,iVBORw0KGgoA5CYII...=","Mimetype":"application/pdf"},"success":true}
+
   /chat/presence:
     post:
       tags:
