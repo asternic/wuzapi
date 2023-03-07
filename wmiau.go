@@ -24,7 +24,7 @@ import (
 	"go.mau.fi/whatsmeow/appstate"
 	waProto "go.mau.fi/whatsmeow/binary/proto"
 	"go.mau.fi/whatsmeow/store"
-	"go.mau.fi/whatsmeow/store/sqlstore"
+//	"go.mau.fi/whatsmeow/store/sqlstore"
 	"go.mau.fi/whatsmeow/types"
 	"go.mau.fi/whatsmeow/types/events"
 	waLog "go.mau.fi/whatsmeow/util/log"
@@ -159,6 +159,8 @@ func (s *server) startClient(userID int, textjid string, token string, subscript
 		}
 	}
 
+    /*  container is initialized on main to have just one connection and avoid sqlite locks
+
 	dbDirectory := "dbdata"
     _, err = os.Stat(dbDirectory)
     if os.IsNotExist(err) {
@@ -179,6 +181,7 @@ func (s *server) startClient(userID int, textjid string, token string, subscript
 	if err != nil {
 		panic(err)
 	}
+    */
 
 	if textjid != "" {
 		jid, _ := parseJID(textjid)

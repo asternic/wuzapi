@@ -11,6 +11,8 @@ import (
 	"syscall"
 	"time"
 	"path/filepath"
+    "go.mau.fi/whatsmeow/store/sqlstore"
+    waLog "go.mau.fi/whatsmeow/util/log"
 
 	"github.com/gorilla/mux"
 	"github.com/patrickmn/go-cache"
@@ -30,6 +32,7 @@ var (
 	logType    = flag.String("logtype", "console", "Type of log output (console or json)")
 	sslcert    = flag.String("sslcertificate", "", "SSL Certificate File")
 	sslprivkey = flag.String("sslprivatekey", "", "SSL Certificate Private Key File")
+    container *sqlstore.Container
 
 	killchannel   = make(map[int](chan bool))
 	userinfocache = cache.New(5*time.Minute, 10*time.Minute)
@@ -89,21 +92,31 @@ func main() {
 	done := make(chan os.Signal, 1)
 	signal.Notify(done, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 
+	if(*waDebug!="") {
+		dbLog := waLog.Stdout("Database", *waDebug, true)
+		container, err = sqlstore.New("sqlite", "file:./dbdata/main.db?_foreign_keys=on&_busy_timeout=3000", dbLog)
+	} else {
+		container, err = sqlstore.New("sqlite", "file:./dbdata/main.db?_foreign_keys=on&_busy_timeout=3000", nil)
+	}
+	if err != nil {
+		panic(err)
+	}
+
 	go func() {
 		if *sslcert != "" {
 			if err := srv.ListenAndServeTLS(*sslcert, *sslprivkey); err != nil && err != http.ErrServerClosed {
 				//log.Fatalf("listen: %s\n", err)
-log.Fatal().Err(err).Msg("Startup failed")
+                log.Fatal().Err(err).Msg("Startup failed")
 			}
 		} else {
 			if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 				//log.Fatalf("listen: %s\n", err)
-log.Fatal().Err(err).Msg("Startup failed")
+                log.Fatal().Err(err).Msg("Startup failed")
 			}
 		}
 	}()
-//	wlog.Infof("Server Started. Listening on %s:%s", *address, *port)
-log.Info().Str("address", *address).Str("port",*port).Msg("Server Started")
+    //wlog.Infof("Server Started. Listening on %s:%s", *address, *port)
+    log.Info().Str("address", *address).Str("port",*port).Msg("Server Started")
 
 	<-done
 	log.Info().Msg("Server Stoped")
