@@ -2096,6 +2096,86 @@ func (s *server) DownloadVideo() http.HandlerFunc {
 	}
 }
 
+// Downloads Audio and returns base64 representation
+func (s *server) DownloadAudio() http.HandlerFunc {
+
+	type downloadAudioStruct struct {
+		Url           string
+		DirectPath    string
+		MediaKey      []byte
+		Mimetype      string
+		FileEncSHA256 []byte
+		FileSHA256    []byte
+		FileLength    uint64
+	}
+
+	return func(w http.ResponseWriter, r *http.Request) {
+
+		txtid := r.Context().Value("userinfo").(Values).Get("Id")
+		userid, _ := strconv.Atoi(txtid)
+
+		mimetype := ""
+		var docdata []byte
+
+		if clientPointer[userid] == nil {
+			s.Respond(w, r, http.StatusInternalServerError, errors.New("No session"))
+			return
+		}
+
+		// check/creates user directory for files
+		userDirectory := fmt.Sprintf("files/user_%s", txtid)
+		_, err := os.Stat(userDirectory)
+		if os.IsNotExist(err) {
+			errDir := os.MkdirAll(userDirectory, 0751)
+			if errDir != nil {
+				s.Respond(w, r, http.StatusInternalServerError, errors.New(fmt.Sprintf("Could not create user directory (%s)", userDirectory)))
+				return
+			}
+		}
+
+		decoder := json.NewDecoder(r.Body)
+		var t downloadAudioStruct
+		err = decoder.Decode(&t)
+		if err != nil {
+			s.Respond(w, r, http.StatusBadRequest, errors.New("Could not decode Payload"))
+			return
+		}
+
+		msg := &waProto.Message{AudioMessage: &waProto.AudioMessage{
+			Url:           proto.String(t.Url),
+			DirectPath:    proto.String(t.DirectPath),
+			MediaKey:      t.MediaKey,
+			Mimetype:      proto.String(t.Mimetype),
+			FileEncSha256: t.FileEncSHA256,
+			FileSha256:    t.FileSHA256,
+			FileLength:    &t.FileLength,
+		}}
+
+		doc := msg.GetAudioMessage()
+
+		if doc != nil {
+			docdata, err = clientPointer[userid].Download(doc)
+			if err != nil {
+				log.Error().Str("error", fmt.Sprintf("%v", err)).Msg("Failed to download audio")
+				msg := fmt.Sprintf("Failed to download audio %v", err)
+				s.Respond(w, r, http.StatusInternalServerError, errors.New(msg))
+				return
+			}
+			mimetype = doc.GetMimetype()
+		}
+
+		dataURL := dataurl.New(docdata, mimetype)
+		response := map[string]interface{}{"Mimetype": mimetype, "Data": dataURL.String()}
+		responseJson, err := json.Marshal(response)
+		if err != nil {
+			s.Respond(w, r, http.StatusInternalServerError, err)
+		} else {
+			s.Respond(w, r, http.StatusOK, string(responseJson))
+		}
+		return
+	}
+}
+
 
 // React
 func (s *server) React() http.HandlerFunc {
