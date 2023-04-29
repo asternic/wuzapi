@@ -14,6 +14,13 @@ type Middleware = alice.Constructor
 
 func (s *server) routes() {
 
+    ex, err := os.Executable()
+    if err != nil {
+        panic(err)
+    }
+    exPath := filepath.Dir(ex)
+
+
 	if *logType == "json" {
 		log = zerolog.New(os.Stdout).With().Timestamp().Str("role", filepath.Base(os.Args[0])).Str("host", *address).Logger()
 	} else {
@@ -79,5 +86,5 @@ func (s *server) routes() {
 	s.router.Handle("/group/photo", c.Then(s.SetGroupPhoto())).Methods("POST")
 	s.router.Handle("/group/name", c.Then(s.SetGroupName())).Methods("POST")
 
-	s.router.PathPrefix("/").Handler(http.FileServer(http.Dir("./static/")))
+	s.router.PathPrefix("/").Handler(http.FileServer(http.Dir(exPath+"/static/")))
 }

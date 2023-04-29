@@ -53,9 +53,14 @@ func init() {
 
 func main() {
 
+    ex, err := os.Executable()
+    if err != nil {
+        panic(err)
+    }
+    exPath := filepath.Dir(ex)
 
-	dbDirectory := "dbdata"
-	_, err := os.Stat(dbDirectory)
+    dbDirectory := exPath + "/dbdata"
+	_, err = os.Stat(dbDirectory)
 	if os.IsNotExist(err) {
 		errDir := os.MkdirAll(dbDirectory, 0751)
 		if errDir != nil {
@@ -63,9 +68,9 @@ func main() {
 		}
 	}
 
-	db, err := sql.Open("sqlite", "./dbdata/users.db")
+	db, err := sql.Open("sqlite", exPath + "/dbdata/users.db")
 	if err != nil {
-		log.Fatal().Err(err).Msg("Could not open/create ./dbdata/users.db")
+		log.Fatal().Err(err).Msg("Could not open/create "+exPath+"/dbdata/users.db")
 		os.Exit(1)
 	}
 	defer db.Close()
