@@ -581,7 +581,7 @@ func (s *server) SendDocument() http.HandlerFunc {
 			}
 		}
 
-		resp, err = clientPointer[userid].SendMessage(context.Background(),recipient, msgid, msg)
+		resp, err = clientPointer[userid].SendMessage(context.Background(), recipient, msg)
 		if err != nil {
 			s.Respond(w, r, http.StatusInternalServerError, errors.New(fmt.Sprintf("Error sending message: %v", err)))
 			return
@@ -692,7 +692,7 @@ func (s *server) SendAudio() http.HandlerFunc {
 			}
 		}
 
-		resp, err = clientPointer[userid].SendMessage(context.Background(),recipient, msgid, msg)
+		resp, err = clientPointer[userid].SendMessage(context.Background(), recipient, msg)
 		if err != nil {
 			s.Respond(w, r, http.StatusInternalServerError, errors.New(fmt.Sprintf("Error sending message: %v", err)))
 			return
@@ -804,7 +804,7 @@ func (s *server) SendImage() http.HandlerFunc {
 			}
 		}
 
-		resp, err = clientPointer[userid].SendMessage(context.Background(),recipient, msgid, msg)
+		resp, err = clientPointer[userid].SendMessage(context.Background(), recipient, msg)
 		if err != nil {
 			s.Respond(w, r, http.StatusInternalServerError, errors.New(fmt.Sprintf("Error sending message: %v", err)))
 			return
@@ -916,7 +916,7 @@ func (s *server) SendSticker() http.HandlerFunc {
 			}
 		}
 
-		resp, err = clientPointer[userid].SendMessage(context.Background(),recipient, msgid, msg)
+		resp, err = clientPointer[userid].SendMessage(context.Background(), recipient, msg)
 		if err != nil {
 			s.Respond(w, r, http.StatusInternalServerError, errors.New(fmt.Sprintf("Error sending message: %v", err)))
 			return
@@ -1030,7 +1030,7 @@ func (s *server) SendVideo() http.HandlerFunc {
 			}
 		}
 
-		resp, err = clientPointer[userid].SendMessage(context.Background(),recipient, msgid, msg)
+		resp, err = clientPointer[userid].SendMessage(context.Background(), recipient, msg)
 		if err != nil {
 			s.Respond(w, r, http.StatusInternalServerError, errors.New(fmt.Sprintf("Error sending message: %v", err)))
 			return
@@ -1118,7 +1118,7 @@ func (s *server) SendContact() http.HandlerFunc {
 			}
 		}
 
-		resp, err = clientPointer[userid].SendMessage(context.Background(),recipient, msgid, msg)
+		resp, err = clientPointer[userid].SendMessage(context.Background(), recipient, msg)
 		if err != nil {
 			s.Respond(w, r, http.StatusInternalServerError, errors.New(fmt.Sprintf("Error sending message: %v", err)))
 			return
@@ -1208,7 +1208,7 @@ func (s *server) SendLocation() http.HandlerFunc {
 			}
 		}
 
-		resp, err = clientPointer[userid].SendMessage(context.Background(),recipient, msgid, msg)
+		resp, err = clientPointer[userid].SendMessage(context.Background(), recipient, msg)
 		if err != nil {
 			s.Respond(w, r, http.StatusInternalServerError, errors.New(fmt.Sprintf("Error sending message: %v", err)))
 			return
@@ -1298,7 +1298,7 @@ func (s *server) SendButtons() http.HandlerFunc {
 			FooterText: proto.String("Footer Text"),
 		}}
 
-		resp, err = clientPointer[userid].SendMessage(context.Background(),recipient, msgid, msg)
+		resp, err = clientPointer[userid].SendMessage(context.Background(),recipient, msg)
 		if err != nil {
 			s.Respond(w, r, http.StatusInternalServerError, errors.New(fmt.Sprintf("Error sending message: %v", err)))
 			return
@@ -1387,7 +1387,7 @@ func (s *server) SendMessage() http.HandlerFunc {
 			}
 		}
 
-		resp, err = clientPointer[userid].SendMessage(context.Background(),recipient, msgid, msg)
+		resp, err = clientPointer[userid].SendMessage(context.Background(), recipient, msg)
 		if err != nil {
 			s.Respond(w, r, http.StatusInternalServerError, errors.New(fmt.Sprintf("Error sending message: %v", err)))
 			return
@@ -1547,7 +1547,7 @@ func (s *server) SendTemplate() http.HandlerFunc {
 		},
 		}
 
-		resp, err = clientPointer[userid].SendMessage(context.Background(),recipient, msgid, msg)
+		resp, err = clientPointer[userid].SendMessage(context.Background(),recipient, msg)
 		if err != nil {
 			s.Respond(w, r, http.StatusInternalServerError, errors.New(fmt.Sprintf("Error sending message: %v", err)))
 			return
@@ -1740,7 +1740,10 @@ func (s *server) GetAvatar() http.HandlerFunc {
 		var pic *types.ProfilePictureInfo
 
 		existingID := ""
-		pic, err = clientPointer[userid].GetProfilePictureInfo(jid, t.Preview, existingID)
+		pic, err = clientPointer[userid].GetProfilePictureInfo(jid, &whatsmeow.GetProfilePictureParams{
+			Preview:    t.Preview,
+			ExistingID: existingID,
+		})
 		if err != nil {
 			msg := fmt.Sprintf("Failed to get avatar: %v", err)
 			log.Error().Msg(msg)
@@ -2176,7 +2179,6 @@ func (s *server) DownloadAudio() http.HandlerFunc {
 	}
 }
 
-
 // React
 func (s *server) React() http.HandlerFunc {
 
@@ -2254,7 +2256,7 @@ func (s *server) React() http.HandlerFunc {
 			},
 		}
 
-		resp, err = clientPointer[userid].SendMessage(context.Background(),recipient, msgid, msg)
+		resp, err = clientPointer[userid].SendMessage(context.Background(), recipient, msg)
 		if err != nil {
 			s.Respond(w, r, http.StatusInternalServerError, errors.New(fmt.Sprintf("Error sending message: %v", err)))
 			return
