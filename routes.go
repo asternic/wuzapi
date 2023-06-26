@@ -66,7 +66,8 @@ func (s *server) routes() {
 	s.router.Handle("/chat/send/location", c.Then(s.SendLocation())).Methods("POST")
 	s.router.Handle("/chat/send/contact", c.Then(s.SendContact())).Methods("POST")
 	s.router.Handle("/chat/react", c.Then(s.React())).Methods("POST")
-	//s.router.Handle("/chat/send/buttons",     c.Then(s.SendButtons())).Methods("POST")
+	s.router.Handle("/chat/send/buttons",     c.Then(s.SendButtons())).Methods("POST")
+	s.router.Handle("/chat/send/list",     c.Then(s.SendList())).Methods("POST")
 
 	s.router.Handle("/user/info", c.Then(s.GetUser())).Methods("GET")
 	s.router.Handle("/user/check", c.Then(s.CheckUser())).Methods("POST")
