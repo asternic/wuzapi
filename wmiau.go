@@ -14,6 +14,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"time"
+	"crypto/tls"
 
 	"github.com/go-resty/resty/v2"
 	_ "modernc.org/sqlite"
@@ -225,6 +226,7 @@ func (s *server) startClient(userID int, textjid string, token string, subscript
 		clientHttp[userID].SetDebug(true)
 	}
 	clientHttp[userID].SetTimeout(5 * time.Second)
+	clientHttp[userID].SetTLSClientConfig(&tls.Config{ InsecureSkipVerify: true })
 
 	if client.Store.ID == nil {
 		// No ID stored, new login
