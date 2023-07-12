@@ -315,6 +315,12 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 	dowebhook := 0
 	path := ""
 
+	ex, err := os.Executable()
+	if err != nil {
+		panic(err)
+	}
+	exPath := filepath.Dir(ex)
+
 	switch evt := rawEvt.(type) {
 	case *events.AppStateSyncComplete:
 		if len(mycli.WAClient.Store.PushName) > 0 && evt.Name == appstate.WAPatchCriticalBlock {
@@ -390,7 +396,7 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 		if img != nil {
 
 			// check/creates user directory for files
-			userDirectory := fmt.Sprintf("files/user_%s", txtid)
+			userDirectory := fmt.Sprintf("%s/files/user_%s", exPath, txtid)
 			_, err := os.Stat(userDirectory)
 			if os.IsNotExist(err) {
 				errDir := os.MkdirAll(userDirectory, 0751)
@@ -420,7 +426,7 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 		if audio != nil {
 
 			// check/creates user directory for files
-			userDirectory := fmt.Sprintf("files/user_%s", txtid)
+			userDirectory := fmt.Sprintf("%s/files/user_%s", exPath, txtid)
 			_, err := os.Stat(userDirectory)
 			if os.IsNotExist(err) {
 				errDir := os.MkdirAll(userDirectory, 0751)
@@ -450,7 +456,7 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 		if document != nil {
 
 			// check/creates user directory for files
-			userDirectory := fmt.Sprintf("files/user_%s", txtid)
+			userDirectory := fmt.Sprintf("%s/files/user_%s", exPath, txtid)
 			_, err := os.Stat(userDirectory)
 			if os.IsNotExist(err) {
 				errDir := os.MkdirAll(userDirectory, 0751)
@@ -517,7 +523,7 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 		dowebhook = 1
 
 		// check/creates user directory for files
-		userDirectory := fmt.Sprintf("files/user_%s", txtid)
+		userDirectory := fmt.Sprintf("%s/files/user_%s", exPath, txtid)
 		_, err := os.Stat(userDirectory)
 		if os.IsNotExist(err) {
 			errDir := os.MkdirAll(userDirectory, 0751)

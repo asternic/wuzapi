@@ -2047,7 +2047,7 @@ func (s *server) DownloadImage() http.HandlerFunc {
 		}
 
 		// check/creates user directory for files
-		userDirectory := fmt.Sprintf("files/user_%s", txtid)
+		userDirectory := fmt.Sprintf("%s/files/user_%s", s.exPath, txtid)
 		_, err := os.Stat(userDirectory)
 		if os.IsNotExist(err) {
 			errDir := os.MkdirAll(userDirectory, 0751)
@@ -2127,7 +2127,7 @@ func (s *server) DownloadDocument() http.HandlerFunc {
 		}
 
 		// check/creates user directory for files
-		userDirectory := fmt.Sprintf("files/user_%s", txtid)
+		userDirectory := fmt.Sprintf("%s/files/user_%s", s.exPath, txtid)
 		_, err := os.Stat(userDirectory)
 		if os.IsNotExist(err) {
 			errDir := os.MkdirAll(userDirectory, 0751)
@@ -2207,7 +2207,7 @@ func (s *server) DownloadVideo() http.HandlerFunc {
 		}
 
 		// check/creates user directory for files
-		userDirectory := fmt.Sprintf("files/user_%s", txtid)
+		userDirectory := fmt.Sprintf("%s/files/user_%s", s.exPath, txtid)
 		_, err := os.Stat(userDirectory)
 		if os.IsNotExist(err) {
 			errDir := os.MkdirAll(userDirectory, 0751)
@@ -2287,7 +2287,7 @@ func (s *server) DownloadAudio() http.HandlerFunc {
 		}
 
 		// check/creates user directory for files
-		userDirectory := fmt.Sprintf("files/user_%s", txtid)
+		userDirectory := fmt.Sprintf("%s/files/user_%s", s.exPath, txtid)
 		_, err := os.Stat(userDirectory)
 		if os.IsNotExist(err) {
 			errDir := os.MkdirAll(userDirectory, 0751)

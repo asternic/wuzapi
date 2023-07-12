@@ -23,6 +23,7 @@ import (
 type server struct {
 	db     *sql.DB
 	router *mux.Router
+	exPath string
 }
 
 var (
@@ -94,6 +95,7 @@ func main() {
 	s := &server{
 		router: mux.NewRouter(),
 		db:     db,
+		exPath: exPath,
 	}
 	s.routes()
 
