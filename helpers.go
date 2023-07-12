@@ -19,7 +19,11 @@ func updateUserInfo(values interface{}, field string, value string) interface{} 
 // webhook for regular messages
 func callHook(myurl string, payload map[string]string, id int) {
 	log.Info().Str("url",myurl).Msg("Sending POST")
-	clientHttp[id].R().SetFormData(payload).Post(myurl)
+	_, err := clientHttp[id].R().SetFormData(payload).Post(myurl)
+
+	if err != nil {
+		log.Debug().Str("error",err.Error())
+	}
 }
 
 // webhook for messages with file attachments
