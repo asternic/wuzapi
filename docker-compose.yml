@@ -1,0 +1,25 @@
+version: '3.3'
+
+services:
+  api:
+    container_name: wuzapi
+    image: wuzapi/api:local
+    build: .
+    restart: always
+    ports:
+      - 8080:8080
+    volumes:
+      - wuzapi_data:/app/dbdata
+    networks:
+      - wuzapi-net
+    command: [ "-logtype", "json", "-token", "1234ABC" ]
+    expose:
+      - 8080
+
+volumes:
+  wuzapi_data:
+
+networks:
+  wuzapi-net:
+    name: wuzapi-net
+    driver: bridge

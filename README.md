@@ -54,6 +54,7 @@ go build .
 By default it will start a REST service in port 8080. These are the parameters
 you can use to alter behaviour
 
+* -apikey : apikey for default admin user (default 1234ABC)
 * -address  : sets the IP address to bind the server to (default 0.0.0.0)
 * -port  : sets the port number (default 8080)
 * -logtype : format for logs, either console (default) or json
@@ -64,7 +65,7 @@ you can use to alter behaviour
 Example:
 
 ```
-./wuzapi -logtype json
+./wuzapi -logtype json -apikey 1234ABCD
 ```
 
 ## Usage
@@ -75,6 +76,12 @@ database:
 
 ``` 
 sqlite3 dbdata/users.db "insert into users ('name','token') values ('John','1234ABCD')" 
+```
+
+Or access with the default admin user
+```
+name: admin
+token: 1234ABCD (admin apikey)
 ```
 
 Once you have some users created, you can talk to the API passing the **Token**

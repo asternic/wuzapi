@@ -65,6 +65,7 @@ are received.</li>
 <p>By default it will start a REST service in port 8080. These are the parameters
 you can use to alter behaviour</p>
 <ul>
+<li>-apikey  : apikey for default admin user (default 1234ABC)</li>
 <li>-address  : sets the IP address to bind the server to (default 0.0.0.0)</li>
 <li>-port  : sets the port number (default 8080)</li>
 <li>-logtype : format for logs, either console (default) or json</li>
@@ -73,7 +74,7 @@ you can use to alter behaviour</p>
 <li>-sslprivatekey : SSL Private Key File</li>
 </ul>
 <p>Example:</p>
-<pre><code>./wuzapi -logtype json
+<pre><code>./wuzapi -logtype json -apikey 1234ABC
 </code></pre>
 <h2 id="user-content-usage">
 <a aria-hidden="true" class="anchor" href="#user-content-usage" id="user-content-usage" name="user-content-usage"><span aria-hidden="true" class="octicon octicon-link"></span></a>Usage</h2>
@@ -81,6 +82,10 @@ you can use to alter behaviour</p>
 authentication token for it. You can do so by updating the SQLite <em>users.db</em>
 database:</p>
 <pre><code>sqlite3 dbdata/users.db "insert into users ('name','token') values ('John','1234ABCD')" 
+</code></pre>
+<p>Or access with the default admin user</p>
+<pre><code>name: admin
+token: 1234ABC (admin apikey)
 </code></pre>
 <p>Once you have some users created, you can talk to the API passing the <strong>Token</strong>
 header as a simple means of authentication. You can have several users
