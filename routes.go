@@ -71,6 +71,7 @@ func (s *server) routes() {
 
 	s.router.Handle("/user/create", c.Then(s.CreateUser())).Methods("POST")
 	s.router.Handle("/user/delete", c.Then(s.DeleteUser())).Methods("POST")
+	s.router.Handle("/user/fetch", c.Then(s.GetUserByToken())).Methods("POST")
 	s.router.Handle("/user/info", c.Then(s.GetUser())).Methods("GET")
 	s.router.Handle("/user/check", c.Then(s.CheckUser())).Methods("POST")
 	s.router.Handle("/user/avatar", c.Then(s.GetAvatar())).Methods("POST")

@@ -1874,6 +1874,49 @@ func (s *server) DeleteUser() http.HandlerFunc {
 	}
 }
 
+func (s *server) GetUserByToken() http.HandlerFunc {
+	type userResponse struct {
+		ID      int    `json:"id"`
+		Name    string `json:"name"`
+		Token   string `json:"token"`
+		Webhook string `json:"webhook"`
+		Jid     string `json:"jid"`
+	}
+
+	return func(w http.ResponseWriter, r *http.Request) {
+		decoder := json.NewDecoder(r.Body)
+
+		var t struct {
+			Token string `json:"token" binding:"required"`
+		}
+		if err := decoder.Decode(&t); err != nil {
+			s.Respond(w, r, http.StatusBadRequest, err.Error())
+			return
+		}
+
+		var user userResponse
+		err := s.db.QueryRow("SELECT id, name, token, webhook, jid FROM users WHERE token=? LIMIT 1", t.Token).Scan(
+			&user.ID, &user.Name, &user.Token, &user.Webhook, &user.Jid,
+		)
+		if err != nil {
+			if err == sql.ErrNoRows {
+				s.Respond(w, r, http.StatusNotFound, "User not found")
+				return
+			}
+			s.Respond(w, r, http.StatusInternalServerError, err)
+			return
+		}
+
+		responseJSON, err := json.Marshal(user)
+		if err != nil {
+			s.Respond(w, r, http.StatusInternalServerError, err.Error())
+			return
+		}
+
+		s.Respond(w, r, http.StatusOK, string(responseJSON))
+	}
+}
+
 // checks if users/phones are on Whatsapp
 func (s *server) CheckUser() http.HandlerFunc {
 
