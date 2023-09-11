@@ -334,6 +334,10 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 			}
 		}
 	case *events.Connected, *events.PushNameSetting:
+		postmap["type"] = "SessionStatus"
+		postmap["state"] = "Connected"
+		dowebhook = 1
+
 		if len(mycli.WAClient.Store.PushName) == 0 {
 			return
 		}
@@ -352,6 +356,8 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 			return
 		}
 	case *events.PairSuccess:
+		postmap["type"] = "PairSuccess"
+		dowebhook = 1
 		log.Info().Str("userid", strconv.Itoa(mycli.userID)).Str("token", mycli.token).Str("ID", evt.ID.String()).Str("BusinessName", evt.BusinessName).Str("Platform", evt.Platform).Msg("QR Pair Success")
 		jid := evt.ID
 		sqlStmt := `UPDATE users SET jid=? WHERE id=?`
@@ -554,6 +560,10 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 	case *events.AppState:
 		log.Info().Str("index", fmt.Sprintf("%+v", evt.Index)).Str("actionValue", fmt.Sprintf("%+v", evt.SyncActionValue)).Msg("App state event received")
 	case *events.LoggedOut:
+		postmap["type"] = "SessionStatus"
+		postmap["state"] = "LoggedOut"
+		dowebhook = 1
+
 		log.Info().Str("reason", evt.Reason.String()).Msg("Logged out")
 		killchannel[mycli.userID] <- true
 		sqlStmt := `UPDATE users SET connected=0 WHERE id=?`
@@ -576,6 +586,17 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 		log.Info().Str("event", fmt.Sprintf("%+v", evt)).Msg("Got call offer notice")
 	case *events.CallRelayLatency:
 		log.Info().Str("event", fmt.Sprintf("%+v", evt)).Msg("Got call relay latency")
+	case *events.QR:
+		postmap["type"] = "QR"
+		image, _ := qrcode.Encode(evt.Codes[0], qrcode.Medium, 256)
+		base64qrcode := "data:image/png;base64," + base64.StdEncoding.EncodeToString(image)
+		postmap["code"] = base64qrcode
+		dowebhook = 1
+		log.Info().Str("event", fmt.Sprintf("%+v", evt)).Msg("Got QR")
+	case *events.PairError:
+		postmap["type"] = "PairError"
+		dowebhook = 1
+		log.Info().Str("event", fmt.Sprintf("%+v", evt)).Msg("Got QR")
 	default:
 		log.Warn().Str("event", fmt.Sprintf("%+v", evt)).Msg("Unhandled event")
 	}
@@ -600,12 +621,12 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 			values, _ := json.Marshal(postmap)
 			if path == "" {
 				data := make(map[string]string)
-				data["jsonData"] = string(values)
+				data["data"] = string(values)
 				data["token"] = mycli.token
 				go callHook(webhookurl, data, mycli.userID)
 			} else {
 				data := make(map[string]string)
-				data["jsonData"] = string(values)
+				data["data"] = string(values)
 				data["token"] = mycli.token
 				go callHookFile(webhookurl, data, mycli.userID, path)
 			}
