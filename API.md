@@ -80,7 +80,7 @@ Available message types to subscribe to are:
 * HistorySync
 * ChatPresence
 
-If you set Immediate to false, the action will wait 10 seconds to verify a successful login. If Immediate is not set or set to false, it will return immedialty, but you will have to check shortly after the /session/status as your session might be disconnected shortly after started if the session was terminated previously via the phone/device.
+If you set Immediate to false, the action will wait 10 seconds to verify a successful login. If Immediate is not set or set to true, it will return immedialty, but you will have to check shortly after the /session/status as your session might be disconnected shortly after started if the session was terminated previously via the phone/device.
 
 Endpoint: _/session/connect_
 
@@ -227,10 +227,10 @@ Gets information for users on Whatsapp
 
 Endpoint: _/user/info_
 
-Method: **GET**
+Method: **POST**
 
 ```
-curl -s -X POST -H 'Token: 1234ABCD' -H 'Content-Type: application/json' --data '{"Phone":["5491155554445","5491155554444"]}' http://localhost:8080/user 
+curl -s -X POST -H 'Token: 1234ABCD' -H 'Content-Type: application/json' --data '{"Phone":["5491155554445","5491155554444"]}' http://localhost:8080/user/info 
 ```
 
 Response:
