@@ -220,6 +220,7 @@ func (s *server) startClient(userID int, textjid string, token string, subscript
 	clientPointer[userID] = client
 	mycli := MyClient{client, 1, userID, token, subscriptions, s.db}
 	mycli.eventHandlerID = mycli.WAClient.AddEventHandler(mycli.myEventHandler)
+	//clientHttp[userID] = resty.New().EnableTrace()
 	clientHttp[userID] = resty.New()
 	clientHttp[userID].SetRedirectPolicy(resty.FlexibleRedirectPolicy(15))
 	if *waDebug == "DEBUG" {
@@ -227,7 +228,14 @@ func (s *server) startClient(userID int, textjid string, token string, subscript
 	}
 	clientHttp[userID].SetTimeout(5 * time.Second)
 	clientHttp[userID].SetTLSClientConfig(&tls.Config{ InsecureSkipVerify: true })
-
+	clientHttp[userID].OnError(func(req *resty.Request, err error) {
+		if v, ok := err.(*resty.ResponseError); ok {
+			// v.Response contains the last response from the server
+			// v.Err contains the original error
+			log.Debug().Str("response",v.Response.String()).Msg("resty error")
+			log.Error().Err(v.Err).Msg("resty error")
+	  }
+	})
 	if client.Store.ID == nil {
 		// No ID stored, new login
 
