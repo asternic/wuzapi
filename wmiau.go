@@ -609,10 +609,12 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 			if path == "" {
 				data := make(map[string]string)
 				data["jsonData"] = string(values)
+				data["token"] = mycli.token
 				go callHook(webhookurl, data, mycli.userID)
 			} else {
 				data := make(map[string]string)
 				data["jsonData"] = string(values)
+				data["token"] = mycli.token
 				go callHookFile(webhookurl, data, mycli.userID, path)
 			}
 		} else {
