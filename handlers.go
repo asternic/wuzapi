@@ -486,6 +486,7 @@ func (s *server) GetStatus() http.HandlerFunc {
 func (s *server) SendDocument() http.HandlerFunc {
 
 	type documentStruct struct {
+		Caption     string
 		Phone       string
 		Document    string
 		FileName    string
@@ -571,6 +572,7 @@ func (s *server) SendDocument() http.HandlerFunc {
 			FileEncSha256: uploaded.FileEncSHA256,
 			FileSha256:    uploaded.FileSHA256,
 			FileLength:    proto.Uint64(uint64(len(filedata))),
+			Caption:       proto.String(t.Caption),
 		}}
 
 		if t.ContextInfo.StanzaId != nil {
