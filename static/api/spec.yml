@@ -105,6 +105,25 @@ paths:
             application/json:
               schema:
                 example: { "code": 200, "data": { "Connected": true, "LoggedIn": true }, "success": true }
+  /session/pairphone:
+    post:
+      tags:
+        - Session
+      summary: Gets pair by phone code
+      description: Gets the code to enter into whatsapp client when pairing by phone number instead of QR code
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#definitions/Pairphone'
+      responses:
+        200:
+          description: Response
+          content:
+            application/json:
+              schema:
+                example: { "code": 200, "data": { "LinkingCode" : "9H3J-H3J8" }, "success": true }
   /session/qr:
     get:
       tags:
@@ -999,6 +1018,14 @@ definitions:
       Sender:
         type: string
         example: 5491155553111.0:1@s.whatsapp.net
+  Pairphone:
+    type: object
+    required:
+      - Phone
+    properties:
+      Phone:
+        type: string
+        example: "5491155553934"
   Checkuser:
     type: object
     required:

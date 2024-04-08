@@ -88,6 +88,24 @@ that you can load with your browser:
 * scan QR codes in [/login](/login) (where you will need to pass
 ?token=1234ABCD)
 
+## ADMIN Actions
+
+You can also list, add and delete users using an admin enpoint. In order to
+use it you must either pass the -admintoken parameter on the command line when
+starting wuzapi, or set the enviornment variable WUZAPI\_ADMIN\_TOKEN
+
+Then you can use the /admin/users endpoint to GET the list of users, you can
+POST to /admin/users to create a new user, or you can DELETE to /admin/users/{id}
+to remove one. You need to set the header Authorization and pass the token
+defined either via environment or command line.
+
+The JSON body to create a new user must contain:
+
+name [string] : User name
+token [string] : Security token for authorizing/authenticating this user
+webhook [string] : URL to send events via POST
+events [string] : comma separated list of events to receive, valid events are: "Message", "ReadReceipt", "Presence", "HistorySync", "ChatPresence", "All"
+expiration [int] : Some expiration timestamp, it is not enforced not used by the daemon
 
 ## API reference 
 

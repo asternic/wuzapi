@@ -20,13 +20,18 @@ func (s *server) routes() {
     }
     exPath := filepath.Dir(ex)
 
-
 	if *logType == "json" {
 		log = zerolog.New(os.Stdout).With().Timestamp().Str("role", filepath.Base(os.Args[0])).Str("host", *address).Logger()
 	} else {
 		output := zerolog.ConsoleWriter{Out: os.Stdout, TimeFormat: time.RFC3339}
 		log = zerolog.New(output).With().Timestamp().Str("role", filepath.Base(os.Args[0])).Str("host", *address).Logger()
 	}
+
+    adminRoutes := s.router.PathPrefix("/admin").Subrouter()
+    adminRoutes.Use(s.authadmin)
+    adminRoutes.Handle("/users", s.ListUsers()).Methods("GET")
+    adminRoutes.Handle("/users", s.AddUser()).Methods("POST")
+    adminRoutes.Handle("/users/{id}", s.DeleteUser()).Methods("DELETE")
 
 	c := alice.New()
 	c = c.Append(s.authalice)
@@ -52,6 +57,7 @@ func (s *server) routes() {
 	s.router.Handle("/session/logout", c.Then(s.Logout())).Methods("POST")
 	s.router.Handle("/session/status", c.Then(s.GetStatus())).Methods("GET")
 	s.router.Handle("/session/qr", c.Then(s.GetQR())).Methods("GET")
+	s.router.Handle("/session/pairphone", c.Then(s.PairPhone())).Methods("POST")
 
 	s.router.Handle("/webhook", c.Then(s.SetWebhook())).Methods("POST")
 	s.router.Handle("/webhook", c.Then(s.GetWebhook())).Methods("GET")

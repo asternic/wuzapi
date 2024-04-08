@@ -18,6 +18,7 @@ import (
 	"github.com/patrickmn/go-cache"
 	"github.com/rs/zerolog"
 	_ "modernc.org/sqlite"
+    _ "github.com/mattn/go-sqlite3"
 )
 
 type server struct {
@@ -33,6 +34,7 @@ var (
 	logType    = flag.String("logtype", "console", "Type of log output (console or json)")
 	sslcert    = flag.String("sslcertificate", "", "SSL Certificate File")
 	sslprivkey = flag.String("sslprivatekey", "", "SSL Certificate Private Key File")
+	adminToken = flag.String("admintoken", "", "Security Token to authorize admin actions (list/create/remove users)")
     container *sqlstore.Container
 
 	killchannel   = make(map[int](chan bool))
@@ -50,6 +52,13 @@ func init() {
         output := zerolog.ConsoleWriter{Out: os.Stdout, TimeFormat: time.RFC3339}
         log = zerolog.New(output).With().Timestamp().Str("role",filepath.Base(os.Args[0])).Logger()
     }
+
+    if(*adminToken == "") {
+        if v := os.Getenv("WUZAPI_ADMIN_TOKEN"); v != "" {
+            *adminToken = v
+        }
+    }
+
 }
 
 func main() {
@@ -84,9 +93,9 @@ func main() {
 
 	if(*waDebug!="") {
 		dbLog := waLog.Stdout("Database", *waDebug, true)
-		container, err = sqlstore.New("sqlite", "file:"+exPath+"/dbdata/main.db?_foreign_keys=on&_busy_timeout=3000", dbLog)
+		container, err = sqlstore.New("sqlite3", "file:"+exPath+"/dbdata/main.db?_foreign_keys=on&_busy_timeout=3000", dbLog)
 	} else {
-		container, err = sqlstore.New("sqlite", "file:"+exPath+"/dbdata/main.db?_foreign_keys=on&_busy_timeout=3000", nil)
+		container, err = sqlstore.New("sqlite3", "file:"+exPath+"/dbdata/main.db?_foreign_keys=on&_busy_timeout=3000", nil)
 	}
 	if err != nil {
 		panic(err)

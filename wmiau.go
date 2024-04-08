@@ -107,39 +107,18 @@ func (s *server) connectOnStartup() {
 }
 
 func parseJID(arg string) (types.JID, bool) {
-	if arg == "" {
-		return types.NewJID("", types.DefaultUserServer), false
-	}
 	if arg[0] == '+' {
 		arg = arg[1:]
 	}
-
-	// Basic only digit check for recipient phone number, we want to remove @server and .session
-	phonenumber := ""
-	phonenumber = strings.Split(arg, "@")[0]
-	phonenumber = strings.Split(phonenumber, ".")[0]
-	b := true
-	for _, c := range phonenumber {
-		if c < '0' || c > '9' {
-			b = false
-			break
-		}
-	}
-	if b == false {
-		log.Warn().Msg("Bad jid format, return empty")
-		recipient, _ := types.ParseJID("")
-		return recipient, false
-	}
-
 	if !strings.ContainsRune(arg, '@') {
 		return types.NewJID(arg, types.DefaultUserServer), true
 	} else {
 		recipient, err := types.ParseJID(arg)
 		if err != nil {
-		    log.Error().Err(err).Str("jid",arg).Msg("Invalid jid")
+		    log.Error().Err(err).Msg("Invalid JID")
 			return recipient, false
 		} else if recipient.User == "" {
-		    log.Error().Err(err).Str("jid",arg).Msg("Invalid jid. No server specified")
+		    log.Error().Err(err).Msg("Invalid JID no server specified")
 			return recipient, false
 		}
 		return recipient, true
@@ -159,30 +138,6 @@ func (s *server) startClient(userID int, textjid string, token string, subscript
 			return
 		}
 	}
-
-    /*  container is initialized on main to have just one connection and avoid sqlite locks
-
-	dbDirectory := "dbdata"
-    _, err = os.Stat(dbDirectory)
-    if os.IsNotExist(err) {
-        errDir := os.MkdirAll(dbDirectory, 0751)
-        if errDir != nil {
-            panic("Could not create dbdata directory")
-        }
-    }
-
-	var container *sqlstore.Container
-
-	if(*waDebug!="") {
-		dbLog := waLog.Stdout("Database", *waDebug, true)
-		container, err = sqlstore.New("sqlite", "file:./dbdata/main.db?_foreign_keys=on", dbLog)
-	} else {
-		container, err = sqlstore.New("sqlite", "file:./dbdata/main.db?_foreign_keys=on", nil)
-	}
-	if err != nil {
-		panic(err)
-	}
-    */
 
 	if textjid != "" {
 		jid, _ := parseJID(textjid)
@@ -209,17 +164,17 @@ func (s *server) startClient(userID int, textjid string, token string, subscript
 	store.DeviceProps.PlatformType = waProto.DeviceProps_UNKNOWN.Enum()
 	store.DeviceProps.Os = &osName
 
-
 	clientLog := waLog.Stdout("Client", *waDebug, true)
 	var client *whatsmeow.Client
 	if(*waDebug!="") {
-	client = whatsmeow.NewClient(deviceStore, clientLog)
+		client = whatsmeow.NewClient(deviceStore, clientLog)
 	} else {
-	client = whatsmeow.NewClient(deviceStore, nil)
+		client = whatsmeow.NewClient(deviceStore, nil)
 	}
 	clientPointer[userID] = client
 	mycli := MyClient{client, 1, userID, token, subscriptions, s.db}
 	mycli.eventHandlerID = mycli.WAClient.AddEventHandler(mycli.myEventHandler)
+
 	//clientHttp[userID] = resty.New().EnableTrace()
 	clientHttp[userID] = resty.New()
 	clientHttp[userID].SetRedirectPolicy(resty.FlexibleRedirectPolicy(15))
@@ -236,6 +191,7 @@ func (s *server) startClient(userID int, textjid string, token string, subscript
 			log.Error().Err(v.Err).Msg("resty error")
 	  }
 	})
+
 	if client.Store.ID == nil {
 		// No ID stored, new login
 
@@ -406,7 +362,7 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 		if img != nil {
 
 			// check/creates user directory for files
-			userDirectory := fmt.Sprintf("%s/files/user_%s", exPath, txtid)
+			userDirectory := filepath.Join(exPath, "files", "user_"+txtid)
 			_, err := os.Stat(userDirectory)
 			if os.IsNotExist(err) {
 				errDir := os.MkdirAll(userDirectory, 0751)
@@ -422,7 +378,7 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 				return
 			}
 			exts, _ := mime.ExtensionsByType(img.GetMimetype())
-			path = fmt.Sprintf("%s/%s%s", userDirectory, evt.Info.ID, exts[0])
+			path = filepath.Join(userDirectory, evt.Info.ID+exts[0])
 			err = os.WriteFile(path, data, 0600)
 			if err != nil {
 				log.Error().Err(err).Msg("Failed to save image")
@@ -436,7 +392,7 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 		if audio != nil {
 
 			// check/creates user directory for files
-			userDirectory := fmt.Sprintf("%s/files/user_%s", exPath, txtid)
+			userDirectory := filepath.Join(exPath, "files", "user_"+txtid)
 			_, err := os.Stat(userDirectory)
 			if os.IsNotExist(err) {
 				errDir := os.MkdirAll(userDirectory, 0751)
@@ -452,7 +408,7 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 				return
 			}
 			exts, _ := mime.ExtensionsByType(audio.GetMimetype())
-			path = fmt.Sprintf("%s/%s%s", userDirectory, evt.Info.ID, exts[0])
+			path = filepath.Join(userDirectory, evt.Info.ID+exts[0])
 			err = os.WriteFile(path, data, 0600)
 			if err != nil {
 				log.Error().Err(err).Msg("Failed to save audio")
@@ -466,7 +422,7 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 		if document != nil {
 
 			// check/creates user directory for files
-			userDirectory := fmt.Sprintf("%s/files/user_%s", exPath, txtid)
+			userDirectory := filepath.Join(exPath, "files", "user_"+txtid)
 			_, err := os.Stat(userDirectory)
 			if os.IsNotExist(err) {
 				errDir := os.MkdirAll(userDirectory, 0751)
@@ -489,7 +445,7 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 				filename := document.FileName
 				extension = filepath.Ext(*filename)
 			}
-			path = fmt.Sprintf("%s/%s%s", userDirectory, evt.Info.ID, extension)
+			path = filepath.Join(userDirectory, evt.Info.ID+extension)
 			err = os.WriteFile(path, data, 0600)
 			if err != nil {
 				log.Error().Err(err).Msg("Failed to save document")
@@ -533,7 +489,7 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 		dowebhook = 1
 
 		// check/creates user directory for files
-		userDirectory := fmt.Sprintf("%s/files/user_%s", exPath, txtid)
+		userDirectory := filepath.Join(exPath, "files", "user_"+txtid)
 		_, err := os.Stat(userDirectory)
 		if os.IsNotExist(err) {
 			errDir := os.MkdirAll(userDirectory, 0751)
@@ -544,7 +500,7 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 		}
 
 		id := atomic.AddInt32(&historySyncID, 1)
-		fileName := fmt.Sprintf("%s/history-%d.json", userDirectory, id)
+		fileName := filepath.Join(userDirectory, "history-"+strconv.Itoa(int(id))+".json")
 		file, err := os.OpenFile(fileName, os.O_WRONLY|os.O_CREATE, 0600)
 		if err != nil {
 			log.Error().Err(err).Msg("Failed to open file to write history sync")
