@@ -101,11 +101,11 @@ defined either via environment or command line.
 
 The JSON body to create a new user must contain:
 
-name [string] : User name
-token [string] : Security token for authorizing/authenticating this user
-webhook [string] : URL to send events via POST
-events [string] : comma separated list of events to receive, valid events are: "Message", "ReadReceipt", "Presence", "HistorySync", "ChatPresence", "All"
-expiration [int] : Some expiration timestamp, it is not enforced not used by the daemon
+- name [string] : User name
+- token [string] : Security token for authorizing/authenticating this user
+- webhook [string] : URL to send events via POST
+- events [string] : comma separated list of events to receive, valid events are: "Message", "ReadReceipt", "Presence", "HistorySync", "ChatPresence", "All"
+- expiration [int] : Some expiration timestamp, it is not enforced not used by the daemon
 
 ## API reference 
 
