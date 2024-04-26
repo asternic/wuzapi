@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"database/sql"
 
 	"github.com/gorilla/mux"
 	"github.com/patrickmn/go-cache"
@@ -2854,20 +2855,6 @@ func (s *server) ListUsers() http.HandlerFunc {
 
 	return func(w http.ResponseWriter, r *http.Request) {
 
-        /*
-		if *adminToken == "" {
-			s.Respond(w, r, http.StatusInternalServerError, errors.New("No admin token set"))
-			return
-		}
-
-        token := r.Header.Get("Authorization")
-        if token != *adminToken {
-			s.Respond(w, r, http.StatusUnauthorized, errors.New("Unauthorized"))
-			log.Error().Str("error", fmt.Sprintf("%s %s", token, *adminToken)).Msg("Admin Authorization Error")
-            return
-        }
-        */
-
         // Query the database to get the list of users
         rows, err := s.db.Query("SELECT id, name, token, webhook, jid, connected, expiration, events FROM users")
         if err != nil {
@@ -2883,13 +2870,19 @@ func (s *server) ListUsers() http.HandlerFunc {
         for rows.Next() {
             var id int
             var name, token, webhook, jid string
-            var connected, expiration int
+            var connectedNull sql.NullInt64
+            var expiration int
             var events string
 
-            err := rows.Scan(&id, &name, &token, &webhook, &jid, &connected, &expiration, &events)
+            err := rows.Scan(&id, &name, &token, &webhook, &jid, &connectedNull, &expiration, &events)
             if err != nil {
 			    s.Respond(w, r, http.StatusInternalServerError, errors.New("Problem accessing DB"))
                 return
+            }
+
+            connected := int(0)
+            if connectedNull.Valid {
+                connected = int(connectedNull.Int64)
             }
 
             user := map[string]interface{}{
