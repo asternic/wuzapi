@@ -2877,7 +2877,7 @@ func (s *server) ListUsers() http.HandlerFunc {
         defer rows.Close()
 
         // Create a slice to store the user data
-        var users []map[string]interface{}
+        users := []map[string]interface{}{}
 
         // Iterate over the rows and populate the user data
         for rows.Next() {
