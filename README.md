@@ -60,6 +60,7 @@ you can use to alter behaviour
 * -wadebug : enable whatsmeow debug, either INFO or DEBUG levels are suported
 * -sslcertificate : SSL Certificate File
 * -sslprivatekey : SSL Private Key File
+* -admintoken : your admin token to create, get, or delete users from database
 
 Example:
 
