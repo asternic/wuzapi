@@ -1,8 +1,10 @@
 FROM golang:1.21-alpine AS build
+RUN apk add --no-cache gcc musl-dev
 RUN mkdir /app
 COPY . /app
 WORKDIR /app
 RUN go mod tidy
+ENV CGO_ENABLED=1
 RUN go build -o server .
 
 FROM alpine:latest
