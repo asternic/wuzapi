@@ -653,7 +653,7 @@ func (s *server) SendDocument() http.HandlerFunc {
 			}
 		}
 
-		resp, err = clientPointer[userid].SendMessage(context.Background(), recipient, msg)
+		resp, err = clientPointer[userid].SendMessage(context.Background(), recipient, msg, whatsmeow.SendRequestExtra{ID: msgid})
 		if err != nil {
 			s.Respond(w, r, http.StatusInternalServerError, errors.New(fmt.Sprintf("Error sending message: %v", err)))
 			return
@@ -769,7 +769,7 @@ func (s *server) SendAudio() http.HandlerFunc {
 			}
 		}
 
-		resp, err = clientPointer[userid].SendMessage(context.Background(), recipient, msg)
+		resp, err = clientPointer[userid].SendMessage(context.Background(), recipient, msg, whatsmeow.SendRequestExtra{ID: msgid})
 		if err != nil {
 			s.Respond(w, r, http.StatusInternalServerError, errors.New(fmt.Sprintf("Error sending message: %v", err)))
 			return
@@ -881,7 +881,7 @@ func (s *server) SendImage() http.HandlerFunc {
 			}
 		}
 
-		resp, err = clientPointer[userid].SendMessage(context.Background(), recipient, msg)
+		resp, err = clientPointer[userid].SendMessage(context.Background(), recipient, msg, whatsmeow.SendRequestExtra{ID: msgid})
 		if err != nil {
 			s.Respond(w, r, http.StatusInternalServerError, errors.New(fmt.Sprintf("Error sending message: %v", err)))
 			return
@@ -993,7 +993,7 @@ func (s *server) SendSticker() http.HandlerFunc {
 			}
 		}
 
-		resp, err = clientPointer[userid].SendMessage(context.Background(), recipient, msg)
+		resp, err = clientPointer[userid].SendMessage(context.Background(), recipient, msg, whatsmeow.SendRequestExtra{ID: msgid})
 		if err != nil {
 			s.Respond(w, r, http.StatusInternalServerError, errors.New(fmt.Sprintf("Error sending message: %v", err)))
 			return
@@ -1107,7 +1107,7 @@ func (s *server) SendVideo() http.HandlerFunc {
 			}
 		}
 
-		resp, err = clientPointer[userid].SendMessage(context.Background(), recipient, msg)
+		resp, err = clientPointer[userid].SendMessage(context.Background(), recipient, msg, whatsmeow.SendRequestExtra{ID: msgid})
 		if err != nil {
 			s.Respond(w, r, http.StatusInternalServerError, errors.New(fmt.Sprintf("Error sending message: %v", err)))
 			return
@@ -1195,7 +1195,7 @@ func (s *server) SendContact() http.HandlerFunc {
 			}
 		}
 
-		resp, err = clientPointer[userid].SendMessage(context.Background(), recipient, msg)
+		resp, err = clientPointer[userid].SendMessage(context.Background(), recipient, msg, whatsmeow.SendRequestExtra{ID: msgid})
 		if err != nil {
 			s.Respond(w, r, http.StatusInternalServerError, errors.New(fmt.Sprintf("Error sending message: %v", err)))
 			return
@@ -1285,7 +1285,7 @@ func (s *server) SendLocation() http.HandlerFunc {
 			}
 		}
 
-		resp, err = clientPointer[userid].SendMessage(context.Background(), recipient, msg)
+		resp, err = clientPointer[userid].SendMessage(context.Background(), recipient, msg, whatsmeow.SendRequestExtra{ID: msgid})
 		if err != nil {
 			s.Respond(w, r, http.StatusInternalServerError, errors.New(fmt.Sprintf("Error sending message: %v", err)))
 			return
@@ -1387,11 +1387,11 @@ func (s *server) SendButtons() http.HandlerFunc {
             Buttons:     buttons,
         }
 
-        resp, err = clientPointer[userid].SendMessage(context.Background(), recipient, &waProto.Message{ViewOnceMessage: &waProto.FutureProofMessage{
+		resp, err = clientPointer[userid].SendMessage(context.Background(), recipient, &waProto.Message{ViewOnceMessage: &waProto.FutureProofMessage{
             Message: &waProto.Message{
                 ButtonsMessage: msg2,
             },
-        }})
+        }}, whatsmeow.SendRequestExtra{ID: msgid})
         if err != nil {
             s.Respond(w, r, http.StatusInternalServerError, errors.New(fmt.Sprintf("Error sending message: %v", err)))
             return
@@ -1527,20 +1527,20 @@ func (s *server) SendList() http.HandlerFunc {
             FooterText:  proto.String(t.FooterText),
         }
 
-        resp, err = clientPointer[userid].SendMessage(context.Background(), recipient, &waProto.Message{
+		resp, err = clientPointer[userid].SendMessage(context.Background(), recipient, &waProto.Message{
             ViewOnceMessage: &waProto.FutureProofMessage{
                 Message: &waProto.Message{
                     ListMessage: msg1,
                 },
-            }})
+            }}, whatsmeow.SendRequestExtra{ID: msgid})
         if err != nil {
             s.Respond(w, r, http.StatusInternalServerError, errors.New(fmt.Sprintf("Error sending message: %v", err)))
             return
         }
 
         log.Info().Str("timestamp", fmt.Sprintf("%d", resp.Timestamp)).Str("id", msgid).Msg("Message sent")
-        response := map[string]interface{}{"Details": "Sent", "Timestamp": resp.Timestamp, "Id": msgid}
-        responseJson, err := json.Marshal(response)
+		response := map[string]interface{}{"Details": "Sent", "Timestamp": resp.Timestamp, "Id": msgid}
+		responseJson, err := json.Marshal(response)
         if err != nil {
             s.Respond(w, r, http.StatusInternalServerError, err)
         } else {
@@ -1620,7 +1620,7 @@ func (s *server) SendMessage() http.HandlerFunc {
 			}
 		}
 
-		resp, err = clientPointer[userid].SendMessage(context.Background(), recipient, msg)
+		resp, err = clientPointer[userid].SendMessage(context.Background(), recipient, msg, whatsmeow.SendRequestExtra{ID: msgid})
 		if err != nil {
 			s.Respond(w, r, http.StatusInternalServerError, errors.New(fmt.Sprintf("Error sending message: %v", err)))
 			return
@@ -1780,7 +1780,7 @@ func (s *server) SendTemplate() http.HandlerFunc {
 		},
 		}
 
-		resp, err = clientPointer[userid].SendMessage(context.Background(),recipient, msg)
+		resp, err = clientPointer[userid].SendMessage(context.Background(),recipient, msg, whatsmeow.SendRequestExtra{ID: msgid})
 		if err != nil {
 			s.Respond(w, r, http.StatusInternalServerError, errors.New(fmt.Sprintf("Error sending message: %v", err)))
 			return
@@ -2489,7 +2489,7 @@ func (s *server) React() http.HandlerFunc {
 			},
 		}
 
-		resp, err = clientPointer[userid].SendMessage(context.Background(), recipient, msg)
+		resp, err = clientPointer[userid].SendMessage(context.Background(), recipient, msg, whatsmeow.SendRequestExtra{ID: msgid})
 		if err != nil {
 			s.Respond(w, r, http.StatusInternalServerError, errors.New(fmt.Sprintf("Error sending message: %v", err)))
 			return
@@ -2969,7 +2969,7 @@ func (s *server) AddUser() http.HandlerFunc {
         id, _ := result.LastInsertId()
 
         // Return the inserted user ID
-        response := map[string]interface{}{
+		response := map[string]interface{}{
             "id": id,
         }
         json.NewEncoder(w).Encode(response)
