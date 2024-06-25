@@ -613,7 +613,7 @@ curl -s -X POST -H 'Token: 1234ABCD' -H 'Content-Type: application/json' --data 
 
 Downloads a Document from a message and retrieves it Base64 media encoded. Required request parameters are: Url, MediaKey, Mimetype, FileSHA256 and FileLength
 
-endpoint: _/chat/downloadvideo_
+endpoint: _/chat/downloaddocument_
 
 method: **POST**
 
