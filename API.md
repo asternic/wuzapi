@@ -609,11 +609,25 @@ curl -s -X POST -H 'Token: 1234ABCD' -H 'Content-Type: application/json' --data 
 
 ---
 
+## Download Audio
+
+Downloads an Audio from a message and retrieves it Base64 media encoded. Required request parameters are: Url, MediaKey, Mimetype, FileSHA256 and FileLength
+
+endpoint: _/chat/downloadaudio_
+
+method: **POST**
+
+```
+curl -s -X POST -H 'Token: 1234ABCD' -H 'Content-Type: application/json' --data '{"Url":"https://mmg.whatsapp.net/d/f/Apah954sUug5I9GnQsmXKPUdUn3ZPKGYFnscJU02dpuD.enc","Mimetype":"audio/ogg; codecs=opus", "FileSHA256":"nMthnfkUWQiMfNJpA6K9+ft+Dx9Mb1STs+9wMHjeo/M=","FileLength":2039,"MediaKey":"vq0RR0nYGkxm2HrpwUp3sK8A7Nr1KUcOiBHrT1hg+PU=","FileEncSHA256":"6bMVZ5dRf9JKxJSUgg4w1h3iSYA3dM8gEQxaMPwoONc="}' http://localhost:8080/chat/downloadaudio
+```
+
+---
+
 ## Download Document
 
 Downloads a Document from a message and retrieves it Base64 media encoded. Required request parameters are: Url, MediaKey, Mimetype, FileSHA256 and FileLength
 
-endpoint: _/chat/downloadvideo_
+endpoint: _/chat/downloaddocument_
 
 method: **POST**
 
