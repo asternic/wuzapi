@@ -599,7 +599,7 @@ func (s *server) SendDocument() http.HandlerFunc {
 			return
 		}
 
-		recipient, err := validateMessageFields(t.Phone, t.ContextInfo.StanzaId, t.ContextInfo.Participant)
+		recipient, err := validateMessageFields(t.Phone, t.ContextInfo.StanzaID, t.ContextInfo.Participant)
 		if err != nil {
 			log.Error().Msg(fmt.Sprintf("%s", err))
 			s.Respond(w, r, http.StatusBadRequest, err)
@@ -634,20 +634,20 @@ func (s *server) SendDocument() http.HandlerFunc {
 		}
 
 		msg := &waProto.Message{DocumentMessage: &waProto.DocumentMessage{
-			Url:           proto.String(uploaded.URL),
+			URL:           proto.String(uploaded.URL),
 			FileName:      &t.FileName,
 			DirectPath:    proto.String(uploaded.DirectPath),
 			MediaKey:      uploaded.MediaKey,
 			Mimetype:      proto.String(http.DetectContentType(filedata)),
-			FileEncSha256: uploaded.FileEncSHA256,
-			FileSha256:    uploaded.FileSHA256,
+			FileEncSHA256: uploaded.FileEncSHA256,
+			FileSHA256:    uploaded.FileSHA256,
 			FileLength:    proto.Uint64(uint64(len(filedata))),
 			Caption:       proto.String(t.Caption),
 		}}
 
-		if t.ContextInfo.StanzaId != nil {
+		if t.ContextInfo.StanzaID != nil {
 			msg.ExtendedTextMessage.ContextInfo = &waProto.ContextInfo{
-				StanzaId:      proto.String(*t.ContextInfo.StanzaId),
+				StanzaID:      proto.String(*t.ContextInfo.StanzaID),
 				Participant:   proto.String(*t.ContextInfo.Participant),
 				QuotedMessage: &waProto.Message{Conversation: proto.String("")},
 			}
@@ -712,7 +712,7 @@ func (s *server) SendAudio() http.HandlerFunc {
 			return
 		}
 
-		recipient, err := validateMessageFields(t.Phone, t.ContextInfo.StanzaId, t.ContextInfo.Participant)
+		recipient, err := validateMessageFields(t.Phone, t.ContextInfo.StanzaID, t.ContextInfo.Participant)
 		if err != nil {
 			log.Error().Msg(fmt.Sprintf("%s", err))
 			s.Respond(w, r, http.StatusBadRequest, err)
@@ -750,20 +750,20 @@ func (s *server) SendAudio() http.HandlerFunc {
         mime := "audio/ogg; codecs=opus"
 
 		msg := &waProto.Message{AudioMessage: &waProto.AudioMessage{
-			Url:           proto.String(uploaded.URL),
+			URL:           proto.String(uploaded.URL),
 			DirectPath:    proto.String(uploaded.DirectPath),
 			MediaKey:      uploaded.MediaKey,
             //Mimetype:      proto.String(http.DetectContentType(filedata)),
 			Mimetype:      &mime,
-			FileEncSha256: uploaded.FileEncSHA256,
-			FileSha256:    uploaded.FileSHA256,
+			FileEncSHA256: uploaded.FileEncSHA256,
+			FileSHA256:    uploaded.FileSHA256,
 			FileLength:    proto.Uint64(uint64(len(filedata))),
-            Ptt:           &ptt,
+            PTT:           &ptt,
 		}}
 
-		if t.ContextInfo.StanzaId != nil {
+		if t.ContextInfo.StanzaID != nil {
 			msg.ExtendedTextMessage.ContextInfo = &waProto.ContextInfo{
-				StanzaId:      proto.String(*t.ContextInfo.StanzaId),
+				StanzaID:      proto.String(*t.ContextInfo.StanzaID),
 				Participant:   proto.String(*t.ContextInfo.Participant),
 				QuotedMessage: &waProto.Message{Conversation: proto.String("")},
 			}
@@ -828,7 +828,7 @@ func (s *server) SendImage() http.HandlerFunc {
 			return
 		}
 
-		recipient, err := validateMessageFields(t.Phone, t.ContextInfo.StanzaId, t.ContextInfo.Participant)
+		recipient, err := validateMessageFields(t.Phone, t.ContextInfo.StanzaID, t.ContextInfo.Participant)
 		if err != nil {
 			log.Error().Msg(fmt.Sprintf("%s", err))
 			s.Respond(w, r, http.StatusBadRequest, err)
@@ -864,18 +864,18 @@ func (s *server) SendImage() http.HandlerFunc {
 
 		msg := &waProto.Message{ImageMessage: &waProto.ImageMessage{
 			Caption:       proto.String(t.Caption),
-			Url:           proto.String(uploaded.URL),
+			URL:           proto.String(uploaded.URL),
 			DirectPath:    proto.String(uploaded.DirectPath),
 			MediaKey:      uploaded.MediaKey,
 			Mimetype:      proto.String(http.DetectContentType(filedata)),
-			FileEncSha256: uploaded.FileEncSHA256,
-			FileSha256:    uploaded.FileSHA256,
+			FileEncSHA256: uploaded.FileEncSHA256,
+			FileSHA256:    uploaded.FileSHA256,
 			FileLength:    proto.Uint64(uint64(len(filedata))),
 		}}
 
-		if t.ContextInfo.StanzaId != nil {
+		if t.ContextInfo.StanzaID != nil {
 			msg.ExtendedTextMessage.ContextInfo = &waProto.ContextInfo{
-				StanzaId:      proto.String(*t.ContextInfo.StanzaId),
+				StanzaID:      proto.String(*t.ContextInfo.StanzaID),
 				Participant:   proto.String(*t.ContextInfo.Participant),
 				QuotedMessage: &waProto.Message{Conversation: proto.String("")},
 			}
@@ -940,7 +940,7 @@ func (s *server) SendSticker() http.HandlerFunc {
 			return
 		}
 
-		recipient, err := validateMessageFields(t.Phone, t.ContextInfo.StanzaId, t.ContextInfo.Participant)
+		recipient, err := validateMessageFields(t.Phone, t.ContextInfo.StanzaID, t.ContextInfo.Participant)
 		if err != nil {
 			log.Error().Msg(fmt.Sprintf("%s", err))
 			s.Respond(w, r, http.StatusBadRequest, err)
@@ -975,19 +975,19 @@ func (s *server) SendSticker() http.HandlerFunc {
 		}
 
 		msg := &waProto.Message{StickerMessage: &waProto.StickerMessage{
-			Url:           proto.String(uploaded.URL),
+			URL:           proto.String(uploaded.URL),
 			DirectPath:    proto.String(uploaded.DirectPath),
 			MediaKey:      uploaded.MediaKey,
 			Mimetype:      proto.String(http.DetectContentType(filedata)),
-			FileEncSha256: uploaded.FileEncSHA256,
-			FileSha256:    uploaded.FileSHA256,
+			FileEncSHA256: uploaded.FileEncSHA256,
+			FileSHA256:    uploaded.FileSHA256,
 			FileLength:    proto.Uint64(uint64(len(filedata))),
 			PngThumbnail:  t.PngThumbnail,
 		}}
 
-		if t.ContextInfo.StanzaId != nil {
+		if t.ContextInfo.StanzaID != nil {
 			msg.ExtendedTextMessage.ContextInfo = &waProto.ContextInfo{
-				StanzaId:      proto.String(*t.ContextInfo.StanzaId),
+				StanzaID:      proto.String(*t.ContextInfo.StanzaID),
 				Participant:   proto.String(*t.ContextInfo.Participant),
 				QuotedMessage: &waProto.Message{Conversation: proto.String("")},
 			}
@@ -1019,7 +1019,7 @@ func (s *server) SendVideo() http.HandlerFunc {
 		Video         string
 		Caption       string
 		Id            string
-		JpegThumbnail []byte
+		JPEGThumbnail []byte
 		ContextInfo   waProto.ContextInfo
 	}
 
@@ -1053,7 +1053,7 @@ func (s *server) SendVideo() http.HandlerFunc {
 			return
 		}
 
-		recipient, err := validateMessageFields(t.Phone, t.ContextInfo.StanzaId, t.ContextInfo.Participant)
+		recipient, err := validateMessageFields(t.Phone, t.ContextInfo.StanzaID, t.ContextInfo.Participant)
 		if err != nil {
 			log.Error().Msg(fmt.Sprintf("%s", err))
 			s.Respond(w, r, http.StatusBadRequest, err)
@@ -1089,19 +1089,19 @@ func (s *server) SendVideo() http.HandlerFunc {
 
 		msg := &waProto.Message{VideoMessage: &waProto.VideoMessage{
 			Caption:       proto.String(t.Caption),
-			Url:           proto.String(uploaded.URL),
+			URL:           proto.String(uploaded.URL),
 			DirectPath:    proto.String(uploaded.DirectPath),
 			MediaKey:      uploaded.MediaKey,
 			Mimetype:      proto.String(http.DetectContentType(filedata)),
-			FileEncSha256: uploaded.FileEncSHA256,
-			FileSha256:    uploaded.FileSHA256,
+			FileEncSHA256: uploaded.FileEncSHA256,
+			FileSHA256:    uploaded.FileSHA256,
 			FileLength:    proto.Uint64(uint64(len(filedata))),
-			JpegThumbnail: t.JpegThumbnail,
+			JPEGThumbnail: t.JPEGThumbnail,
 		}}
 
-		if t.ContextInfo.StanzaId != nil {
+		if t.ContextInfo.StanzaID != nil {
 			msg.ExtendedTextMessage.ContextInfo = &waProto.ContextInfo{
-				StanzaId:      proto.String(*t.ContextInfo.StanzaId),
+				StanzaID:      proto.String(*t.ContextInfo.StanzaID),
 				Participant:   proto.String(*t.ContextInfo.Participant),
 				QuotedMessage: &waProto.Message{Conversation: proto.String("")},
 			}
@@ -1169,7 +1169,7 @@ func (s *server) SendContact() http.HandlerFunc {
 			return
 		}
 
-		recipient, err := validateMessageFields(t.Phone, t.ContextInfo.StanzaId, t.ContextInfo.Participant)
+		recipient, err := validateMessageFields(t.Phone, t.ContextInfo.StanzaID, t.ContextInfo.Participant)
 		if err != nil {
 			log.Error().Msg(fmt.Sprintf("%s", err))
 			s.Respond(w, r, http.StatusBadRequest, err)
@@ -1187,9 +1187,9 @@ func (s *server) SendContact() http.HandlerFunc {
 			Vcard:       &t.Vcard,
 		}}
 
-		if t.ContextInfo.StanzaId != nil {
+		if t.ContextInfo.StanzaID != nil {
 			msg.ExtendedTextMessage.ContextInfo = &waProto.ContextInfo{
-				StanzaId:      proto.String(*t.ContextInfo.StanzaId),
+				StanzaID:      proto.String(*t.ContextInfo.StanzaID),
 				Participant:   proto.String(*t.ContextInfo.Participant),
 				QuotedMessage: &waProto.Message{Conversation: proto.String("")},
 			}
@@ -1258,7 +1258,7 @@ func (s *server) SendLocation() http.HandlerFunc {
 			return
 		}
 
-		recipient, err := validateMessageFields(t.Phone, t.ContextInfo.StanzaId, t.ContextInfo.Participant)
+		recipient, err := validateMessageFields(t.Phone, t.ContextInfo.StanzaID, t.ContextInfo.Participant)
 		if err != nil {
 			log.Error().Msg(fmt.Sprintf("%s", err))
 			s.Respond(w, r, http.StatusBadRequest, err)
@@ -1277,9 +1277,9 @@ func (s *server) SendLocation() http.HandlerFunc {
 			Name:             &t.Name,
 		}}
 
-		if t.ContextInfo.StanzaId != nil {
+		if t.ContextInfo.StanzaID != nil {
 			msg.ExtendedTextMessage.ContextInfo = &waProto.ContextInfo{
-				StanzaId:      proto.String(*t.ContextInfo.StanzaId),
+				StanzaID:      proto.String(*t.ContextInfo.StanzaID),
 				Participant:   proto.String(*t.ContextInfo.Participant),
 				QuotedMessage: &waProto.Message{Conversation: proto.String("")},
 			}
@@ -1374,7 +1374,7 @@ func (s *server) SendButtons() http.HandlerFunc {
 
         for _, item := range t.Buttons {
             buttons = append(buttons, &waProto.ButtonsMessage_Button{
-                ButtonId:       proto.String(item.ButtonId),
+                ButtonID:       proto.String(item.ButtonId),
                 ButtonText:     &waProto.ButtonsMessage_Button_ButtonText{DisplayText: proto.String(item.ButtonText)},
                 Type:           waProto.ButtonsMessage_Button_RESPONSE.Enum(),
                 NativeFlowInfo: &waProto.ButtonsMessage_Button_NativeFlowInfo{},
@@ -1507,7 +1507,7 @@ func (s *server) SendList() http.HandlerFunc {
                     idtext = row.RowId
                 }
                 rows = append(rows, &waProto.ListMessage_Row{
-                    RowId:       proto.String(idtext),
+                    RowID:       proto.String(idtext),
                     Title:       proto.String(row.Title),
                     Description: proto.String(row.Description),
                 })
@@ -1591,7 +1591,7 @@ func (s *server) SendMessage() http.HandlerFunc {
 			return
 		}
 
-		recipient, err := validateMessageFields(t.Phone, t.ContextInfo.StanzaId, t.ContextInfo.Participant)
+		recipient, err := validateMessageFields(t.Phone, t.ContextInfo.StanzaID, t.ContextInfo.Participant)
 		if err != nil {
 			log.Error().Msg(fmt.Sprintf("%s", err))
 			s.Respond(w, r, http.StatusBadRequest, err)
@@ -1612,9 +1612,9 @@ func (s *server) SendMessage() http.HandlerFunc {
 			},
 		}
 
-		if t.ContextInfo.StanzaId != nil {
+		if t.ContextInfo.StanzaID != nil {
 			msg.ExtendedTextMessage.ContextInfo = &waProto.ContextInfo{
-				StanzaId:      proto.String(*t.ContextInfo.StanzaId),
+				StanzaID:      proto.String(*t.ContextInfo.StanzaID),
 				Participant:   proto.String(*t.ContextInfo.Participant),
 				QuotedMessage: &waProto.Message{Conversation: proto.String("")},
 			}
@@ -2138,12 +2138,12 @@ func (s *server) DownloadImage() http.HandlerFunc {
 		}
 
 		msg := &waProto.Message{ImageMessage: &waProto.ImageMessage{
-			Url:           proto.String(t.Url),
+			URL:           proto.String(t.Url),
 			DirectPath:    proto.String(t.DirectPath),
 			MediaKey:      t.MediaKey,
 			Mimetype:      proto.String(t.Mimetype),
-			FileEncSha256: t.FileEncSHA256,
-			FileSha256:    t.FileSHA256,
+			FileEncSHA256: t.FileEncSHA256,
+			FileSHA256:    t.FileSHA256,
 			FileLength:    &t.FileLength,
 		}}
 
@@ -2218,12 +2218,12 @@ func (s *server) DownloadDocument() http.HandlerFunc {
 		}
 
 		msg := &waProto.Message{DocumentMessage: &waProto.DocumentMessage{
-			Url:           proto.String(t.Url),
+			URL:           proto.String(t.Url),
 			DirectPath:    proto.String(t.DirectPath),
 			MediaKey:      t.MediaKey,
 			Mimetype:      proto.String(t.Mimetype),
-			FileEncSha256: t.FileEncSHA256,
-			FileSha256:    t.FileSHA256,
+			FileEncSHA256: t.FileEncSHA256,
+			FileSHA256:    t.FileSHA256,
 			FileLength:    &t.FileLength,
 		}}
 
@@ -2298,12 +2298,12 @@ func (s *server) DownloadVideo() http.HandlerFunc {
 		}
 
 		msg := &waProto.Message{VideoMessage: &waProto.VideoMessage{
-			Url:           proto.String(t.Url),
+			URL:           proto.String(t.Url),
 			DirectPath:    proto.String(t.DirectPath),
 			MediaKey:      t.MediaKey,
 			Mimetype:      proto.String(t.Mimetype),
-			FileEncSha256: t.FileEncSHA256,
-			FileSha256:    t.FileSHA256,
+			FileEncSHA256: t.FileEncSHA256,
+			FileSHA256:    t.FileSHA256,
 			FileLength:    &t.FileLength,
 		}}
 
@@ -2378,12 +2378,12 @@ func (s *server) DownloadAudio() http.HandlerFunc {
 		}
 
 		msg := &waProto.Message{AudioMessage: &waProto.AudioMessage{
-			Url:           proto.String(t.Url),
+			URL:           proto.String(t.Url),
 			DirectPath:    proto.String(t.DirectPath),
 			MediaKey:      t.MediaKey,
 			Mimetype:      proto.String(t.Mimetype),
-			FileEncSha256: t.FileEncSHA256,
-			FileSha256:    t.FileSHA256,
+			FileEncSHA256: t.FileEncSHA256,
+			FileSHA256:    t.FileSHA256,
 			FileLength:    &t.FileLength,
 		}}
 
@@ -2479,13 +2479,13 @@ func (s *server) React() http.HandlerFunc {
 		msg := &waProto.Message{
 			ReactionMessage: &waProto.ReactionMessage{
 				Key: &waProto.MessageKey{
-					RemoteJid: proto.String(recipient.String()),
+					RemoteJID: proto.String(recipient.String()),
 					FromMe:    proto.Bool(fromMe),
-					Id:        proto.String(msgid),
+					ID:        proto.String(msgid),
 				},
 				Text:              proto.String(reaction),
 				GroupingKey:       proto.String(reaction),
-				SenderTimestampMs: proto.Int64(time.Now().UnixMilli()),
+				SenderTimestampMS: proto.Int64(time.Now().UnixMilli()),
 			},
 		}
 
@@ -3049,7 +3049,7 @@ func validateMessageFields(phone string, stanzaid *string, participant *string) 
 
 	if participant != nil {
 		if stanzaid == nil {
-			return types.NewJID("", types.DefaultUserServer), errors.New("Missing StanzaId in ContextInfo")
+			return types.NewJID("", types.DefaultUserServer), errors.New("Missing StanzaID in ContextInfo")
 		}
 	}
 
