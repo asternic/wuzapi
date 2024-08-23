@@ -2,8 +2,6 @@ module wuzapi
 
 go 1.21
 
-toolchain go1.22.3
-
 require (
 	github.com/go-resty/resty/v2 v2.11.0
 	github.com/gorilla/mux v1.8.0

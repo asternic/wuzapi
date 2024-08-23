@@ -4,6 +4,28 @@ API calls should be made with content type json, and parameters sent into the re
 
 ---
 
+## Auth
+```
+curl --request POST \
+  --url http://10.20.1.122:8080/admin/users \
+  --header 'Content-Type: application/json' \
+  --header 'accept: application/json' \
+  --header 'content-type: application/json' \
+  --header 'token: abcd' \
+  --data '{
+  "name": "adif",
+  "token": "abdcde",
+  "events": "All"
+}'
+```
+Response:
+
+```json
+
+```
+
+---
+
 ## Webhook
 
 The following _webhook_ endpoints are used to get or set the webhook that will be called whenever a message or event is received. Available event types are:
