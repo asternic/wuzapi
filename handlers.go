@@ -3008,68 +3008,6 @@ func (s *server) DeleteUser() http.HandlerFunc {
 	}
 }
 
-func (s *server) GetUserByToken() http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		vars := mux.Vars(r)
-		token := vars["token"]
-		rows, err := s.db.Query("SELECT id, name, token, webhook, jid, connected, expiration, events FROM users WHERE token = ? FIRST", token)
-		if err != nil {
-			s.Respond(w, r, http.StatusInternalServerError, errors.New("Problem accessing DB"))
-			return
-		}
-		defer rows.Close()
-
-		// Create a slice to store the user data
-		var user interface{}
-
-		// Iterate over the rows and populate the user data
-		for rows.Next() {
-			var id int
-			var name, token, webhook, jid string
-			var connectedNull sql.NullInt64
-			var expiration int
-			var events string
-
-			err := rows.Scan(&id, &name, &token, &webhook, &jid, &connectedNull, &expiration, &events)
-			if err != nil {
-				s.Respond(w, r, http.StatusInternalServerError, errors.New("Problem accessing DB"))
-				return
-			}
-
-			connected := int(0)
-			if connectedNull.Valid {
-				connected = int(connectedNull.Int64)
-			}
-
-			user = map[string]interface{}{
-				"id":         id,
-				"name":       name,
-				"token":      token,
-				"webhook":    webhook,
-				"jid":        jid,
-				"connected":  connected == 1,
-				"expiration": expiration,
-				"events":     events,
-			}
-		}
-		// Check for any error that occurred during iteration
-		if err := rows.Err(); err != nil {
-			s.Respond(w, r, http.StatusInternalServerError, errors.New("Problem accessing DB"))
-			return
-		}
-
-		// Set the response content type to JSON
-		w.Header().Set("Content-Type", "application/json")
-
-		// Encode the user data as JSON and write the response
-		err = json.NewEncoder(w).Encode(user)
-		if err != nil {
-			s.Respond(w, r, http.StatusInternalServerError, errors.New("Problem encodingJSON"))
-			return
-		}
-	}
-}
-
 // Writes JSON response to API clients
 func (s *server) Respond(w http.ResponseWriter, r *http.Request, status int, data interface{}) {
 	w.Header().Set("Content-Type", "application/json")

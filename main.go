@@ -34,7 +34,7 @@ var (
 	logType    = flag.String("logtype", "console", "Type of log output (console or json)")
 	sslcert    = flag.String("sslcertificate", "", "SSL Certificate File")
 	sslprivkey = flag.String("sslprivatekey", "", "SSL Certificate Private Key File")
-	adminToken = flag.String("admintoken", "INTERNALTOKEN", "Security Token to authorize admin actions (list/create/remove users)")
+	adminToken = flag.String("admintoken", "", "Security Token to authorize admin actions (list/create/remove users)")
 	container  *sqlstore.Container
 
 	killchannel   = make(map[int](chan bool))
