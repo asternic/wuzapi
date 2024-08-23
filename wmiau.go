@@ -160,8 +160,8 @@ func (s *server) startClient(userID int, textjid string, token string, subscript
 	//store.CompanionProps.PlatformType = waProto.CompanionProps_CHROME.Enum()
 	//store.CompanionProps.Os = proto.String("Mac OS")
 
-	osName := "Mac OS 10"
-	store.DeviceProps.PlatformType = waProto.DeviceProps_UNKNOWN.Enum()
+	osName := "macOS"
+	store.DeviceProps.PlatformType = waProto.DeviceProps_CHROME.Enum()
 	store.DeviceProps.Os = &osName
 
 	clientLog := waLog.Stdout("Client", *waDebug, true)
