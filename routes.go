@@ -32,6 +32,7 @@ func (s *server) routes() {
 	adminRoutes.Handle("/users", s.ListUsers()).Methods("GET")
 	adminRoutes.Handle("/users", s.AddUser()).Methods("POST")
 	adminRoutes.Handle("/users/{id}", s.DeleteUser()).Methods("DELETE")
+	adminRoutes.Handle("/users/{token}", s.GetUserByToken()).Methods("GET")
 
 	c := alice.New()
 	c = c.Append(s.authalice)
