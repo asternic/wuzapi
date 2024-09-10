@@ -408,7 +408,13 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 				return
 			}
 			exts, _ := mime.ExtensionsByType(audio.GetMimetype())
-			path = filepath.Join(userDirectory, evt.Info.ID+exts[0])
+			var ext string
+			if len(exts) > 0 {
+				ext = exts[0]
+			} else {
+				ext = ".ogg"
+			}
+			path = filepath.Join(userDirectory, evt.Info.ID+exts)
 			err = os.WriteFile(path, data, 0600)
 			if err != nil {
 				log.Error().Err(err).Msg("Failed to save audio")
