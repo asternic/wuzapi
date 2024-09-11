@@ -414,7 +414,7 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 			} else {
 				ext = ".ogg"
 			}
-			path = filepath.Join(userDirectory, evt.Info.ID+exts)
+			path = filepath.Join(userDirectory, evt.Info.ID+ext)
 			err = os.WriteFile(path, data, 0600)
 			if err != nil {
 				log.Error().Err(err).Msg("Failed to save audio")
