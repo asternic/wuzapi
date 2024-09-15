@@ -2621,15 +2621,14 @@ func (s *server) GetGroupInfo() http.HandlerFunc {
 			return
 		}
 
-		decoder := json.NewDecoder(r.Body)
-		var t getGroupInfoStruct
-		err := decoder.Decode(&t)
-		if err != nil {
-			s.Respond(w, r, http.StatusBadRequest, errors.New("Could not decode Payload"))
+		// Get GroupJID from query parameter
+		groupJID := r.URL.Query().Get("groupJID")
+		if groupJID == "" {
+			s.Respond(w, r, http.StatusBadRequest, errors.New("Missing groupJID parameter"))
 			return
 		}
 
-		group, ok := parseJID(t.GroupJID)
+		group, ok := parseJID(groupJID)
 		if !ok {
 			s.Respond(w, r, http.StatusBadRequest, errors.New("Could not parse Group JID"))
 			return
@@ -2674,21 +2673,32 @@ func (s *server) GetGroupInviteLink() http.HandlerFunc {
 			return
 		}
 
-		decoder := json.NewDecoder(r.Body)
-		var t getGroupInfoStruct
-		err := decoder.Decode(&t)
-		if err != nil {
-			s.Respond(w, r, http.StatusBadRequest, errors.New("Could not decode Payload"))
+		// Get GroupJID from query parameter
+		groupJID := r.URL.Query().Get("groupJID")
+		if groupJID == "" {
+			s.Respond(w, r, http.StatusBadRequest, errors.New("Missing groupJID parameter"))
 			return
 		}
 
-		group, ok := parseJID(t.GroupJID)
+		// Get reset parameter
+		resetParam := r.URL.Query().Get("reset")
+		reset := false
+		if resetParam != "" {
+			var err error
+			reset, err = strconv.ParseBool(resetParam)
+			if err != nil {
+				s.Respond(w, r, http.StatusBadRequest, errors.New("Invalid reset parameter, must be true or false"))
+				return
+			}
+		}
+
+		group, ok := parseJID(groupJID)
 		if !ok {
 			s.Respond(w, r, http.StatusBadRequest, errors.New("Could not parse Group JID"))
 			return
 		}
 
-		resp, err := clientPointer[userid].GetGroupInviteLink(group, t.Reset)
+		resp, err := clientPointer[userid].GetGroupInviteLink(group, reset)
 
 		if err != nil {
 			log.Error().Str("error", fmt.Sprintf("%v", err)).Msg("Failed to get group invite link")
