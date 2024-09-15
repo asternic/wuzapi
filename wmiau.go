@@ -164,7 +164,7 @@ func (s *server) startClient(userID int, textjid string, token string, subscript
 	store.DeviceProps.PlatformType = waProto.DeviceProps_UNKNOWN.Enum()
 	store.DeviceProps.Os = &osName
 
-	clientLog := waLog.Stdout("Client", *waDebug, true)
+	clientLog := waLog.Stdout("Client", *waDebug, *colorOutput)
 	var client *whatsmeow.Client
 	if(*waDebug!="") {
 		client = whatsmeow.NewClient(deviceStore, clientLog)
