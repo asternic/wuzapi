@@ -112,6 +112,10 @@ func main() {
 	srv := &http.Server{
 		Addr:    *address + ":" + *port,
 		Handler: s.router,
+		ReadHeaderTimeout: 20 * time.Second,
+		ReadTimeout:	   60 * time.Second,
+		WriteTimeout:	  120 * time.Second,
+		IdleTimeout:	   180 * time.Second,
 	}
 
 	done := make(chan os.Signal, 1)
