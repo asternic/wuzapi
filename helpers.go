@@ -1,6 +1,9 @@
 package main
 
-import ( "strconv" )
+import (
+	"fmt"
+	"strconv"
+)
 
 func Find(slice []string, val string) bool {
     for _, item := range slice {
@@ -32,27 +35,26 @@ func callHook(myurl string, payload map[string]string, id int) {
     if err != nil {
         log.Debug().Str("error",err.Error())
     }
-    /*
-    ti := resp.Request.TraceInfo()
-    log.Debug().Msg("  DNSLookup     :"+ ti.DNSLookup.String())
-    log.Debug().Msg("  ConnTime      :"+ ti.ConnTime.String())
-    log.Debug().Msg("  TCPConnTime   :"+ ti.TCPConnTime.String())
-    log.Debug().Msg("  TLSHandshake  :"+ ti.TLSHandshake.String())
-    log.Debug().Msg("  ServerTime    :"+ ti.ServerTime.String())
-    log.Debug().Msg("  ResponseTime  :"+ ti.ResponseTime.String())
-    log.Debug().Msg("  TotalTime     :"+ ti.TotalTime.String())
-    log.Debug().Msg("  IsConnReused  :"+ strconv.FormatBool(ti.IsConnReused))
-    log.Debug().Msg("  IsConnWasIdle :"+ strconv.FormatBool(ti.IsConnWasIdle))
-    log.Debug().Msg("  ConnIdleTime  :"+ ti.ConnIdleTime.String())
-    log.Debug().Msg("  RequestAttempt:"+ strconv.Itoa(ti.RequestAttempt))
-    */
 }
 
 // webhook for messages with file attachments
-func callHookFile(myurl string, payload map[string]string, id int, file string) {
-    log.Info().Str("file",file).Str("url",myurl).Msg("Sending POST")
-    clientHttp[id].R().SetFiles(map[string]string{
-        "file": file,
-    }).SetFormData(payload).Post(myurl)
-}
+func callHookFile(myurl string, payload map[string]string, id int, file string) error {
+    log.Info().Str("file", file).Str("url", myurl).Msg("Sending POST")
 
+    resp, err := clientHttp[id].R().
+        SetFiles(map[string]string{
+            "file": file,
+        }).
+        SetFormData(payload).
+        Post(myurl)
+
+    if err != nil {
+        log.Error().Err(err).Str("url", myurl).Msg("Failed to send POST request")
+        return fmt.Errorf("failed to send POST request: %w", err)
+    }
+
+    // Optionally, you can log the response status
+    log.Info().Int("status", resp.StatusCode()).Msg("POST request completed")
+
+    return nil
+}

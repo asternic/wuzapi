@@ -568,16 +568,24 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 		if webhookurl != "" {
 			log.Info().Str("url",webhookurl).Msg("Calling webhook")
 			values, _ := json.Marshal(postmap)
+			data := map[string]string{
+				"jsonData":  string(values),
+				"token": mycli.token,
+			}
 			if path == "" {
-				data := make(map[string]string)
-				data["jsonData"] = string(values)
-				data["token"] = mycli.token
 				go callHook(webhookurl, data, mycli.userID)
 			} else {
-				data := make(map[string]string)
-				data["jsonData"] = string(values)
-				data["token"] = mycli.token
-				go callHookFile(webhookurl, data, mycli.userID, path)
+				// Create a channel to capture error from the goroutine
+				errChan := make(chan error, 1)
+				go func() {
+					err := callHookFile(webhookurl, data, mycli.userID, path)
+					errChan <- err
+				}()
+
+				// Optionally handle the error from the channel
+				if err := <-errChan; err != nil {
+					log.Error().Err(err).Msg("Error calling hook file")
+				}
 			}
 		} else {
 			log.Warn().Str("userid",strconv.Itoa(mycli.userID)).Msg("No webhook set for user")
