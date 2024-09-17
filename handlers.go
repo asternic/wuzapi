@@ -12,7 +12,10 @@ import (
 	"strings"
 	"time"
 	"database/sql"
+	"image/jpeg"
+	"bytes"
 
+	"github.com/nfnt/resize"
 	"github.com/gorilla/mux"
 	"github.com/patrickmn/go-cache"
 	"github.com/vincent-petithory/dataurl"
@@ -843,6 +846,7 @@ func (s *server) SendImage() http.HandlerFunc {
 
 		var uploaded whatsmeow.UploadResponse
 		var filedata []byte
+		var thumbnailBytes []byte
 
 		if t.Image[0:10] == "data:image" {
 			dataURL, err := dataurl.DecodeString(t.Image)
@@ -857,6 +861,38 @@ func (s *server) SendImage() http.HandlerFunc {
 					return
 				}
 			}
+
+			// decode jpeg into image.Image
+			reader := bytes.NewReader(filedata)
+			img, err := jpeg.Decode(reader)
+			if err != nil {
+				s.Respond(w, r, http.StatusInternalServerError, errors.New(fmt.Sprintf("Could not decode image for thumbnail preparation: %v", err)))
+				return
+			}
+
+			// resize to width 72 using Lanczos resampling and preserve aspect ratio
+			m := resize.Thumbnail(72, 72, img, resize.Lanczos3)
+
+			tmpFile, err := os.CreateTemp("", "resized-*.jpg")
+			if err != nil {
+				s.Respond(w, r, http.StatusInternalServerError, errors.New(fmt.Sprintf("Could not create temp file for thumbnail: %v", err)))
+				return
+			}
+			defer tmpFile.Close()
+
+			// write new image to file
+			if err := jpeg.Encode(tmpFile, m, nil); err != nil {
+				s.Respond(w, r, http.StatusInternalServerError, errors.New(fmt.Sprintf("Failed to encode jpeg: %v", err)))
+				return
+			}
+
+			thumbnailBytes, err = os.ReadFile(tmpFile.Name())
+			if err != nil {
+				s.Respond(w, r, http.StatusInternalServerError, errors.New(fmt.Sprintf("Failed to read %s: %v", tmpFile.Name(), err)))
+				return
+			}
+
+
 		} else {
 			s.Respond(w, r, http.StatusBadRequest, errors.New("Image data should start with \"data:image/png;base64,\""))
 			return
@@ -871,6 +907,7 @@ func (s *server) SendImage() http.HandlerFunc {
 			FileEncSHA256: uploaded.FileEncSHA256,
 			FileSHA256:    uploaded.FileSHA256,
 			FileLength:    proto.Uint64(uint64(len(filedata))),
+			JPEGThumbnail: thumbnailBytes,
 		}}
 
 		if t.ContextInfo.StanzaID != nil {
