@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 	"database/sql"
+	"image"
 	"image/jpeg"
 	"bytes"
 
@@ -864,7 +865,7 @@ func (s *server) SendImage() http.HandlerFunc {
 
 			// decode jpeg into image.Image
 			reader := bytes.NewReader(filedata)
-			img, err := jpeg.Decode(reader)
+			img, _, err := image.Decode(reader)
 			if err != nil {
 				s.Respond(w, r, http.StatusInternalServerError, errors.New(fmt.Sprintf("Could not decode image for thumbnail preparation: %v", err)))
 				return
