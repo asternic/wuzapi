@@ -924,17 +924,17 @@ func (s *server) SendImage() http.HandlerFunc {
 		}}
 
 		if t.ContextInfo.StanzaID != nil {
-			msg.ExtendedTextMessage.ContextInfo = &waProto.ContextInfo{
-				StanzaID:      proto.String(*t.ContextInfo.StanzaID),
-				Participant:   proto.String(*t.ContextInfo.Participant),
-				QuotedMessage: &waProto.Message{Conversation: proto.String("")},
+			if(msg.ImageMessage.ContextInfo == nil) {
+				msg.ImageMessage.ContextInfo = &waProto.ContextInfo {
+					StanzaID:      proto.String(*t.ContextInfo.StanzaID),
+					Participant:   proto.String(*t.ContextInfo.Participant),
+					QuotedMessage: &waProto.Message{Conversation: proto.String("")},
+				}
 			}
 		}
+
 		if(t.ContextInfo.MentionedJID != nil) {
-			if(msg.ExtendedTextMessage.ContextInfo == nil) {
-				msg.ExtendedTextMessage.ContextInfo = &waProto.ContextInfo{}
-			}
-			msg.ExtendedTextMessage.ContextInfo.MentionedJID = t.ContextInfo.MentionedJID
+			msg.ImageMessage.ContextInfo.MentionedJID = t.ContextInfo.MentionedJID
 		}
 
 		resp, err = clientPointer[userid].SendMessage(context.Background(), recipient, msg, whatsmeow.SendRequestExtra{ID: msgid})
