@@ -2,22 +2,22 @@ package main
 
 import (
 	"context"
-	"database/sql"
+	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"mime"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
-	"crypto/tls"
 
 	"github.com/go-resty/resty/v2"
-	_ "modernc.org/sqlite"
+	"github.com/jmoiron/sqlx" // Importação do sqlx
 	"github.com/mdp/qrterminal/v3"
 	"github.com/patrickmn/go-cache"
 	"github.com/skip2/go-qrcode"
@@ -25,11 +25,9 @@ import (
 	"go.mau.fi/whatsmeow/appstate"
 	waProto "go.mau.fi/whatsmeow/binary/proto"
 	"go.mau.fi/whatsmeow/store"
-//	"go.mau.fi/whatsmeow/store/sqlstore"
 	"go.mau.fi/whatsmeow/types"
 	"go.mau.fi/whatsmeow/types/events"
 	waLog "go.mau.fi/whatsmeow/util/log"
-	//"google.golang.org/protobuf/proto"
 )
 
 //var wlog waLog.Logger
@@ -37,18 +35,19 @@ var clientPointer = make(map[int]*whatsmeow.Client)
 var clientHttp = make(map[int]*resty.Client)
 var historySyncID int32
 
+// Declaração do campo db como *sqlx.DB
 type MyClient struct {
 	WAClient       *whatsmeow.Client
 	eventHandlerID uint32
 	userID         int
 	token          string
 	subscriptions  []string
-	db             *sql.DB
+	db             *sqlx.DB
 }
 
 // Connects to Whatsapp Websocket on server startup if last state was connected
 func (s *server) connectOnStartup() {
-	rows, err := s.db.Query("SELECT id,token,jid,webhook,events FROM users WHERE connected=1")
+	rows, err := s.db.Queryx("SELECT id,token,jid,webhook,events FROM users WHERE connected=1")
 	if err != nil {
 		log.Error().Err(err).Msg("DB Problem")
 		return
@@ -181,7 +180,7 @@ func (s *server) startClient(userID int, textjid string, token string, subscript
 	if *waDebug == "DEBUG" {
 		clientHttp[userID].SetDebug(true)
 	}
-	clientHttp[userID].SetTimeout(5 * time.Second)
+	clientHttp[userID].SetTimeout(30 * time.Second)
 	clientHttp[userID].SetTLSClientConfig(&tls.Config{ InsecureSkipVerify: true })
 	clientHttp[userID].OnError(func(req *resty.Request, err error) {
 		if v, ok := err.(*resty.ResponseError); ok {
@@ -216,14 +215,14 @@ func (s *server) startClient(userID int, textjid string, token string, subscript
 					// Store encoded/embeded base64 QR on database for retrieval with the /qr endpoint
 					image, _ := qrcode.Encode(evt.Code, qrcode.Medium, 256)
 					base64qrcode := "data:image/png;base64," + base64.StdEncoding.EncodeToString(image)
-					sqlStmt := `UPDATE users SET qrcode=? WHERE id=?`
+					sqlStmt := `UPDATE users SET qrcode=$1 WHERE id=$2`
 					_, err := s.db.Exec(sqlStmt, base64qrcode, userID)
 					if err != nil {
 						log.Error().Err(err).Msg(sqlStmt)
 					}
 				} else if evt.Event == "timeout" {
 					// Clear QR code from DB on timeout
-					sqlStmt := `UPDATE users SET qrcode=? WHERE id=?`
+					sqlStmt := `UPDATE users SET qrcode=$1 WHERE id=$2`
 					_, err := s.db.Exec(sqlStmt, "", userID)
 					if err != nil {
 						log.Error().Err(err).Msg(sqlStmt)
@@ -234,7 +233,7 @@ func (s *server) startClient(userID int, textjid string, token string, subscript
 				} else if evt.Event == "success" {
 					log.Info().Msg("QR pairing ok!")
 					// Clear QR code after pairing
-					sqlStmt := `UPDATE users SET qrcode=? WHERE id=?`
+					sqlStmt := `UPDATE users SET qrcode=$1, connected=1 WHERE id=$2`
 					_, err := s.db.Exec(sqlStmt, "", userID)
 					if err != nil {
 						log.Error().Err(err).Msg(sqlStmt)
@@ -261,8 +260,8 @@ func (s *server) startClient(userID int, textjid string, token string, subscript
 			log.Info().Str("userid",strconv.Itoa(userID)).Msg("Received kill signal")
 			client.Disconnect()
 			delete(clientPointer, userID)
-			sqlStmt := `UPDATE users SET connected=0 WHERE id=?`
-			_, err := s.db.Exec(sqlStmt, userID)
+			sqlStmt := `UPDATE users SET, qrcode=$1 connected=0 WHERE id=$1`
+			_, err := s.db.Exec(sqlStmt, "", userID)
 			if err != nil {
 				log.Error().Err(err).Msg(sqlStmt)
 			}
@@ -272,6 +271,15 @@ func (s *server) startClient(userID int, textjid string, token string, subscript
 			//log.Info().Str("jid",textjid).Msg("Loop the loop")
 		}
 	}
+}
+
+func fileToBase64(filepath string) (string, string, error) {
+    data, err := os.ReadFile(filepath)
+    if err != nil {
+        return "", "", err
+    }
+    mimeType := http.DetectContentType(data)
+    return base64.StdEncoding.EncodeToString(data), mimeType, nil
 }
 
 func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
@@ -309,7 +317,7 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 		} else {
 			log.Info().Msg("Marked self as available")
 		}
-		sqlStmt := `UPDATE users SET connected=1 WHERE id=?`
+		sqlStmt := `UPDATE users SET connected=1 WHERE id=$1`
 		_, err = mycli.db.Exec(sqlStmt, mycli.userID)
 		if err != nil {
 			log.Error().Err(err).Msg(sqlStmt)
@@ -318,7 +326,7 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 	case *events.PairSuccess:
 		log.Info().Str("userid",strconv.Itoa(mycli.userID)).Str("token",mycli.token).Str("ID",evt.ID.String()).Str("BusinessName",evt.BusinessName).Str("Platform",evt.Platform).Msg("QR Pair Success")
 		jid := evt.ID
-		sqlStmt := `UPDATE users SET jid=? WHERE id=?`
+		sqlStmt := `UPDATE users SET jid=$1 WHERE id=$2`
 		_, err := mycli.db.Exec(sqlStmt, jid, mycli.userID)
 		if err != nil {
 			log.Error().Err(err).Msg(sqlStmt)
@@ -356,11 +364,10 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 		}
 
 		log.Info().Str("id",evt.Info.ID).Str("source",evt.Info.SourceString()).Str("parts",strings.Join(metaParts,", ")).Msg("Message Received")
-
+	
 		// try to get Image if any
 		img := evt.Message.GetImageMessage()
 		if img != nil {
-
 			// check/creates user directory for files
 			userDirectory := filepath.Join(exPath, "files", "user_"+txtid)
 			_, err := os.Stat(userDirectory)
@@ -371,7 +378,7 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 					return
 				}
 			}
-
+		
 			data, err := mycli.WAClient.Download(img)
 			if err != nil {
 				log.Error().Err(err).Msg("Failed to download image")
@@ -385,12 +392,21 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 				return
 			}
 			log.Info().Str("path",path).Msg("Image saved")
+			// Converte a imagem para base64
+			base64String, mimeType, err := fileToBase64(path)
+			if err == nil {
+				postmap["base64"] = base64String
+				postmap["mimeType"] = mimeType
+				postmap["fileName"] = filepath.Base(path)
+			} else {
+				log.Error().Err(err).Msg("Failed to convert image to base64")
+			}
+			// log.Debug().Str("path",path).Msg("Image converted to base64")
 		}
 
 		// try to get Audio if any
 		audio := evt.Message.GetAudioMessage()
 		if audio != nil {
-
 			// check/creates user directory for files
 			userDirectory := filepath.Join(exPath, "files", "user_"+txtid)
 			_, err := os.Stat(userDirectory)
@@ -421,8 +437,17 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 				return
 			}
 			log.Info().Str("path",path).Msg("Audio saved")
+			// Converte o áudio para base64
+			base64String, mimeType, err := fileToBase64(path)
+			if err == nil {
+				postmap["base64"] = base64String
+				postmap["mimeType"] = mimeType
+				postmap["fileName"] = filepath.Base(path)
+			} else {
+				log.Error().Err(err).Msg("Failed to convert audio to base64")
+			}
+			// log.Debug().Str("path",path).Msg("Audio converted to base64")
 		}
-
 		// try to get Document if any
 		document := evt.Message.GetDocumentMessage()
 		if document != nil {
@@ -458,7 +483,57 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 				return
 			}
 			log.Info().Str("path",path).Msg("Document saved")
+			// Converte o documento para base64
+			base64String, mimeType, err := fileToBase64(path)
+			if err == nil {
+				postmap["base64"] = base64String
+				postmap["mimeType"] = mimeType
+				postmap["fileName"] = filepath.Base(path)
+			} else {
+				log.Error().Err(err).Msg("Failed to convert document to base64")
+			}
+			// log.Debug().Str("path",path).Msg("Document converted to base64")
 		}
+
+			// try to get Video if any
+			video := evt.Message.GetVideoMessage()
+			if video != nil {
+				// check/creates user directory for files
+				userDirectory := filepath.Join(exPath, "files", "user_"+txtid)
+				_, err := os.Stat(userDirectory)
+				if os.IsNotExist(err) {
+					errDir := os.MkdirAll(userDirectory, 0751)
+					if errDir != nil {
+						log.Error().Err(errDir).Msg("Could not create user directory")
+						return
+					}
+				}
+
+				data, err := mycli.WAClient.Download(video)
+				if err != nil {
+					log.Error().Err(err).Msg("Failed to download video")
+					return
+				}
+				exts, _ := mime.ExtensionsByType(video.GetMimetype())
+				path = filepath.Join(userDirectory, evt.Info.ID+exts[0])
+				err = os.WriteFile(path, data, 0600)
+				if err != nil {
+					log.Error().Err(err).Msg("Failed to save video")
+					return
+				}
+				log.Info().Str("path",path).Msg("Video saved")
+				// Converte o vídeo para base64
+				base64String, mimeType, err := fileToBase64(path)
+				if err == nil {
+					postmap["base64"] = base64String
+					postmap["mimeType"] = mimeType
+					postmap["fileName"] = filepath.Base(path)
+				} else {
+					log.Error().Err(err).Msg("Failed to convert video to base64")
+				}
+				// log.Debug().Str("path",path).Msg("Video converted to base64")
+			}
+
 	case *events.Receipt:
 		postmap["type"] = "ReadReceipt"
 		dowebhook = 1
@@ -526,7 +601,7 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 	case *events.LoggedOut:
 		log.Info().Str("reason",evt.Reason.String()).Msg("Logged out")
 		killchannel[mycli.userID] <- true
-		sqlStmt := `UPDATE users SET connected=0 WHERE id=?`
+		sqlStmt := `UPDATE users SET connected=0 WHERE id=$1`
 		_, err := mycli.db.Exec(sqlStmt, mycli.userID)
 		if err != nil {
 			log.Error().Err(err).Msg(sqlStmt)
@@ -565,30 +640,38 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 			return
 		}
 
-		if webhookurl != "" {
-			log.Info().Str("url",webhookurl).Msg("Calling webhook")
-			values, _ := json.Marshal(postmap)
-			data := map[string]string{
-				"jsonData":  string(values),
-				"token": mycli.token,
-			}
-			if path == "" {
-				go callHook(webhookurl, data, mycli.userID)
-			} else {
-				// Create a channel to capture error from the goroutine
-				errChan := make(chan error, 1)
-				go func() {
-					err := callHookFile(webhookurl, data, mycli.userID, path)
-					errChan <- err
-				}()
+if webhookurl != "" {
+    log.Info().Str("url",webhookurl).Msg("Calling webhook")
+    jsonData, err := json.Marshal(postmap)
+    if err != nil {
+        log.Error().Err(err).Msg("Failed to marshal postmap to JSON")
+    } else {
+        data := map[string]string{
+            "jsonData": string(jsonData),
+            "token":    mycli.token,
+        }
+        
+        // Adicione este log
+        log.Debug().Interface("webhookData", data).Msg("Data being sent to webhook")
 
-				// Optionally handle the error from the channel
-				if err := <-errChan; err != nil {
-					log.Error().Err(err).Msg("Error calling hook file")
-				}
-			}
-		} else {
-			log.Warn().Str("userid",strconv.Itoa(mycli.userID)).Msg("No webhook set for user")
-		}
+        if path == "" {
+            go callHook(webhookurl, data, mycli.userID)
+        } else {
+            // Create a channel to capture error from the goroutine
+            errChan := make(chan error, 1)
+            go func() {
+                err := callHookFile(webhookurl, data, mycli.userID, path)
+                errChan <- err
+            }()
+    
+            // Optionally handle the error from the channel
+            if err := <-errChan; err != nil {
+                log.Error().Err(err).Msg("Error calling hook file")
+            }
+        }
+    }
+} else {
+    log.Warn().Str("userid",strconv.Itoa(mycli.userID)).Msg("No webhook set for user")
+}
 	}
 }
