@@ -2,26 +2,31 @@ package main
 
 import (
 	"context"
-	"database/sql"
 	"flag"
 	"fmt"
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
-	"path/filepath"
-    "go.mau.fi/whatsmeow/store/sqlstore"
-    waLog "go.mau.fi/whatsmeow/util/log"
 
+	"go.mau.fi/whatsmeow/store/sqlstore"
+	waLog "go.mau.fi/whatsmeow/util/log"
+
+	"github.com/golang-migrate/migrate/v4"
+	"github.com/golang-migrate/migrate/v4/database/postgres"
+	_ "github.com/golang-migrate/migrate/v4/source/file"
 	"github.com/gorilla/mux"
+	"github.com/jmoiron/sqlx"
+	"github.com/joho/godotenv"
+	_ "github.com/lib/pq" // Driver para PostgreSQL
 	"github.com/patrickmn/go-cache"
 	"github.com/rs/zerolog"
-	_ "modernc.org/sqlite"
 )
 
 type server struct {
-	db     *sql.DB
+	db     *sqlx.DB
 	router *mux.Router
 	exPath string
 }
@@ -35,67 +40,95 @@ var (
 	sslcert     = flag.String("sslcertificate", "", "SSL Certificate File")
 	sslprivkey  = flag.String("sslprivatekey", "", "SSL Certificate Private Key File")
 	adminToken  = flag.String("admintoken", "", "Security Token to authorize admin actions (list/create/remove users)")
-    container *sqlstore.Container
+	container   *sqlstore.Container
 
 	killchannel   = make(map[int](chan bool))
 	userinfocache = cache.New(5*time.Minute, 10*time.Minute)
-	log zerolog.Logger
+	log           zerolog.Logger
 )
 
 func init() {
+	// Carrega variáveis de ambiente do arquivo .env
+	err := godotenv.Load()
+	if err != nil {
+		log.Fatal().Err(err).Msg("Erro ao carregar o arquivo .env")
+	}
 
 	flag.Parse()
 
-	if(*logType=="json") {
-        log = zerolog.New(os.Stdout).With().Timestamp().Str("role",filepath.Base(os.Args[0])).Logger()
-    } else {
+	if *logType == "json" {
+		log = zerolog.New(os.Stdout).With().Timestamp().Str("role", filepath.Base(os.Args[0])).Logger()
+	} else {
 		output := zerolog.ConsoleWriter{Out: os.Stdout, TimeFormat: time.RFC3339, NoColor: !*colorOutput}
-        log = zerolog.New(output).With().Timestamp().Str("role",filepath.Base(os.Args[0])).Logger()
-    }
+		log = zerolog.New(output).With().Timestamp().Str("role", filepath.Base(os.Args[0])).Logger()
+	}
 
-    if(*adminToken == "") {
-        if v := os.Getenv("WUZAPI_ADMIN_TOKEN"); v != "" {
-            *adminToken = v
-        }
-    }
+	if *adminToken == "" {
+		if v := os.Getenv("WUZAPI_ADMIN_TOKEN"); v != "" {
+			*adminToken = v
+		}
+	}
+}
 
+func runMigrations(db *sqlx.DB) {
+	driver, err := postgres.WithInstance(db.DB, &postgres.Config{})
+	if err != nil {
+		log.Fatal().Err(err).Msg("Erro ao configurar driver de migração")
+	}
+
+	m, err := migrate.NewWithDatabaseInstance(
+		"file://migrations",
+		"postgres", driver)
+	if err != nil {
+		log.Fatal().Err(err).Msg("Erro ao configurar migração")
+	}
+
+	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
+		log.Fatal().Err(err).Msg("Erro ao aplicar migrações")
+	}
 }
 
 func main() {
-
-    ex, err := os.Executable()
-    if err != nil {
-        panic(err)
-    }
-    exPath := filepath.Dir(ex)
-
-    dbDirectory := exPath + "/dbdata"
-	_, err = os.Stat(dbDirectory)
-	if os.IsNotExist(err) {
-		errDir := os.MkdirAll(dbDirectory, 0751)
-		if errDir != nil {
-			panic("Could not create dbdata directory")
-		}
-	}
-
-    db, err := sql.Open("sqlite", exPath + "/dbdata/users.db?_pragma=foreign_keys(1)&_busy_timeout=3000")
+	ex, err := os.Executable()
 	if err != nil {
-		log.Fatal().Err(err).Msg("Could not open/create "+exPath+"/dbdata/users.db")
+		panic(err)
+	}
+	exPath := filepath.Dir(ex)
+
+	// Obtendo informações do banco de dados a partir das variáveis de ambiente
+	dbUser := os.Getenv("DB_USER")
+	dbPassword := os.Getenv("DB_PASSWORD")
+	dbName := os.Getenv("DB_NAME")
+	dbHost := os.Getenv("DB_HOST")
+	dbPort := os.Getenv("DB_PORT")
+
+	// String de conexão para PostgreSQL
+	dsn := fmt.Sprintf("user=%s password=%s dbname=%s host=%s port=%s sslmode=disable", dbUser, dbPassword, dbName, dbHost, dbPort)
+
+	// Conectando ao banco de dados PostgreSQL usando SQLX
+	db, err := sqlx.Open("postgres", dsn)
+	if err != nil {
+		log.Fatal().Err(err).Msg("Não foi possível conectar ao banco de dados PostgreSQL")
 		os.Exit(1)
 	}
 	defer db.Close()
 
-	sqlStmt := `CREATE TABLE IF NOT EXISTS users (id INTEGER NOT NULL PRIMARY KEY, name TEXT NOT NULL, token TEXT NOT NULL, webhook TEXT NOT NULL default "", jid TEXT NOT NULL default "", qrcode TEXT NOT NULL default "", connected INTEGER, expiration INTEGER, events TEXT NOT NULL default "All");`
-	_, err = db.Exec(sqlStmt)
+	// Verificando se a conexão foi estabelecida corretamente
+	err = db.Ping()
 	if err != nil {
-		panic(fmt.Sprintf("%q: %s\n", err, sqlStmt))
+		log.Fatal().Err(err).Msg("Não foi possível verificar a conexão com o banco de dados")
+		os.Exit(1)
 	}
 
-	if(*waDebug!="") {
+	// Executa as migrações
+	runMigrations(db)
+
+	// Inicializando o repositório com o banco de dados PostgreSQL
+	if *waDebug != "" {
 		dbLog := waLog.Stdout("Database", *waDebug, *colorOutput)
-        container, err = sqlstore.New("sqlite", "file:"+exPath+"/dbdata/main.db?_pragma=foreign_keys(1)&_busy_timeout=3000", dbLog)
+		container, err = sqlstore.New("postgres", dsn, dbLog)
 	} else {
-        container, err = sqlstore.New("sqlite", "file:"+exPath+"/dbdata/main.db?_pragma=foreign_keys(1)&_busy_timeout=3000", nil)
+		container, err = sqlstore.New("postgres", dsn, nil)
 	}
 	if err != nil {
 		panic(err)
@@ -114,9 +147,9 @@ func main() {
 		Addr:    *address + ":" + *port,
 		Handler: s.router,
 		ReadHeaderTimeout: 20 * time.Second,
-		ReadTimeout:	   60 * time.Second,
-		WriteTimeout:	  120 * time.Second,
-		IdleTimeout:	   180 * time.Second,
+		ReadTimeout:       60 * time.Second,
+		WriteTimeout:      120 * time.Second,
+		IdleTimeout:       180 * time.Second,
 	}
 
 	done := make(chan os.Signal, 1)
@@ -125,31 +158,27 @@ func main() {
 	go func() {
 		if *sslcert != "" {
 			if err := srv.ListenAndServeTLS(*sslcert, *sslprivkey); err != nil && err != http.ErrServerClosed {
-				//log.Fatalf("listen: %s\n", err)
-                log.Fatal().Err(err).Msg("Startup failed")
+				log.Fatal().Err(err).Msg("Falha ao iniciar o servidor com TLS")
 			}
 		} else {
 			if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-				//log.Fatalf("listen: %s\n", err)
-                log.Fatal().Err(err).Msg("Startup failed")
+				log.Fatal().Err(err).Msg("Falha ao iniciar o servidor")
 			}
 		}
 	}()
-    //wlog.Infof("Server Started. Listening on %s:%s", *address, *port)
-    log.Info().Str("address", *address).Str("port",*port).Msg("Server Started")
+	log.Info().Str("address", *address).Str("port", *port).Msg("Servidor iniciado")
 
 	<-done
-	log.Info().Msg("Server Stoped")
+	log.Info().Msg("Servidor parando")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer func() {
-		// extra handling here
 		cancel()
 	}()
 
 	if err := srv.Shutdown(ctx); err != nil {
-		log.Error().Str("error",fmt.Sprintf("%+v",err)).Msg("Server Shutdown Failed")
+		log.Error().Str("error", fmt.Sprintf("%+v", err)).Msg("Falha ao parar o servidor")
 		os.Exit(1)
 	}
-	log.Info().Msg("Server Exited Properly")
+	log.Info().Msg("Servidor saiu corretamente")
 }
