@@ -1,13 +1,14 @@
 package main
 
 import (
-	"github.com/justinas/alice"
-	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/hlog"
 	"net/http"
 	"os"
 	"path/filepath"
 	"time"
+
+	"github.com/justinas/alice"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/hlog"
 )
 
 type Middleware = alice.Constructor
@@ -59,8 +60,11 @@ func (s *server) routes() {
 	s.router.Handle("/session/qr", c.Then(s.GetQR())).Methods("GET")
 	s.router.Handle("/session/pairphone", c.Then(s.PairPhone())).Methods("POST")
 
-	s.router.Handle("/webhook", c.Then(s.SetWebhook())).Methods("POST")
-	s.router.Handle("/webhook", c.Then(s.GetWebhook())).Methods("GET")
+    s.router.Handle("/webhook", c.Then(s.SetWebhook())).Methods("POST")
+    s.router.Handle("/webhook", c.Then(s.GetWebhook())).Methods("GET")
+    s.router.Handle("/webhook", c.Then(s.DeleteWebhook())).Methods("DELETE") // Nova rota
+    s.router.Handle("/webhook/update", c.Then(s.UpdateWebhook())).Methods("PUT") // Nova rota
+
 
 	s.router.Handle("/chat/send/text", c.Then(s.SendMessage())).Methods("POST")
 	s.router.Handle("/chat/send/image", c.Then(s.SendImage())).Methods("POST")
