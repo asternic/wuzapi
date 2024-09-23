@@ -41,11 +41,22 @@ func callHook(myurl string, payload map[string]string, id int) {
 func callHookFile(myurl string, payload map[string]string, id int, file string) error {
     log.Info().Str("file", file).Str("url", myurl).Msg("Sending POST")
 
+    // Criar um novo mapa para o payload final
+    finalPayload := make(map[string]string)
+    for k, v := range payload {
+        finalPayload[k] = v
+    }
+
+    // Adicionar o arquivo ao payload
+    finalPayload["file"] = file
+
+    log.Debug().Interface("finalPayload", finalPayload).Msg("Final payload to be sent")
+
     resp, err := clientHttp[id].R().
         SetFiles(map[string]string{
             "file": file,
         }).
-        SetFormData(payload).
+        SetFormData(finalPayload).
         Post(myurl)
 
     if err != nil {
@@ -53,8 +64,11 @@ func callHookFile(myurl string, payload map[string]string, id int, file string) 
         return fmt.Errorf("failed to send POST request: %w", err)
     }
 
-    // Optionally, you can log the response status
-    log.Info().Int("status", resp.StatusCode()).Msg("POST request completed")
+    // Log do payload enviado
+    log.Debug().Interface("payload", finalPayload).Msg("Payload sent to webhook")
+
+    // Optionally, you can log the response status and body
+    log.Info().Int("status", resp.StatusCode()).Str("body", string(resp.Body())).Msg("POST request completed")
 
     return nil
 }
