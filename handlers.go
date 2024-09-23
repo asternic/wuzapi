@@ -1,23 +1,23 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"path/filepath"
+	"image"
+	"image/jpeg"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
-	"database/sql"
-	"image"
-	"image/jpeg"
-	"bytes"
 
-	"github.com/nfnt/resize"
 	"github.com/gorilla/mux"
+	"github.com/nfnt/resize"
 	"github.com/patrickmn/go-cache"
 	"github.com/vincent-petithory/dataurl"
 	"go.mau.fi/whatsmeow"
@@ -67,7 +67,7 @@ func (s *server) authalice(next http.Handler) http.Handler {
 		if !found {
 			log.Info().Msg("Looking for user information in DB")
 			// Checks DB from matching user and store user values in context
-			rows, err := s.db.Query("SELECT id,webhook,jid,events FROM users WHERE token=? LIMIT 1", token)
+			rows, err := s.db.Query("SELECT id,webhook,jid,events FROM users WHERE token=$1 LIMIT 1", token)
 			if err != nil {
 				s.Respond(w, r, http.StatusInternalServerError, err)
 				return
@@ -125,7 +125,7 @@ func (s *server) auth(handler http.HandlerFunc) http.HandlerFunc {
 		if !found {
 			log.Info().Msg("Looking for user information in DB")
 			// Checks DB from matching user and store user values in context
-			rows, err := s.db.Query("SELECT id,webhook,jid,events FROM users WHERE token=? LIMIT 1", token)
+			rows, err := s.db.Query("SELECT id, webhook, jid, events FROM users WHERE token=$1 LIMIT 1", token)
 			if err != nil {
 				s.Respond(w, r, http.StatusInternalServerError, err)
 				return
@@ -210,7 +210,7 @@ func (s *server) Connect() http.HandlerFunc {
 				}
 			}
 			eventstring = strings.Join(subscribedEvents, ",")
-			_, err = s.db.Exec("UPDATE users SET events=? WHERE id=?", eventstring, userid)
+			_, err = s.db.Exec("UPDATE users SET events=$1 WHERE id=$2", eventstring, userid)
 			if err != nil {
 				log.Warn().Msg("Could not set events in users table")
 			}
@@ -267,7 +267,7 @@ func (s *server) Disconnect() http.HandlerFunc {
 			if clientPointer[userid].IsLoggedIn() == true {
 				log.Info().Str("jid", jid).Msg("Disconnection successfull")
 				killchannel[userid] <- true
-				_, err := s.db.Exec("UPDATE users SET events=? WHERE id=?", "", userid)
+				_, err := s.db.Exec("UPDATE users SET events=$1 WHERE id=$2", "", userid)
 				if err != nil {
 					log.Warn().Str("userid", txtid).Msg("Could not set events in users table")
 				}
@@ -303,7 +303,7 @@ func (s *server) GetWebhook() http.HandlerFunc {
 		events := ""
 		txtid := r.Context().Value("userinfo").(Values).Get("Id")
 
-		rows, err := s.db.Query("SELECT webhook,events FROM users WHERE id=? LIMIT 1", txtid)
+		rows, err := s.db.Query("SELECT webhook,events FROM users WHERE id=$1 LIMIT 1", txtid)
 		if err != nil {
 			s.Respond(w, r, http.StatusInternalServerError, errors.New(fmt.Sprintf("Could not get webhook: %v", err)))
 			return
@@ -335,13 +335,89 @@ func (s *server) GetWebhook() http.HandlerFunc {
 	}
 }
 
-// Sets WebHook
-func (s *server) SetWebhook() http.HandlerFunc {
-	type webhookStruct struct {
-		WebhookURL string
+// DeleteWebhook removes the webhook and clears events for a user
+func (s *server) DeleteWebhook() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		txtid := r.Context().Value("userinfo").(Values).Get("Id")
+		token := r.Context().Value("userinfo").(Values).Get("Token")
+		userid, _ := strconv.Atoi(txtid)
+
+		// Update the database to remove the webhook and clear events
+		_, err := s.db.Exec("UPDATE users SET webhook='', events='' WHERE id=$1", userid)
+		if err != nil {
+			s.Respond(w, r, http.StatusInternalServerError, errors.New(fmt.Sprintf("Could not delete webhook: %v", err)))
+			return
+		}
+
+		// Update the user info cache
+		v := updateUserInfo(r.Context().Value("userinfo"), "Webhook", "")
+		v = updateUserInfo(v, "Events", "")
+		userinfocache.Set(token, v, cache.NoExpiration)
+
+		response := map[string]interface{}{"Details": "Webhook and events deleted successfully"}
+		responseJson, err := json.Marshal(response)
+		if err != nil {
+			s.Respond(w, r, http.StatusInternalServerError, err)
+		} else {
+			s.Respond(w, r, http.StatusOK, string(responseJson))
+		}
+	}
+}
+
+// UpdateWebhook updates the webhook URL and events for a user
+func (s *server) UpdateWebhook() http.HandlerFunc {
+	type updateWebhookStruct struct {
+		WebhookURL string   `json:"webhook"`
+		Events     []string `json:"events"`
+		Active     bool     `json:"active"`
 	}
 	return func(w http.ResponseWriter, r *http.Request) {
+		txtid := r.Context().Value("userinfo").(Values).Get("Id")
+		token := r.Context().Value("userinfo").(Values).Get("Token")
+		userid, _ := strconv.Atoi(txtid)
 
+		decoder := json.NewDecoder(r.Body)
+		var t updateWebhookStruct
+		err := decoder.Decode(&t)
+		if err != nil {
+			s.Respond(w, r, http.StatusBadRequest, errors.New("Could not decode payload"))
+			return
+		}
+
+		webhook := t.WebhookURL
+		events := strings.Join(t.Events, ",")
+		if !t.Active {
+			webhook = ""
+			events = ""
+		}
+
+		_, err = s.db.Exec("UPDATE users SET webhook=?, events=? WHERE id=?", webhook, events, userid)
+		if err != nil {
+			s.Respond(w, r, http.StatusInternalServerError, errors.New(fmt.Sprintf("Could not update webhook: %v", err)))
+			return
+		}
+
+		v := updateUserInfo(r.Context().Value("userinfo"), "Webhook", webhook)
+		v = updateUserInfo(v, "Events", events)
+		userinfocache.Set(token, v, cache.NoExpiration)
+
+		response := map[string]interface{}{"webhook": webhook, "events": t.Events, "active": t.Active}
+		responseJson, err := json.Marshal(response)
+		if err != nil {
+			s.Respond(w, r, http.StatusInternalServerError, err)
+		} else {
+			s.Respond(w, r, http.StatusOK, string(responseJson))
+		}
+	}
+}
+
+// SetWebhook sets the webhook URL and events for a user
+func (s *server) SetWebhook() http.HandlerFunc {
+	type webhookStruct struct {
+		WebhookURL string   `json:"webhook"`
+		Events     []string `json:"events"`
+	}
+	return func(w http.ResponseWriter, r *http.Request) {
 		txtid := r.Context().Value("userinfo").(Values).Get("Id")
 		token := r.Context().Value("userinfo").(Values).Get("Token")
 		userid, _ := strconv.Atoi(txtid)
@@ -350,28 +426,30 @@ func (s *server) SetWebhook() http.HandlerFunc {
 		var t webhookStruct
 		err := decoder.Decode(&t)
 		if err != nil {
-			s.Respond(w, r, http.StatusInternalServerError, errors.New(fmt.Sprintf("Could not set webhook: %v", err)))
+			s.Respond(w, r, http.StatusBadRequest, errors.New("Could not decode payload"))
 			return
 		}
-		var webhook = t.WebhookURL
 
-		_, err = s.db.Exec("UPDATE users SET webhook=? WHERE id=?", webhook, userid)
+		webhook := t.WebhookURL
+		events := strings.Join(t.Events, ",")
+
+		_, err = s.db.Exec("UPDATE users SET webhook=$1, events=$2 WHERE id=$3", webhook, events, userid)
 		if err != nil {
-			s.Respond(w, r, http.StatusInternalServerError, errors.New(fmt.Sprintf("%s", err)))
+			s.Respond(w, r, http.StatusInternalServerError, errors.New(fmt.Sprintf("Could not set webhook: %v", err)))
 			return
 		}
 
 		v := updateUserInfo(r.Context().Value("userinfo"), "Webhook", webhook)
+		v = updateUserInfo(v, "Events", events)
 		userinfocache.Set(token, v, cache.NoExpiration)
 
-		response := map[string]interface{}{"webhook": webhook}
+		response := map[string]interface{}{"webhook": webhook, "events": t.Events}
 		responseJson, err := json.Marshal(response)
 		if err != nil {
 			s.Respond(w, r, http.StatusInternalServerError, err)
 		} else {
 			s.Respond(w, r, http.StatusOK, string(responseJson))
 		}
-		return
 	}
 }
 
@@ -391,7 +469,7 @@ func (s *server) GetQR() http.HandlerFunc {
 				s.Respond(w, r, http.StatusInternalServerError, errors.New("Not connected"))
 				return
 			}
-			rows, err := s.db.Query("SELECT qrcode AS code FROM users WHERE id=? LIMIT 1", userid)
+			rows, err := s.db.Query("SELECT qrcode AS code FROM users WHERE id=$1 LIMIT 1", userid)
 			if err != nil {
 				s.Respond(w, r, http.StatusInternalServerError, err)
 				return
@@ -2893,97 +2971,83 @@ func (s *server) SetGroupName() http.HandlerFunc {
 
 // Admin List users
 func (s *server) ListUsers() http.HandlerFunc {
-
-	type usersStruct struct {
-		Id int
-        Name string
-        Connected bool
-        Events string
-	}
-
-	return func(w http.ResponseWriter, r *http.Request) {
-
+    type usersStruct struct {
+        Id        int    `db:"id"`
+        Name      string `db:"name"`
+        Token     string `db:"token"`
+        Webhook   string `db:"webhook"`
+        Jid       string `db:"jid"`
+		Qrcode    string `db:"qrcode"`
+        Connected sql.NullBool `db:"connected"`
+        Expiration int    `db:"expiration"`
+        Events    string `db:"events"`
+    }
+    return func(w http.ResponseWriter, r *http.Request) {
         // Query the database to get the list of users
-        rows, err := s.db.Query("SELECT id, name, token, webhook, jid, connected, expiration, events FROM users")
+        rows, err := s.db.Queryx("SELECT id, name, token, webhook, jid, qrcode, connected, expiration, events FROM users")
         if err != nil {
-			s.Respond(w, r, http.StatusInternalServerError, errors.New("Problem accessing DB"))
+            s.Respond(w, r, http.StatusInternalServerError, errors.New("Problem accessing DB"))
             return
         }
         defer rows.Close()
-
         // Create a slice to store the user data
         users := []map[string]interface{}{}
-
         // Iterate over the rows and populate the user data
         for rows.Next() {
-            var id int
-            var name, token, webhook, jid string
-            var connectedNull sql.NullInt64
-            var expiration int
-            var events string
-
-            err := rows.Scan(&id, &name, &token, &webhook, &jid, &connectedNull, &expiration, &events)
+            var user usersStruct
+            err := rows.StructScan(&user)
             if err != nil {
-			    s.Respond(w, r, http.StatusInternalServerError, errors.New("Problem accessing DB"))
+                s.Respond(w, r, http.StatusInternalServerError, errors.New("Problem accessing DB"))
                 return
             }
-
-            connected := int(0)
-            if connectedNull.Valid {
-                connected = int(connectedNull.Int64)
+            userMap := map[string]interface{}{
+                "id":         user.Id,
+                "name":       user.Name,
+                "token":      user.Token,
+                "webhook":    user.Webhook,
+                "jid":        user.Jid,
+				"qrcode":     user.Qrcode,
+                "connected":  user.Connected.Bool,
+                "expiration": user.Expiration,
+                "events":     user.Events,
             }
-
-            user := map[string]interface{}{
-                "id":         id,
-                "name":       name,
-                "token":      token,
-                "webhook":    webhook,
-                "jid":        jid,
-                "connected":  connected == 1,
-                "expiration": expiration,
-                "events":     events,
-            }
-
-            users = append(users, user)
+            users = append(users, userMap)
         }
         // Check for any error that occurred during iteration
         if err := rows.Err(); err != nil {
-			s.Respond(w, r, http.StatusInternalServerError, errors.New("Problem accessing DB"))
+            s.Respond(w, r, http.StatusInternalServerError, errors.New("Problem accessing DB"))
             return
         }
-
         // Set the response content type to JSON
         w.Header().Set("Content-Type", "application/json")
-
         // Encode the user data as JSON and write the response
         err = json.NewEncoder(w).Encode(users)
         if err != nil {
-			s.Respond(w, r, http.StatusInternalServerError, errors.New("Problem encodingJSON"))
+            s.Respond(w, r, http.StatusInternalServerError, errors.New("Problem encoding JSON"))
             return
         }
     }
 }
 
 func (s *server) AddUser() http.HandlerFunc {
-    return func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
 
-        // Parse the request body
-        var user struct {
-            Name       string `json:"name"`
-            Token      string `json:"token"`
-            Webhook    string `json:"webhook"`
-            Expiration int    `json:"expiration"`
-            Events     string `json:"events"`
-        }
-        err := json.NewDecoder(r.Body).Decode(&user)
-        if err != nil {
-			s.Respond(w, r, http.StatusBadRequest, errors.New("Incomplete data in Payload. Required name,token,webhook,expiration,events"))
-            return
-        }
+		// Parse the request body
+		var user struct {
+			Name       string `json:"name"`
+			Token      string `json:"token"`
+			Webhook    string `json:"webhook"`
+			Expiration int    `json:"expiration"`
+			Events     string `json:"events"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&user); err != nil {
+			s.Respond(w, r, http.StatusBadRequest, errors.New("Incomplete data in Payload. Required name, token, webhook, expiration, events"))
+			return
+		}
 
 		// Check if a user with the same token already exists
 		var count int
-		err = s.db.QueryRow("SELECT COUNT(*) FROM users WHERE token = ?", user.Token).Scan(&count)
+		err := s.db.Get(&count, "SELECT COUNT(*) FROM users WHERE token = $1", user.Token)
 		if err != nil {
 			s.Respond(w, r, http.StatusInternalServerError, errors.New("Problem accessing DB"))
 			return
@@ -2998,63 +3062,67 @@ func (s *server) AddUser() http.HandlerFunc {
 		eventList := strings.Split(user.Events, ",")
 		for _, event := range eventList {
 			event = strings.TrimSpace(event)
-			if !contains(validEvents, event) {
+			if !Find(validEvents, event) {
 				s.Respond(w, r, http.StatusBadRequest, errors.New("Invalid event: "+event))
 				return
 			}
 		}
 
-        // Insert the user into the database
-        result, err := s.db.Exec("INSERT INTO users (name, token, webhook, expiration, events, jid, qrcode) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            user.Name, user.Token, user.Webhook, user.Expiration, user.Events, "", "")
-        if err != nil {
+		// Insert the user into the database
+		var id int
+		err = s.db.QueryRowx(
+			"INSERT INTO users (name, token, webhook, expiration, events, jid, qrcode) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id",
+			user.Name, user.Token, user.Webhook, user.Expiration, user.Events, "", "",
+		).Scan(&id)		
+		if err != nil {
 			s.Respond(w, r, http.StatusInternalServerError, errors.New("Problem accessing DB"))
 			log.Error().Str("error", fmt.Sprintf("%v", err)).Msg("Admin DB Error")
-            return
-        }
+			return
+		}
 
-        // Get the ID of the inserted user
-        id, _ := result.LastInsertId()
-
-        // Return the inserted user ID
+		// Return the inserted user ID
 		response := map[string]interface{}{
-            "id": id,
-        }
-        json.NewEncoder(w).Encode(response)
-    }
+			"id": id,
+		}
+		if err := json.NewEncoder(w).Encode(response); err != nil {
+			s.Respond(w, r, http.StatusInternalServerError, errors.New("Problem encoding JSON"))
+			return
+		}
+	}
 }
 
 func (s *server) DeleteUser() http.HandlerFunc {
-    return func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
 
-        // Get the user ID from the request URL
-        vars := mux.Vars(r)
-        userID := vars["id"]
+		// Get the user ID from the request URL
+		vars := mux.Vars(r)
+		userID := vars["id"]
 
-        // Delete the user from the database
-        result, err := s.db.Exec("DELETE FROM users WHERE id = ?", userID)
-        if err != nil {
-			s.Respond(w, r, http.StatusInternalServerError, errors.New("Problem accessing DB"))
-            return
-        }
-
-        // Check if the user was deleted
-        rowsAffected, _ := result.RowsAffected()
-        if rowsAffected == 0 {
-			s.Respond(w, r, http.StatusNotFound, errors.New("User not found"))
-            return
-        }
-
-        // Return a success response
-		response := map[string]interface{}{"Details": "User deleted successfully"}
-		responseJson, err := json.Marshal(response)
-
+		// Delete the user from the database
+		result, err := s.db.Exec("DELETE FROM users WHERE id=$1", userID)
 		if err != nil {
-			s.Respond(w, r, http.StatusInternalServerError, err)
-		} else {
-			s.Respond(w, r, http.StatusOK, string(responseJson))
+			s.Respond(w, r, http.StatusInternalServerError, errors.New("Problem accessing DB"))
+			return
 		}
-    }
+
+		// Check if the user was deleted
+		rowsAffected, err := result.RowsAffected()
+		if err != nil {
+			s.Respond(w, r, http.StatusInternalServerError, errors.New("Problem checking rows affected"))
+			return
+		}
+		if rowsAffected == 0 {
+			s.Respond(w, r, http.StatusNotFound, errors.New("User not found"))
+			return
+		}
+
+		// Return a success response
+		response := map[string]interface{}{"Details": "User deleted successfully"}
+		if err := json.NewEncoder(w).Encode(response); err != nil {
+			s.Respond(w, r, http.StatusInternalServerError, errors.New("Problem encoding JSON"))
+			return
+		}
+	}
 }
 
 // Writes JSON response to API clients
