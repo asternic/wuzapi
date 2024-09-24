@@ -1,0 +1,40 @@
+version: '3.8'
+
+services:
+  wuzapi-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      - WUZAPI_ADMIN_TOKEN=H4Zbhw72PBKdTIgS
+    volumes:
+      - ./dbdata:/app/dbdata
+      - ./files:/app/files
+    depends_on:
+      - db
+    networks:
+      - wuzapi-network
+
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: wuzapi
+      POSTGRES_PASSWORD: wuzapi
+      POSTGRES_DB: wuzapi
+    ports:
+      - "5432:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    networks:
+      - wuzapi-network
+      
+networks:
+  wuzapi-network:
+    driver: bridge
+
+volumes:
+  dbdata:
+  files:
+  db_data:
