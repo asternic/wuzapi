@@ -544,15 +544,22 @@ paths:
         - Group 
       summary: Get Group Invite Link
       description: Gets the invite link for a group, optionally resetting it to create a new/different one
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#definitions/GroupInviteLink'
+      parameters:
+        - in: query
+          name: groupJID
+          schema:
+            type: string
+          required: true
+          description: The JID of the group to retrieve information from
+        - in: query
+          name: reset
+          schema:
+            type: boolean
+          required: false
+          description: Whether to revoke the old invite link and generate a new one (default is false)
       responses:
         200:
-          description: Response
+          description: Successfull response
           content:
             application/json:
               schema:
@@ -563,16 +570,16 @@ paths:
         - Group 
       summary: Gets group information
       description: Retrieves information about a specific group
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#definitions/GroupInfo'
- 
+      parameters:
+        - in: query
+          name: groupJID
+          schema:
+            type: string
+          required: true
+          description: The JID of the group to retrieve information from
       responses:
         200:
-          description: Response
+          description: Successful response
           content:
             application/json:
               schema:

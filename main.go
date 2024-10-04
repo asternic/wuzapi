@@ -29,14 +29,15 @@ type server struct {
 }
 
 var (
-	address    = flag.String("address", "0.0.0.0", "Bind IP Address")
-	port       = flag.String("port", "8080", "Listen Port")
-	waDebug    = flag.String("wadebug", "", "Enable whatsmeow debug (INFO or DEBUG)")
-	logType    = flag.String("logtype", "console", "Type of log output (console or json)")
-	sslcert    = flag.String("sslcertificate", "", "SSL Certificate File")
-	sslprivkey = flag.String("sslprivatekey", "", "SSL Certificate Private Key File")
-	adminToken = flag.String("admintoken", "", "Security Token to authorize admin actions (list/create/remove users)")
-	container  *sqlstore.Container
+	address     = flag.String("address", "0.0.0.0", "Bind IP Address")
+	port        = flag.String("port", "8080", "Listen Port")
+	waDebug     = flag.String("wadebug", "", "Enable whatsmeow debug (INFO or DEBUG)")
+	logType     = flag.String("logtype", "console", "Type of log output (console or json)")
+	colorOutput = flag.Bool("color", false, "Enable colored output for console logs")
+	sslcert     = flag.String("sslcertificate", "", "SSL Certificate File")
+	sslprivkey  = flag.String("sslprivatekey", "", "SSL Certificate Private Key File")
+	adminToken  = flag.String("admintoken", "", "Security Token to authorize admin actions (list/create/remove users)")
+	container   *sqlstore.Container
 
 	killchannel   = make(map[int](chan bool))
 	userinfocache = cache.New(5*time.Minute, 10*time.Minute)
@@ -50,7 +51,7 @@ func init() {
 	if *logType == "json" {
 		log = zerolog.New(os.Stdout).With().Timestamp().Str("role", filepath.Base(os.Args[0])).Logger()
 	} else {
-		output := zerolog.ConsoleWriter{Out: os.Stdout, TimeFormat: time.RFC3339}
+		output := zerolog.ConsoleWriter{Out: os.Stdout, TimeFormat: time.RFC3339, NoColor: !*colorOutput}
 		log = zerolog.New(output).With().Timestamp().Str("role", filepath.Base(os.Args[0])).Logger()
 	}
 
@@ -93,7 +94,7 @@ func main() {
 	}
 
 	if *waDebug != "" {
-		dbLog := waLog.Stdout("Database", *waDebug, true)
+		dbLog := waLog.Stdout("Database", *waDebug, *colorOutput)
 		container, err = sqlstore.New("sqlite", "file:"+exPath+"/dbdata/main.db?_pragma=foreign_keys(1)&_busy_timeout=3000", dbLog)
 	} else {
 		container, err = sqlstore.New("sqlite", "file:"+exPath+"/dbdata/main.db?_pragma=foreign_keys(1)&_busy_timeout=3000", nil)
@@ -112,8 +113,12 @@ func main() {
 	s.connectOnStartup()
 
 	srv := &http.Server{
-		Addr:    *address + ":" + *port,
-		Handler: s.router,
+		Addr:              *address + ":" + *port,
+		Handler:           s.router,
+		ReadHeaderTimeout: 20 * time.Second,
+		ReadTimeout:       60 * time.Second,
+		WriteTimeout:      120 * time.Second,
+		IdleTimeout:       180 * time.Second,
 	}
 
 	done := make(chan os.Signal, 1)

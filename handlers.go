@@ -1,11 +1,14 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"image"
+	"image/jpeg"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -14,6 +17,7 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
+	"github.com/nfnt/resize"
 	"github.com/patrickmn/go-cache"
 	"github.com/vincent-petithory/dataurl"
 	"go.mau.fi/whatsmeow"
@@ -651,6 +655,12 @@ func (s *server) SendDocument() http.HandlerFunc {
 				QuotedMessage: &waProto.Message{Conversation: proto.String("")},
 			}
 		}
+		if t.ContextInfo.MentionedJID != nil {
+			if msg.ExtendedTextMessage.ContextInfo == nil {
+				msg.ExtendedTextMessage.ContextInfo = &waProto.ContextInfo{}
+			}
+			msg.ExtendedTextMessage.ContextInfo.MentionedJID = t.ContextInfo.MentionedJID
+		}
 
 		resp, err = clientPointer[userid].SendMessage(context.Background(), recipient, msg, whatsmeow.SendRequestExtra{ID: msgid})
 		if err != nil {
@@ -767,6 +777,12 @@ func (s *server) SendAudio() http.HandlerFunc {
 				QuotedMessage: &waProto.Message{Conversation: proto.String("")},
 			}
 		}
+		if t.ContextInfo.MentionedJID != nil {
+			if msg.ExtendedTextMessage.ContextInfo == nil {
+				msg.ExtendedTextMessage.ContextInfo = &waProto.ContextInfo{}
+			}
+			msg.ExtendedTextMessage.ContextInfo.MentionedJID = t.ContextInfo.MentionedJID
+		}
 
 		resp, err = clientPointer[userid].SendMessage(context.Background(), recipient, msg, whatsmeow.SendRequestExtra{ID: msgid})
 		if err != nil {
@@ -842,6 +858,7 @@ func (s *server) SendImage() http.HandlerFunc {
 
 		var uploaded whatsmeow.UploadResponse
 		var filedata []byte
+		var thumbnailBytes []byte
 
 		if t.Image[0:10] == "data:image" {
 			dataURL, err := dataurl.DecodeString(t.Image)
@@ -856,6 +873,37 @@ func (s *server) SendImage() http.HandlerFunc {
 					return
 				}
 			}
+
+			// decode jpeg into image.Image
+			reader := bytes.NewReader(filedata)
+			img, _, err := image.Decode(reader)
+			if err != nil {
+				s.Respond(w, r, http.StatusInternalServerError, errors.New(fmt.Sprintf("Could not decode image for thumbnail preparation: %v", err)))
+				return
+			}
+
+			// resize to width 72 using Lanczos resampling and preserve aspect ratio
+			m := resize.Thumbnail(72, 72, img, resize.Lanczos3)
+
+			tmpFile, err := os.CreateTemp("", "resized-*.jpg")
+			if err != nil {
+				s.Respond(w, r, http.StatusInternalServerError, errors.New(fmt.Sprintf("Could not create temp file for thumbnail: %v", err)))
+				return
+			}
+			defer tmpFile.Close()
+
+			// write new image to file
+			if err := jpeg.Encode(tmpFile, m, nil); err != nil {
+				s.Respond(w, r, http.StatusInternalServerError, errors.New(fmt.Sprintf("Failed to encode jpeg: %v", err)))
+				return
+			}
+
+			thumbnailBytes, err = os.ReadFile(tmpFile.Name())
+			if err != nil {
+				s.Respond(w, r, http.StatusInternalServerError, errors.New(fmt.Sprintf("Failed to read %s: %v", tmpFile.Name(), err)))
+				return
+			}
+
 		} else {
 			s.Respond(w, r, http.StatusBadRequest, errors.New("Image data should start with \"data:image/png;base64,\""))
 			return
@@ -870,14 +918,21 @@ func (s *server) SendImage() http.HandlerFunc {
 			FileEncSHA256: uploaded.FileEncSHA256,
 			FileSHA256:    uploaded.FileSHA256,
 			FileLength:    proto.Uint64(uint64(len(filedata))),
+			JPEGThumbnail: thumbnailBytes,
 		}}
 
 		if t.ContextInfo.StanzaID != nil {
-			msg.ExtendedTextMessage.ContextInfo = &waProto.ContextInfo{
-				StanzaID:      proto.String(*t.ContextInfo.StanzaID),
-				Participant:   proto.String(*t.ContextInfo.Participant),
-				QuotedMessage: &waProto.Message{Conversation: proto.String("")},
+			if msg.ImageMessage.ContextInfo == nil {
+				msg.ImageMessage.ContextInfo = &waProto.ContextInfo{
+					StanzaID:      proto.String(*t.ContextInfo.StanzaID),
+					Participant:   proto.String(*t.ContextInfo.Participant),
+					QuotedMessage: &waProto.Message{Conversation: proto.String("")},
+				}
 			}
+		}
+
+		if t.ContextInfo.MentionedJID != nil {
+			msg.ImageMessage.ContextInfo.MentionedJID = t.ContextInfo.MentionedJID
 		}
 
 		resp, err = clientPointer[userid].SendMessage(context.Background(), recipient, msg, whatsmeow.SendRequestExtra{ID: msgid})
@@ -990,6 +1045,12 @@ func (s *server) SendSticker() http.HandlerFunc {
 				Participant:   proto.String(*t.ContextInfo.Participant),
 				QuotedMessage: &waProto.Message{Conversation: proto.String("")},
 			}
+		}
+		if t.ContextInfo.MentionedJID != nil {
+			if msg.ExtendedTextMessage.ContextInfo == nil {
+				msg.ExtendedTextMessage.ContextInfo = &waProto.ContextInfo{}
+			}
+			msg.ExtendedTextMessage.ContextInfo.MentionedJID = t.ContextInfo.MentionedJID
 		}
 
 		resp, err = clientPointer[userid].SendMessage(context.Background(), recipient, msg, whatsmeow.SendRequestExtra{ID: msgid})
@@ -1105,6 +1166,12 @@ func (s *server) SendVideo() http.HandlerFunc {
 				QuotedMessage: &waProto.Message{Conversation: proto.String("")},
 			}
 		}
+		if t.ContextInfo.MentionedJID != nil {
+			if msg.ExtendedTextMessage.ContextInfo == nil {
+				msg.ExtendedTextMessage.ContextInfo = &waProto.ContextInfo{}
+			}
+			msg.ExtendedTextMessage.ContextInfo.MentionedJID = t.ContextInfo.MentionedJID
+		}
 
 		resp, err = clientPointer[userid].SendMessage(context.Background(), recipient, msg, whatsmeow.SendRequestExtra{ID: msgid})
 		if err != nil {
@@ -1192,6 +1259,12 @@ func (s *server) SendContact() http.HandlerFunc {
 				Participant:   proto.String(*t.ContextInfo.Participant),
 				QuotedMessage: &waProto.Message{Conversation: proto.String("")},
 			}
+		}
+		if t.ContextInfo.MentionedJID != nil {
+			if msg.ExtendedTextMessage.ContextInfo == nil {
+				msg.ExtendedTextMessage.ContextInfo = &waProto.ContextInfo{}
+			}
+			msg.ExtendedTextMessage.ContextInfo.MentionedJID = t.ContextInfo.MentionedJID
 		}
 
 		resp, err = clientPointer[userid].SendMessage(context.Background(), recipient, msg, whatsmeow.SendRequestExtra{ID: msgid})
@@ -1282,6 +1355,12 @@ func (s *server) SendLocation() http.HandlerFunc {
 				Participant:   proto.String(*t.ContextInfo.Participant),
 				QuotedMessage: &waProto.Message{Conversation: proto.String("")},
 			}
+		}
+		if t.ContextInfo.MentionedJID != nil {
+			if msg.ExtendedTextMessage.ContextInfo == nil {
+				msg.ExtendedTextMessage.ContextInfo = &waProto.ContextInfo{}
+			}
+			msg.ExtendedTextMessage.ContextInfo.MentionedJID = t.ContextInfo.MentionedJID
 		}
 
 		resp, err = clientPointer[userid].SendMessage(context.Background(), recipient, msg, whatsmeow.SendRequestExtra{ID: msgid})
@@ -1617,6 +1696,12 @@ func (s *server) SendMessage() http.HandlerFunc {
 				Participant:   proto.String(*t.ContextInfo.Participant),
 				QuotedMessage: &waProto.Message{Conversation: proto.String("")},
 			}
+		}
+		if t.ContextInfo.MentionedJID != nil {
+			if msg.ExtendedTextMessage.ContextInfo == nil {
+				msg.ExtendedTextMessage.ContextInfo = &waProto.ContextInfo{}
+			}
+			msg.ExtendedTextMessage.ContextInfo.MentionedJID = t.ContextInfo.MentionedJID
 		}
 
 		resp, err = clientPointer[userid].SendMessage(context.Background(), recipient, msg, whatsmeow.SendRequestExtra{ID: msgid})
@@ -2620,15 +2705,14 @@ func (s *server) GetGroupInfo() http.HandlerFunc {
 			return
 		}
 
-		decoder := json.NewDecoder(r.Body)
-		var t getGroupInfoStruct
-		err := decoder.Decode(&t)
-		if err != nil {
-			s.Respond(w, r, http.StatusBadRequest, errors.New("Could not decode Payload"))
+		// Get GroupJID from query parameter
+		groupJID := r.URL.Query().Get("groupJID")
+		if groupJID == "" {
+			s.Respond(w, r, http.StatusBadRequest, errors.New("Missing groupJID parameter"))
 			return
 		}
 
-		group, ok := parseJID(t.GroupJID)
+		group, ok := parseJID(groupJID)
 		if !ok {
 			s.Respond(w, r, http.StatusBadRequest, errors.New("Could not parse Group JID"))
 			return
@@ -2673,21 +2757,32 @@ func (s *server) GetGroupInviteLink() http.HandlerFunc {
 			return
 		}
 
-		decoder := json.NewDecoder(r.Body)
-		var t getGroupInfoStruct
-		err := decoder.Decode(&t)
-		if err != nil {
-			s.Respond(w, r, http.StatusBadRequest, errors.New("Could not decode Payload"))
+		// Get GroupJID from query parameter
+		groupJID := r.URL.Query().Get("groupJID")
+		if groupJID == "" {
+			s.Respond(w, r, http.StatusBadRequest, errors.New("Missing groupJID parameter"))
 			return
 		}
 
-		group, ok := parseJID(t.GroupJID)
+		// Get reset parameter
+		resetParam := r.URL.Query().Get("reset")
+		reset := false
+		if resetParam != "" {
+			var err error
+			reset, err = strconv.ParseBool(resetParam)
+			if err != nil {
+				s.Respond(w, r, http.StatusBadRequest, errors.New("Invalid reset parameter, must be true or false"))
+				return
+			}
+		}
+
+		group, ok := parseJID(groupJID)
 		if !ok {
 			s.Respond(w, r, http.StatusBadRequest, errors.New("Could not parse Group JID"))
 			return
 		}
 
-		resp, err := clientPointer[userid].GetGroupInviteLink(group, t.Reset)
+		resp, err := clientPointer[userid].GetGroupInviteLink(group, reset)
 
 		if err != nil {
 			log.Error().Str("error", fmt.Sprintf("%v", err)).Msg("Failed to get group invite link")
