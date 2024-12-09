@@ -1658,6 +1658,7 @@ func (s *server) SendMessage() http.HandlerFunc {
 			s.Respond(w, r, http.StatusBadRequest, errors.New("Could not decode Payload"))
 			return
 		}
+		log.Info().Msg(fmt.Sprintf("Payload Send Messages Body: %s Phone: %s ", t.Body, t.Phone))
 
 		if t.Phone == "" {
 			s.Respond(w, r, http.StatusBadRequest, errors.New("Missing Phone in Payload"))
@@ -1703,12 +1704,13 @@ func (s *server) SendMessage() http.HandlerFunc {
 			}
 			msg.ExtendedTextMessage.ContextInfo.MentionedJID = t.ContextInfo.MentionedJID
 		}
-
+		log.Info().Msg(fmt.Sprintf("Prepare MSG Chat:", msg.Chat))
 		resp, err = clientPointer[userid].SendMessage(context.Background(), recipient, msg, whatsmeow.SendRequestExtra{ID: msgid})
 		if err != nil {
 			s.Respond(w, r, http.StatusInternalServerError, errors.New(fmt.Sprintf("Error sending message: %v", err)))
 			return
 		}
+		log.Info().Msg(fmt.Sprintf("Sending MSG Chat:", msg.Chat))
 
 		log.Info().Str("timestamp", fmt.Sprintf("%d", resp.Timestamp)).Str("id", msgid).Msg("Message sent")
 		response := map[string]interface{}{"Details": "Sent", "Timestamp": resp.Timestamp, "Id": msgid}
