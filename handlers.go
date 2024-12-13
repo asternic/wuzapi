@@ -3092,7 +3092,7 @@ func (s *server) GetUserByToken() http.HandlerFunc {
 			var id int
 			var name, token, webhook, jid string
 			var connectedNull sql.NullInt64
-			var expiration int
+			var expiration sql.NullInt32
 			var events string
 
 			err := rows.Scan(&id, &name, &token, &webhook, &jid, &connectedNull, &expiration, &events)
@@ -3113,7 +3113,7 @@ func (s *server) GetUserByToken() http.HandlerFunc {
 				"webhook":    webhook,
 				"jid":        jid,
 				"connected":  connected == 1,
-				"expiration": expiration,
+				"expiration": expiration.Int32,
 				"events":     events,
 			}
 
