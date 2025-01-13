@@ -8,6 +8,9 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+	//"database/sql"
+	//"fmt"
+	//"go.mau.fi/whatsmeow/store/sqlstore"
 )
 
 type Middleware = alice.Constructor
@@ -94,4 +97,17 @@ func (s *server) routes() {
 	s.router.Handle("/group/name", c.Then(s.SetGroupName())).Methods("POST")
 
 	s.router.PathPrefix("/").Handler(http.FileServer(http.Dir(exPath+"/static/")))
+
+	// Initialize the main container
+	/*
+	mainDB, err := sql.Open("sqlite", fmt.Sprintf("file:%s?_pragma=foreign_keys(1)&_busy_timeout=5000&_journal_mode=WAL", filepath.Join(s.exPath, "db", "store.db")))
+	if err != nil {
+		log.Fatal().Err(err).Msg("Failed to open main database")
+	}
+	s.container = sqlstore.NewWithDB(mainDB, "sqlite", nil)
+	err = s.container.Upgrade()
+	if err != nil {
+		log.Fatal().Err(err).Msg("Failed to create main tables")
+	}
+		*/
 }

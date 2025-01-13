@@ -8,11 +8,13 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
-	"path/filepath"
-    "go.mau.fi/whatsmeow/store/sqlstore"
-    waLog "go.mau.fi/whatsmeow/util/log"
+
+	"go.mau.fi/whatsmeow/store/sqlstore"
+
+	//    waLog "go.mau.fi/whatsmeow/util/log"
 
 	"github.com/gorilla/mux"
 	"github.com/patrickmn/go-cache"
@@ -21,9 +23,10 @@ import (
 )
 
 type server struct {
-	db     *sql.DB
-	router *mux.Router
-	exPath string
+	db        *sql.DB
+	router    *mux.Router
+	exPath    string
+	container *sqlstore.Container
 }
 
 var (
@@ -35,41 +38,41 @@ var (
 	sslcert     = flag.String("sslcertificate", "", "SSL Certificate File")
 	sslprivkey  = flag.String("sslprivatekey", "", "SSL Certificate Private Key File")
 	adminToken  = flag.String("admintoken", "", "Security Token to authorize admin actions (list/create/remove users)")
-    container *sqlstore.Container
+	//    container *sqlstore.Container
 
 	killchannel   = make(map[int](chan bool))
 	userinfocache = cache.New(5*time.Minute, 10*time.Minute)
-	log zerolog.Logger
+	log           zerolog.Logger
 )
 
 func init() {
 
 	flag.Parse()
 
-	if(*logType=="json") {
-        log = zerolog.New(os.Stdout).With().Timestamp().Str("role",filepath.Base(os.Args[0])).Logger()
-    } else {
+	if *logType == "json" {
+		log = zerolog.New(os.Stdout).With().Timestamp().Str("role", filepath.Base(os.Args[0])).Logger()
+	} else {
 		output := zerolog.ConsoleWriter{Out: os.Stdout, TimeFormat: time.RFC3339, NoColor: !*colorOutput}
-        log = zerolog.New(output).With().Timestamp().Str("role",filepath.Base(os.Args[0])).Logger()
-    }
+		log = zerolog.New(output).With().Timestamp().Str("role", filepath.Base(os.Args[0])).Logger()
+	}
 
-    if(*adminToken == "") {
-        if v := os.Getenv("WUZAPI_ADMIN_TOKEN"); v != "" {
-            *adminToken = v
-        }
-    }
+	if *adminToken == "" {
+		if v := os.Getenv("WUZAPI_ADMIN_TOKEN"); v != "" {
+			*adminToken = v
+		}
+	}
 
 }
 
 func main() {
 
-    ex, err := os.Executable()
-    if err != nil {
-        panic(err)
-    }
-    exPath := filepath.Dir(ex)
+	ex, err := os.Executable()
+	if err != nil {
+		panic(err)
+	}
+	exPath := filepath.Dir(ex)
 
-    dbDirectory := exPath + "/dbdata"
+	dbDirectory := exPath + "/dbdata"
 	_, err = os.Stat(dbDirectory)
 	if os.IsNotExist(err) {
 		errDir := os.MkdirAll(dbDirectory, 0751)
@@ -78,9 +81,9 @@ func main() {
 		}
 	}
 
-    db, err := sql.Open("sqlite", exPath + "/dbdata/users.db?_pragma=foreign_keys(1)&_busy_timeout=3000")
+	db, err := sql.Open("sqlite", exPath+"/dbdata/users.db?_pragma=foreign_keys(1)&_busy_timeout=3000")
 	if err != nil {
-		log.Fatal().Err(err).Msg("Could not open/create "+exPath+"/dbdata/users.db")
+		log.Fatal().Err(err).Msg("Could not open/create " + exPath + "/dbdata/users.db")
 		os.Exit(1)
 	}
 	defer db.Close()
@@ -89,16 +92,6 @@ func main() {
 	_, err = db.Exec(sqlStmt)
 	if err != nil {
 		panic(fmt.Sprintf("%q: %s\n", err, sqlStmt))
-	}
-
-	if(*waDebug!="") {
-		dbLog := waLog.Stdout("Database", *waDebug, *colorOutput)
-        container, err = sqlstore.New("sqlite", "file:"+exPath+"/dbdata/main.db?_pragma=foreign_keys(1)&_busy_timeout=3000", dbLog)
-	} else {
-        container, err = sqlstore.New("sqlite", "file:"+exPath+"/dbdata/main.db?_pragma=foreign_keys(1)&_busy_timeout=3000", nil)
-	}
-	if err != nil {
-		panic(err)
 	}
 
 	s := &server{
@@ -111,12 +104,12 @@ func main() {
 	s.connectOnStartup()
 
 	srv := &http.Server{
-		Addr:    *address + ":" + *port,
-		Handler: s.router,
+		Addr:              *address + ":" + *port,
+		Handler:           s.router,
 		ReadHeaderTimeout: 20 * time.Second,
-		ReadTimeout:	   60 * time.Second,
-		WriteTimeout:	  120 * time.Second,
-		IdleTimeout:	   180 * time.Second,
+		ReadTimeout:       60 * time.Second,
+		WriteTimeout:      120 * time.Second,
+		IdleTimeout:       180 * time.Second,
 	}
 
 	done := make(chan os.Signal, 1)
@@ -126,17 +119,17 @@ func main() {
 		if *sslcert != "" {
 			if err := srv.ListenAndServeTLS(*sslcert, *sslprivkey); err != nil && err != http.ErrServerClosed {
 				//log.Fatalf("listen: %s\n", err)
-                log.Fatal().Err(err).Msg("Startup failed")
+				log.Fatal().Err(err).Msg("Startup failed")
 			}
 		} else {
 			if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 				//log.Fatalf("listen: %s\n", err)
-                log.Fatal().Err(err).Msg("Startup failed")
+				log.Fatal().Err(err).Msg("Startup failed")
 			}
 		}
 	}()
-    //wlog.Infof("Server Started. Listening on %s:%s", *address, *port)
-    log.Info().Str("address", *address).Str("port",*port).Msg("Server Started")
+	//wlog.Infof("Server Started. Listening on %s:%s", *address, *port)
+	log.Info().Str("address", *address).Str("port", *port).Msg("Server Started")
 
 	<-done
 	log.Info().Msg("Server Stoped")
@@ -148,7 +141,7 @@ func main() {
 	}()
 
 	if err := srv.Shutdown(ctx); err != nil {
-		log.Error().Str("error",fmt.Sprintf("%+v",err)).Msg("Server Shutdown Failed")
+		log.Error().Str("error", fmt.Sprintf("%+v", err)).Msg("Server Shutdown Failed")
 		os.Exit(1)
 	}
 	log.Info().Msg("Server Exited Properly")
