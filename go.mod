@@ -18,10 +18,12 @@ require (
 	google.golang.org/protobuf v1.34.2
 )
 
-require github.com/lib/pq v1.10.9
+require (
+	github.com/golang-migrate/migrate/v4 v4.18.1
+	github.com/lib/pq v1.10.9
+)
 
 require (
-	github.com/golang-migrate/migrate/v4 v4.18.1 // indirect
 	github.com/google/go-cmp v0.6.0 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
@@ -42,6 +44,5 @@ require (
 	golang.org/x/crypto v0.27.0 // indirect
 	golang.org/x/net v0.29.0 // indirect
 	golang.org/x/sys v0.25.0 // indirect
-	golang.org/x/time v0.5.0 // indirect
 	rsc.io/qr v0.2.0 // indirect
 )
