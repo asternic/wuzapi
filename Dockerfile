@@ -1,17 +1,33 @@
-FROM golang:1.21-alpine AS build
+FROM golang:1.23-alpine AS builder
+
 RUN apk add --no-cache gcc musl-dev
-RUN mkdir /app
-COPY . /app
+
 WORKDIR /app
-RUN go mod tidy
+
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY . .
+
 ENV CGO_ENABLED=1
-RUN go build -o server .
+RUN go build -o wuzapi .
 
 FROM alpine:latest
-RUN mkdir /app
-COPY ./static /app/static
-COPY --from=build /app/server /app/
-VOLUME [ "/app/dbdata", "/app/files" ]
+
+RUN apk add --no-cache ca-certificates netcat-openbsd postgresql-client
+
 WORKDIR /app
-ENV WUZAPI_ADMIN_TOKEN SetToRandomAndSecureTokenForAdminTasks
-CMD [ "/app/server", "-logtype", "json" ]
+
+COPY --from=builder /app/wuzapi /app/
+COPY static/ /app/static/
+
+COPY migrations/ /app/migrations/
+
+VOLUME [ "/app/dbdata", "/app/files" ]
+
+ENV WUZAPI_ADMIN_TOKEN="SetToRandomAndSecureTokenForAdminTasks"
+
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+ENTRYPOINT ["/entrypoint.sh"] 
