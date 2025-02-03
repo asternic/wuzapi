@@ -14,9 +14,6 @@ import (
 	"go.mau.fi/whatsmeow/store/sqlstore"
 	waLog "go.mau.fi/whatsmeow/util/log"
 
-	"github.com/golang-migrate/migrate/v4"
-	"github.com/golang-migrate/migrate/v4/database/postgres"
-	_ "github.com/golang-migrate/migrate/v4/source/file"
 	"github.com/gorilla/mux"
 	"github.com/jmoiron/sqlx"
 	"github.com/joho/godotenv"
@@ -70,24 +67,6 @@ func init() {
 	}
 }
 
-func runMigrations(db *sqlx.DB) {
-	driver, err := postgres.WithInstance(db.DB, &postgres.Config{})
-	if err != nil {
-		log.Fatal().Err(err).Msg("Erro ao configurar driver de migração")
-	}
-
-	m, err := migrate.NewWithDatabaseInstance(
-		"file://migrations",
-		"postgres", driver)
-	if err != nil {
-		log.Fatal().Err(err).Msg("Erro ao configurar migração")
-	}
-
-	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
-		log.Fatal().Err(err).Msg("Erro ao aplicar migrações")
-	}
-}
-
 func main() {
 	ex, err := os.Executable()
 	if err != nil {
@@ -119,9 +98,6 @@ func main() {
 		log.Fatal().Err(err).Msg("Não foi possível verificar a conexão com o banco de dados")
 		os.Exit(1)
 	}
-
-	// Executa as migrações
-	runMigrations(db)
 
 	// Inicializando o repositório com o banco de dados PostgreSQL
 	if *waDebug != "" {
