@@ -1672,10 +1672,12 @@ func (s *server) SendMessage() http.HandlerFunc {
 
 		recipient, err := validateMessageFields(t.Phone, t.ContextInfo.StanzaID, t.ContextInfo.Participant)
 		if err != nil {
-			log.Error().Msg(fmt.Sprintf("%s", err))
+			log.Error().Msg(fmt.Sprintf("Error validateMessageFields %s", err))
 			s.Respond(w, r, http.StatusBadRequest, err)
 			return
 		}
+
+		log.Info().Msg(fmt.Sprintf("Result JID : %s DEVICE: %d", recipient.User, recipient.Device))
 
 		if t.Id == "" {
 			msgid = whatsmeow.GenerateMessageID()
@@ -1707,6 +1709,7 @@ func (s *server) SendMessage() http.HandlerFunc {
 		log.Info().Msg(fmt.Sprintf("Prepare MSG Chat 2: %s", msg.Chat.String()))
 		resp, err = clientPointer[userid].SendMessage(context.Background(), recipient, msg, whatsmeow.SendRequestExtra{ID: msgid})
 		if err != nil {
+			log.Error().Msg(fmt.Sprintf("Error sending message 1: %s", err.Error()))
 			s.Respond(w, r, http.StatusInternalServerError, errors.New(fmt.Sprintf("Error sending message: %v", err)))
 			return
 		}
