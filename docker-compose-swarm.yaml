@@ -34,7 +34,7 @@ services:
         - traefik.http.routers.wuzapi-server.priority=1
         - traefik.http.routers.wuzapi-server.tls.certresolver=letsencryptresolver
         - traefik.http.routers.wuzapi-server.service=wuzapi-server
-        - traefik.http.services.wuzapi-server.loadbalancer.server.port=5000
+        - traefik.http.services.wuzapi-server.loadbalancer.server.port=8080
     # healthcheck:
     #   test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
     #   interval: 10s
