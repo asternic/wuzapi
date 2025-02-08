@@ -1,7 +1,7 @@
 openapi: 3.0.0
 info:
   title: WUZAPI
-  description: "WUZAPI implements a REST API for WhatsApp.\n\nFor authentication you must pass the 'token' header with a token that will be matched with the 'users' table on sqlite dbdata/users.db database).\n\nYou can insert a sample user with this command:\n\n<pre>sqlite3 settings.db \"insert into users ('name','token') values ('John','1234ABCD')\"</pre>\n\nYou will need to scan the QR code using your own front end or you could use the provided one [here](/login?token=1234ABCD).\n\nTo receive messages you will need to create your own server and set its URL as hook using the [webhook](#Webhook) API call.\n\n <b>PS:</b> Phone numbers should have country code with or without the <b>+</b> sign eg: <b>5491155553934</b> or <b>+5491155553934</b>, but natively whatsapp requires no plus sign prefix."
+  description: "WUZAPI implements a REST API for WhatsApp.\n\nFor authentication you must pass the 'token' header with a token that will be matched with the 'users' table on database).\n\nYou can insert a sample user with this command:\n\n<pre>psql -h '$DB_HOST' -p '$DB_PORT' -U '$DB_USER' -d '$DB_NAME' -c 'INSERT INTO users (name, token) VALUES ('John','1234ABCD');\"</pre>\n\nYou will need to scan the QR code using your own front end or you could use the provided one [here](/login?token=1234ABCD).\n\nTo receive messages you will need to create your own server and set its URL as hook using the [webhook](#Webhook) API call.\n\n <b>PS:</b> Phone numbers should have country code with or without the <b>+</b> sign eg: <b>5491155553934</b> or <b>+5491155553934</b>, but natively whatsapp requires no plus sign prefix."
   version: '3.0'
   termsOfService: ''
    

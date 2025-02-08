@@ -78,9 +78,9 @@ you can use to alter behaviour</p>
 <h2 id="user-content-usage">
 <a aria-hidden="true" class="anchor" href="#user-content-usage" id="user-content-usage" name="user-content-usage"><span aria-hidden="true" class="octicon octicon-link"></span></a>Usage</h2>
 <p>In order to open up sessions, you first need to create a user and set an
-authentication token for it. You can do so by updating the SQLite <em>users.db</em>
+authentication token for it. You can do so by updating the Postgres <em>users.db</em>
 database:</p>
-<pre><code>sqlite3 dbdata/users.db "insert into users ('name','token') values ('John','1234ABCD')" 
+<pre><code>psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -c "INSERT INTO users (name, token) VALUES ('John','1234ABCD');" 
 </code></pre>
 <p>Once you have some users created, you can talk to the API passing the <strong>Token</strong>
 header as a simple means of authentication. You can have several users

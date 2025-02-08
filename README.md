@@ -71,11 +71,11 @@ Example:
 ## Usage
 
 In order to open up sessions, you first need to create a user and set an
-authentication token for it. You can do so by updating the SQLite _users.db_
+authentication token for it. You can do so by updating the Postgres
 database:
 
 ``` 
-sqlite3 dbdata/users.db "insert into users ('name','token') values ('John','1234ABCD')" 
+psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -c "INSERT INTO users (name, token) VALUES ('John','1234ABCD');"
 ```
 
 Once you have some users created, you can talk to the API passing the **Token**

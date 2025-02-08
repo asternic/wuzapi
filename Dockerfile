@@ -17,7 +17,6 @@ RUN apk update && apk add --no-cache \
     netcat-openbsd \
     postgresql-client \
     openssl \
-    sqlite \
     curl \
     ffmpeg
 
