@@ -1,3 +1,5 @@
+version: '3.7'
+
 services:
   wuzapi-server:
     image: setupautomatizado/wuzapi-server:latest
@@ -10,15 +12,13 @@ services:
       - DB_NAME=wuzapi
       - DB_HOST=db
       - DB_PORT=5432
+      - TZ=America/Sao_Paulo
     volumes:
       - wuzapi_dbdata:/app/dbdata
       - wuzapi_files:/app/files
     deploy:
       mode: replicated
       replicas: 1
-      update_config:
-        parallelism: 1
-        order: rolling-update
       restart_policy:
         condition: on-failure
       placement:
