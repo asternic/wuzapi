@@ -1,10 +1,9 @@
-version: '3.8'
-
 services:
   wuzapi-server:
     build:
       context: .
       dockerfile: Dockerfile
+    entrypoint: ["/bin/sh"]
     ports:
       - "8080:8080"
     environment:

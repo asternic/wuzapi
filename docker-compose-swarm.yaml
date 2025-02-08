@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   wuzapi-server:
     image: setupautomatizado/wuzapi-server:latest
@@ -7,9 +5,11 @@ services:
       - network_public
     environment:
       - WUZAPI_ADMIN_TOKEN=H4Zbhw72PBKdTIgS
-      - PORT=8080
-      - DB_DIALECT=sqlite
-      - DATABASE_URL=/app/dbdata/users.db
+      - DB_USER=wuzapi
+      - DB_PASSWORD=wuzapi
+      - DB_NAME=wuzapi
+      - DB_HOST=db
+      - DB_PORT=5432
     volumes:
       - wuzapi_dbdata:/app/dbdata
       - wuzapi_files:/app/files
