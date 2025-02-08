@@ -24,6 +24,7 @@ import (
 	waProto "go.mau.fi/whatsmeow/binary/proto"
 	"go.mau.fi/whatsmeow/types"
 	"google.golang.org/protobuf/proto"
+	"github.com/rs/zerolog/log"
 )
 
 type Values struct {

@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"strconv"
+    "github.com/rs/zerolog/log"
+
 )
 
 func Find(slice []string, val string) bool {

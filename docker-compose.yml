@@ -3,7 +3,6 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    entrypoint: ["/bin/sh"]
     ports:
       - "8080:8080"
     environment:
@@ -13,6 +12,7 @@ services:
       - DB_NAME=wuzapi
       - DB_HOST=db
       - DB_PORT=5432
+      - TZ=America/Sao_Paulo
     volumes:
       - ./dbdata:/app/dbdata
       - ./files:/app/files

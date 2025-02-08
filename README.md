@@ -61,12 +61,27 @@ you can use to alter behaviour
 * -sslcertificate : SSL Certificate File
 * -sslprivatekey : SSL Private Key File
 * -admintoken : your admin token to create, get, or delete users from database
+* --logtype=console --color=true
+* --logtype json
 
 Example:
 
+Para ter logs coloridos:
 ```
-./wuzapi -logtype json
+Depois:
 ```
+./wuzapi --logtype=console --color=true
+```
+ (ou -color no Docker, etc.)
+
+Para logs em JSON:
+Rode:
+```
+./wuzapi --logtype json Nesse caso, color é irrelevante.
+```
+
+Com fuso horário:
+Defina TZ=America/Sao_Paulo ./wuzapi ... no seu shell, ou no Docker Compose environment: TZ=America/Sao_Paulo.
 
 ## Usage
 
