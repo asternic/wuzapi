@@ -2121,7 +2121,21 @@ func (s *server) SendPresence() http.HandlerFunc {
 			return
 		}
 
-		err = clientPointer[userid].SendPresence(types.Presence(pre.Type))
+		var presence types.Presence
+
+		switch pre.Type {
+			case "available":
+				presence = types.PresenceAvailable
+			case "unavailable":
+				presence = types.PresenceUnavailable
+			default:
+				s.Respond(w, r, http.StatusBadRequest, errors.New("Invalid presence type. Allowed values: 'available', 'unavailable'"))
+				return
+		}
+
+		log.Info().Str("presence", pre.Type).Msg("Your global presence status")
+
+		err = clientPointer[userid].SendPresence(presence)
 		if err != nil {
 			s.Respond(w, r, http.StatusInternalServerError, errors.New("Failure sending presence to Whatsapp servers"))
 			return
