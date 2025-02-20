@@ -61,21 +61,36 @@ you can use to alter behaviour
 * -sslcertificate : SSL Certificate File
 * -sslprivatekey : SSL Private Key File
 * -admintoken : your admin token to create, get, or delete users from database
+* --logtype=console --color=true
+* --logtype json
 
 Example:
 
+Para ter logs coloridos:
 ```
-./wuzapi -logtype json
+Depois:
 ```
+./wuzapi --logtype=console --color=true
+```
+ (ou -color no Docker, etc.)
+
+Para logs em JSON:
+Rode:
+```
+./wuzapi --logtype json Nesse caso, color é irrelevante.
+```
+
+Com fuso horário:
+Defina TZ=America/Sao_Paulo ./wuzapi ... no seu shell, ou no Docker Compose environment: TZ=America/Sao_Paulo.
 
 ## Usage
 
 In order to open up sessions, you first need to create a user and set an
-authentication token for it. You can do so by updating the SQLite _users.db_
+authentication token for it. You can do so by updating the Postgres
 database:
 
 ``` 
-sqlite3 dbdata/users.db "insert into users ('name','token') values ('John','1234ABCD')" 
+psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -c "INSERT INTO users (name, token) VALUES ('John','1234ABCD');"
 ```
 
 Once you have some users created, you can talk to the API passing the **Token**

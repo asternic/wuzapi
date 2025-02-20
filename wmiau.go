@@ -28,6 +28,8 @@ import (
 	"go.mau.fi/whatsmeow/types"
 	"go.mau.fi/whatsmeow/types/events"
 	waLog "go.mau.fi/whatsmeow/util/log"
+	"github.com/rs/zerolog/log"
+
 )
 
 //var wlog waLog.Logger

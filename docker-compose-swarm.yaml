@@ -1,4 +1,4 @@
-version: '3.8'
+version: '3.7'
 
 services:
   wuzapi-server:
@@ -7,18 +7,18 @@ services:
       - network_public
     environment:
       - WUZAPI_ADMIN_TOKEN=H4Zbhw72PBKdTIgS
-      - PORT=8080
-      - DB_DIALECT=sqlite
-      - DATABASE_URL=/app/dbdata/users.db
+      - DB_USER=wuzapi
+      - DB_PASSWORD=wuzapi
+      - DB_NAME=wuzapi
+      - DB_HOST=db
+      - DB_PORT=5432
+      - TZ=America/Sao_Paulo
     volumes:
       - wuzapi_dbdata:/app/dbdata
       - wuzapi_files:/app/files
     deploy:
       mode: replicated
       replicas: 1
-      update_config:
-        parallelism: 1
-        order: rolling-update
       restart_policy:
         condition: on-failure
       placement:
@@ -34,7 +34,7 @@ services:
         - traefik.http.routers.wuzapi-server.priority=1
         - traefik.http.routers.wuzapi-server.tls.certresolver=letsencryptresolver
         - traefik.http.routers.wuzapi-server.service=wuzapi-server
-        - traefik.http.services.wuzapi-server.loadbalancer.server.port=5000
+        - traefik.http.services.wuzapi-server.loadbalancer.server.port=8080
     # healthcheck:
     #   test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
     #   interval: 10s

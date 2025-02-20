@@ -21,11 +21,26 @@ func (s *server) routes() {
     }
     exPath := filepath.Dir(ex)
 
+	var routerLog zerolog.Logger
 	if *logType == "json" {
-		log = zerolog.New(os.Stdout).With().Timestamp().Str("role", filepath.Base(os.Args[0])).Str("host", *address).Logger()
+		routerLog = zerolog.New(os.Stdout).
+			With().
+			Timestamp().
+			Str("role", filepath.Base(os.Args[0])).
+			Str("host", *address).
+			Logger()
 	} else {
-		output := zerolog.ConsoleWriter{Out: os.Stdout, TimeFormat: time.RFC3339, NoColor: !*colorOutput}
-		log = zerolog.New(output).With().Timestamp().Str("role", filepath.Base(os.Args[0])).Str("host", *address).Logger()
+		output := zerolog.ConsoleWriter{
+			Out:        os.Stdout,
+			TimeFormat: time.RFC3339,
+			NoColor:    !*colorOutput,
+		}
+		routerLog = zerolog.New(output).
+			With().
+			Timestamp().
+			Str("role", filepath.Base(os.Args[0])).
+			Str("host", *address).
+			Logger()
 	}
 
     adminRoutes := s.router.PathPrefix("/admin").Subrouter()
@@ -36,7 +51,7 @@ func (s *server) routes() {
 
 	c := alice.New()
 	c = c.Append(s.authalice)
-	c = c.Append(hlog.NewHandler(log))
+	c = c.Append(hlog.NewHandler(routerLog))
 
 	c = c.Append(hlog.AccessHandler(func(r *http.Request, status, size int, duration time.Duration) {
 		hlog.FromRequest(r).Info().
