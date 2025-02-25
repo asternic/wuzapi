@@ -80,7 +80,7 @@ func (s *server) routes() {
 	s.router.Handle("/webhook", c.Then(s.DeleteWebhook())).Methods("DELETE")     // Nova rota
 	s.router.Handle("/webhook/update", c.Then(s.UpdateWebhook())).Methods("PUT") // Nova rota
 
-	s.router.Handle("/proxy", c.Then(s.SetProxy())).Methods("POST")
+	s.router.Handle("/session/proxy", c.Then(s.SetProxy())).Methods("POST")
 
 	s.router.Handle("/chat/send/text", c.Then(s.SendMessage())).Methods("POST")
 	s.router.Handle("/chat/send/image", c.Then(s.SendImage())).Methods("POST")
