@@ -354,6 +354,32 @@ paths:
             application/json:
               schema:
                 example: { "code": 200, "data": { "Users": [ { "IsInWhatsapp": true, "JID": "5491155553934@s.whatsapp.net", "Query": "5491155553934", "VerifiedName": "Company Name" }, { "IsInWhatsapp": false, "JID": "5491155553935@s.whatsapp.net", "Query": "5491155553935", "VerifiedName": "" } ] }, "success": true }
+  /user/presence:
+    post:
+      tags:
+        - User
+      summary: Send user global presence
+      description: Sends user presence Available or Unavailable
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#definitions/UserPresence'
+
+      responses:
+        200:
+          description: Response
+          content:
+            application/json:
+              schema:
+                example: {"code": 200, "data": {"Details": "Presence set successfuly"}, "success": true}
+        400:
+          description: Response
+          content:
+            application/json:
+              schema:
+                example: {"code": 400,"error": "Invalid presence type. Allowed values: 'available', 'unavailable'","success": false}
 
   /user/avatar:
     post:
@@ -911,6 +937,14 @@ definitions:
       Media: 
         type: string
         example: audio
+  UserPresence:
+  type: object
+  required:
+    - type
+  properties:
+    type:
+      type: string
+      example: avaliable
   MessageContact:
     type: object
     required: 
