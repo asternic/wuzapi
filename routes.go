@@ -15,11 +15,11 @@ type Middleware = alice.Constructor
 
 func (s *server) routes() {
 
-    ex, err := os.Executable()
-    if err != nil {
-        panic(err)
-    }
-    exPath := filepath.Dir(ex)
+	ex, err := os.Executable()
+	if err != nil {
+		panic(err)
+	}
+	exPath := filepath.Dir(ex)
 
 	var routerLog zerolog.Logger
 	if *logType == "json" {
@@ -43,11 +43,11 @@ func (s *server) routes() {
 			Logger()
 	}
 
-    adminRoutes := s.router.PathPrefix("/admin").Subrouter()
-    adminRoutes.Use(s.authadmin)
-    adminRoutes.Handle("/users", s.ListUsers()).Methods("GET")
-    adminRoutes.Handle("/users", s.AddUser()).Methods("POST")
-    adminRoutes.Handle("/users/{id}", s.DeleteUser()).Methods("DELETE")
+	adminRoutes := s.router.PathPrefix("/admin").Subrouter()
+	adminRoutes.Use(s.authadmin)
+	adminRoutes.Handle("/users", s.ListUsers()).Methods("GET")
+	adminRoutes.Handle("/users", s.AddUser()).Methods("POST")
+	adminRoutes.Handle("/users/{id}", s.DeleteUser()).Methods("DELETE")
 
 	c := alice.New()
 	c = c.Append(s.authalice)
@@ -75,30 +75,30 @@ func (s *server) routes() {
 	s.router.Handle("/session/qr", c.Then(s.GetQR())).Methods("GET")
 	s.router.Handle("/session/pairphone", c.Then(s.PairPhone())).Methods("POST")
 
-    s.router.Handle("/webhook", c.Then(s.SetWebhook())).Methods("POST")
-    s.router.Handle("/webhook", c.Then(s.GetWebhook())).Methods("GET")
-    s.router.Handle("/webhook", c.Then(s.DeleteWebhook())).Methods("DELETE") // Nova rota
-    s.router.Handle("/webhook/update", c.Then(s.UpdateWebhook())).Methods("PUT") // Nova rota
+	s.router.Handle("/webhook", c.Then(s.SetWebhook())).Methods("POST")
+	s.router.Handle("/webhook", c.Then(s.GetWebhook())).Methods("GET")
+	s.router.Handle("/webhook", c.Then(s.DeleteWebhook())).Methods("DELETE")     // Nova rota
+	s.router.Handle("/webhook/update", c.Then(s.UpdateWebhook())).Methods("PUT") // Nova rota
 
+	s.router.Handle("/proxy", c.Then(s.SetProxy())).Methods("POST")
 
 	s.router.Handle("/chat/send/text", c.Then(s.SendMessage())).Methods("POST")
 	s.router.Handle("/chat/send/image", c.Then(s.SendImage())).Methods("POST")
 	s.router.Handle("/chat/send/audio", c.Then(s.SendAudio())).Methods("POST")
 	s.router.Handle("/chat/send/document", c.Then(s.SendDocument())).Methods("POST")
-//	s.router.Handle("/chat/send/template", c.Then(s.SendTemplate())).Methods("POST")
+	//	s.router.Handle("/chat/send/template", c.Then(s.SendTemplate())).Methods("POST")
 	s.router.Handle("/chat/send/video", c.Then(s.SendVideo())).Methods("POST")
 	s.router.Handle("/chat/send/sticker", c.Then(s.SendSticker())).Methods("POST")
 	s.router.Handle("/chat/send/location", c.Then(s.SendLocation())).Methods("POST")
 	s.router.Handle("/chat/send/contact", c.Then(s.SendContact())).Methods("POST")
 	s.router.Handle("/chat/react", c.Then(s.React())).Methods("POST")
-	s.router.Handle("/chat/send/buttons",     c.Then(s.SendButtons())).Methods("POST")
-	s.router.Handle("/chat/send/list",     c.Then(s.SendList())).Methods("POST")
+	s.router.Handle("/chat/send/buttons", c.Then(s.SendButtons())).Methods("POST")
+	s.router.Handle("/chat/send/list", c.Then(s.SendList())).Methods("POST")
 
 	s.router.Handle("/user/info", c.Then(s.GetUser())).Methods("POST")
 	s.router.Handle("/user/check", c.Then(s.CheckUser())).Methods("POST")
 	s.router.Handle("/user/avatar", c.Then(s.GetAvatar())).Methods("POST")
 	s.router.Handle("/user/contacts", c.Then(s.GetContacts())).Methods("GET")
-	s.router.Handle("/user/presence", c.Then(s.SendPresence())).Methods("POST")
 
 	s.router.Handle("/chat/presence", c.Then(s.ChatPresence())).Methods("POST")
 	s.router.Handle("/chat/markread", c.Then(s.MarkRead())).Methods("POST")
@@ -113,5 +113,5 @@ func (s *server) routes() {
 	s.router.Handle("/group/photo", c.Then(s.SetGroupPhoto())).Methods("POST")
 	s.router.Handle("/group/name", c.Then(s.SetGroupName())).Methods("POST")
 
-	s.router.PathPrefix("/").Handler(http.FileServer(http.Dir(exPath+"/static/")))
+	s.router.PathPrefix("/").Handler(http.FileServer(http.Dir(exPath + "/static/")))
 }

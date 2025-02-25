@@ -8,5 +8,6 @@ CREATE TABLE IF NOT EXISTS users (
     qrcode TEXT NOT NULL DEFAULT '',
     connected INTEGER,
     expiration INTEGER,
+    proxy_url TEXT,
     events TEXT NOT NULL DEFAULT 'All'
 );
