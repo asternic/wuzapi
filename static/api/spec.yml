@@ -938,13 +938,13 @@ definitions:
         type: string
         example: audio
   UserPresence:
-  type: object
-  required:
-    - type
-  properties:
-    type:
-      type: string
-      example: avaliable
+    type: object
+    required:
+      - type
+    properties:
+      type:
+        type: string
+        example: avaliable
   MessageContact:
     type: object
     required: 
