@@ -3073,6 +3073,48 @@ func (s *server) SetGroupName() http.HandlerFunc {
 	}
 }
 
+// List newsletters
+func (s *server) ListNewsletter() http.HandlerFunc {
+
+	type NewsletterCollection struct {
+		Newsletter []types.NewsletterMetadata
+	}
+
+	return func(w http.ResponseWriter, r *http.Request) {
+
+		txtid := r.Context().Value("userinfo").(Values).Get("Id")
+		userid, _ := strconv.Atoi(txtid)
+
+		if clientPointer[userid] == nil {
+			s.Respond(w, r, http.StatusInternalServerError, errors.New("No session"))
+			return
+		}
+
+		resp, err := clientPointer[userid].GetSubscribedNewsletters()
+
+		if err != nil {
+			msg := fmt.Sprintf("Failed to get newsletter list: %v", err)
+			log.Error().Msg(msg)
+			s.Respond(w, r, http.StatusInternalServerError, msg)
+			return
+		}
+
+		gc := new(NewsletterCollection)
+		for _, info := range resp {
+			gc.Newsletter = append(gc.Newsletter, *info)
+		}
+
+		responseJson, err := json.Marshal(gc)
+		if err != nil {
+			s.Respond(w, r, http.StatusInternalServerError, err)
+		} else {
+			s.Respond(w, r, http.StatusOK, string(responseJson))
+		}
+
+		return
+	}
+}
+
 // Admin List users
 func (s *server) ListUsers() http.HandlerFunc {
 	type usersStruct struct {

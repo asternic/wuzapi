@@ -827,6 +827,21 @@ paths:
               schema:
                 example: { "code": 200, "data": { "Details": "Group Photo set successfully", "PictureID": "1222332123" }, "success": true }
 
+  /newsletter/list:
+    get:
+      tags:
+        - Newsletter
+      summary: List subscribed newsletters
+      description: Returns complete list of subscribed newsletters
+
+      responses:
+        200:
+          description: Response
+          content:
+            application/json:
+              schema:
+                example: {"code": 200, "data": {"Newsletter": [{"id": "120363144038483540@newsletter", "state": {"type": "active" }, "thread_metadata": {"creation_time": "1688746895", "description": {"id": "1689653839450668", "text": "WhatsApp’s official channel. Follow for our latest feature launches, updates, exclusive drops and more.", "update_time": "1689653839450668" }, "invite": "0029Va4K0PZ5a245NkngBA2M", "name": {"id": "1688746895480511", "text": "WhatsApp", "update_time": "1688746895480511" }, "picture": {"direct_path": "/v/t61.24694-24/416962407_970228831134395_8869146381947923973_n.jpg?ccb=11-4&oh=01_Q5AaIRyTfP806JEGJDm0XWU5E-D4LcA-Wj3csSwh1jJTVanC&oe=67D550F1&_nc_sid=5e03e0&_nc_cat=110", "id": "1707950960975554", "type": "IMAGE", "url": "" }, "preview": {"direct_path": "/v/t61.24694-24/416962407_970228831134395_8869146381947923973_n.jpg?stp=dst-jpg_s192x192_tt6&ccb=11-4&oh=01_Q5AaIawuPXJUw9grRFJZtAJEc6QNm0XpqJq4X1Ssi9xNI0Qf&oe=67D550F1&_nc_sid=5e03e0&_nc_cat=110", "id": "1707950960975554", "type": "PREVIEW", "url": "" }, "settings": {"reaction_codes": {"value": "ALL" } }, "subscribers_count": "0", "verification": "verified" }, "viewer_metadata": {"mute": "on", "role": "subscriber" } } ] }, "success": true }
+
 
 definitions:
   User:
@@ -938,13 +953,13 @@ definitions:
         type: string
         example: audio
   UserPresence:
-  type: object
-  required:
-    - type
-  properties:
-    type:
-      type: string
-      example: avaliable
+    type: object
+    required:
+      - type
+    properties:
+      type:
+        type: string
+        example: avaliable
   MessageContact:
     type: object
     required: 

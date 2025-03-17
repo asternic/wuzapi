@@ -114,5 +114,8 @@ func (s *server) routes() {
 	s.router.Handle("/group/photo", c.Then(s.SetGroupPhoto())).Methods("POST")
 	s.router.Handle("/group/name", c.Then(s.SetGroupName())).Methods("POST")
 
+	s.router.Handle("/newsletter/list", c.Then(s.ListNewsletter())).Methods("GET")
+	// s.router.Handle("/newsletters/info", c.Then(s.GetNewsletterInfo())).Methods("GET")
+
 	s.router.PathPrefix("/").Handler(http.FileServer(http.Dir(exPath + "/static/")))
 }
