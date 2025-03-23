@@ -10,12 +10,22 @@
     <div class="container border rounded-3">
       <div class="row justify-content-md-center px-4 py-5">
         <div class="col col-md-auto">
-          <h1 class="display-5 fw-bold">Welcome to WuzAPI</h1>
+          <h1 class="display-5 fw-bold">Bem-vindo ao WuzAPI</h1>
+        </div>
+      </div>
+      <div class="row justify-content-md-center">
+        <div class="col-md-8 text-center mb-4">
+          <p class="lead">
+            Para acessar esta página, inclua seu token na URL: <code>?token=seu_token_aqui</code>
+          </p>
+          <p>
+            Por padrão, o sistema cria um usuário "admin" com o token definido na variável de ambiente WUZAPI_ADMIN_TOKEN.
+          </p>
         </div>
       </div>
       <div class="row justify-content-md-center">
         <div class="col col-md-auto" id="qr" style="display:none;">
-          <div><h4>Please scan this QR Code with Whatsapp in order to enable the API</h4></div> 
+          <div><h4>Por favor, escaneie este código QR com o WhatsApp para habilitar a API</h4></div> 
           <div id="qrContainer" class="text-center" style="width:275px;height:275px; border: 10px solid green; margin:auto;"></div>
         </div>
       </div>

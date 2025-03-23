@@ -240,13 +240,20 @@ func applyMigrationsAndCreateUser(db *sqlx.DB, exPath string) error {
 	}
 	log.Info().Msg("Migração executada com sucesso.")
 
-	if _, err = db.Exec("INSERT INTO users (name, token) VALUES ($1, $2)", "John", "1234ABCD"); err != nil {
+	// Usar o token administrativo definido na variável de ambiente
+	userToken := *adminToken
+	if userToken == "" {
+		userToken = "1234ABCD" // Valor padrão caso não esteja definido
+		log.Warn().Msg("WUZAPI_ADMIN_TOKEN não definido, usando token padrão")
+	}
+
+	if _, err = db.Exec("INSERT INTO users (name, token) VALUES ($1, $2)", "admin", userToken); err != nil {
 		if strings.Contains(err.Error(), "duplicate key") {
 			log.Warn().Msg("Usuário padrão já existe. Ignorando.")
 			return nil
 		}
 		return fmt.Errorf("erro ao inserir usuário padrão: %w", err)
 	}
-	log.Info().Msg("Usuário padrão (John/1234ABCD) inserido com sucesso.")
+	log.Info().Msgf("Usuário padrão (admin/%s) inserido com sucesso.", userToken)
 	return nil
 }

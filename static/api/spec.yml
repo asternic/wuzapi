@@ -1,7 +1,7 @@
 openapi: 3.0.0
 info:
   title: WUZAPI
-  description: "WUZAPI implements a REST API for WhatsApp.\n\nFor authentication you must pass the 'token' header with a token that will be matched with the 'users' table on database).\n\nYou can insert a sample user with this command:\n\n<pre>psql -h '$DB_HOST' -p '$DB_PORT' -U '$DB_USER' -d '$DB_NAME' -c 'INSERT INTO users (name, token) VALUES ('John','1234ABCD');\"</pre>\n\nYou will need to scan the QR code using your own front end or you could use the provided one [here](/login?token=1234ABCD).\n\nTo receive messages you will need to create your own server and set its URL as hook using the [webhook](#Webhook) API call.\n\n <b>PS:</b> Phone numbers should have country code with or without the <b>+</b> sign eg: <b>5491155553934</b> or <b>+5491155553934</b>, but natively whatsapp requires no plus sign prefix."
+  description: "WUZAPI implements a REST API for WhatsApp.\n\nHá dois métodos de autenticação:\n\n1. **Para usuários normais**: Use o cabeçalho 'token' que será correspondido com a tabela 'users' no banco de dados.\n\n2. **Para administradores**: Use o cabeçalho 'Authorization' com o token administrativo para acessar rotas protegidas de administração.\n\nA API cria automaticamente um usuário administrador com o nome 'admin' e o token definido na variável de ambiente WUZAPI_ADMIN_TOKEN.\n\nVocê também pode inserir um usuário adicional com este comando:\n\n<pre>psql -h '$DB_HOST' -p '$DB_PORT' -U '$DB_USER' -d '$DB_NAME' -c 'INSERT INTO users (name, token) VALUES ('usuario2','seu_token_aqui');\"</pre>\n\nVocê precisará escanear o código QR usando seu próprio front-end ou poderá usar o fornecido [aqui](/login?token=seu_token_aqui).\n\nPara receber mensagens, você precisará criar seu próprio servidor e definir sua URL como hook usando a chamada de API [webhook](#Webhook).\n\n <b>PS:</b> Números de telefone devem ter código de país com ou sem o sinal <b>+</b>, por exemplo: <b>5491155553934</b> ou <b>+5491155553934</b>, mas nativamente o WhatsApp requer prefixo sem sinal de adição."
   version: '3.0'
   termsOfService: ''
    
@@ -15,6 +15,8 @@ paths:
         - Admin
       summary: List users
       description: Retrieve a list of users from the database.
+      security:
+        - AdminAuth: []
       responses:
         200:
           description: A JSON array of user objects
@@ -34,6 +36,8 @@ paths:
         - Admin
       summary: Add a new user
       description: Add a new user to the database.
+      security:
+        - AdminAuth: []
       requestBody:
         required: true
         content:
@@ -59,6 +63,8 @@ paths:
         - Admin
       summary: Delete a user
       description: Deletes a user by their ID.
+      security:
+        - AdminAuth: []
       parameters:
         - name: id
           in: path
@@ -95,6 +101,8 @@ paths:
         * HistorySync
         * ChatPresence
         * All (subscribes to all event types)
+      security:
+        - ApiKeyAuth: []
       responses:
         200:
           description: Response
@@ -120,6 +128,8 @@ paths:
         * HistorySync
         * ChatPresence
         * All (subscribes to all event types)
+      security:
+        - ApiKeyAuth: []
       requestBody:
         required: true
         content:
@@ -138,6 +148,8 @@ paths:
         - Webhook
       summary: Deletes webhook 
       description: Removes the configured webhook and clears events for the user
+      security:
+        - ApiKeyAuth: []
       responses:
         200:
           description: Response
@@ -163,6 +175,8 @@ paths:
         * HistorySync
         * ChatPresence
         * All (subscribes to all event types)
+      security:
+        - ApiKeyAuth: []
       requestBody:
         required: true
         content:
@@ -183,7 +197,8 @@ paths:
         - Session 
       summary: connects to WhatsApp servers
       description: "Initiates connection to WhatsApp servers.\n\nIf there is no previous session created, it will generate a QR code that can be retrieved via the [qr](#/Session/get_session_qr) API call.\n\nIf the optional Subscribe is supplied it will limit webhooks to the specified event types: Message,ReadReceipt,Presence,HistorySync,ChatPresence.\n\nIf no Subscribe is supplied it will subscribe to All events.\n\nIf Immediate is set to false, the action will wait for 10 seconds to retrieve actual connection status from whatsapp, otherwise it will return immediatly.\n\nWhen setting Immediate to true you should check for actual connection status after a few seconds via the [status](#/Session/get_session_status) API call as your connection might fail if the session was closed from another device."
-
+      security:
+        - ApiKeyAuth: []
       requestBody:
         required: true
         content:
@@ -205,6 +220,8 @@ paths:
         - Session 
       summary: disconnects from WhatsApp servers
       description: Closes connection to WhatsApp servers. Session is not terminated, that means that calling connect again will reuse the previous session avoiding QR code scanning 
+      security:
+        - ApiKeyAuth: []
       responses:
         200:
           description: Response
@@ -218,6 +235,8 @@ paths:
         - Session 
       summary: Logs out from WhatsApp 
       description: Closes connection to WhatsApp servers and terminate session. That means that next time connect is issued, QR scan will be needed from phone to connect again
+      security:
+        - ApiKeyAuth: []
       responses:
         200:
           description: Response
@@ -231,6 +250,8 @@ paths:
         - Session 
       summary: Gets connection and session status
       description: Gets status from connection, including websocket connection and logged in status (session)
+      security:
+        - ApiKeyAuth: []
       responses:
         200:
           description: Response
@@ -244,6 +265,8 @@ paths:
         - Session
       summary: Gets pair by phone code
       description: Gets the code to enter into whatsapp client when pairing by phone number instead of QR code
+      security:
+        - ApiKeyAuth: []
       requestBody:
         required: true
         content:
@@ -263,6 +286,8 @@ paths:
         - Session 
       summary: Gets QR code for scanning
       description: Gets QR code if the user is connected but not logged in. If the user is already logged in, QRCode will be empty.
+      security:
+        - ApiKeyAuth: []
       responses:
         200:
           description: Response
@@ -278,6 +303,8 @@ paths:
       description: |
         Sets or disables the proxy configuration for the user.
         Provide a JSON payload with "proxy_url" (e.g. "http://host:port" or "socks5://user:pass@host:port") and "enable" (boolean).
+      security:
+        - ApiKeyAuth: []
       requestBody:
         required: true
         content:
@@ -318,6 +345,8 @@ paths:
         - User
       summary: Gets information about users on WhatsApp
       description: Gets extra information about users on WhatsApp
+      security:
+        - ApiKeyAuth: []
       requestBody:
         required: true
         content:
@@ -339,6 +368,8 @@ paths:
         - User
       summary: Checks if user has WhatsApp
       description: Checks if users have an account with WhatsApp
+      security:
+        - ApiKeyAuth: []
       requestBody:
         required: true
         content:
@@ -360,6 +391,8 @@ paths:
         - User
       summary: Send user global presence
       description: Sends user presence Available or Unavailable
+      security:
+        - ApiKeyAuth: []
       requestBody:
         required: true
         content:
@@ -387,6 +420,8 @@ paths:
         - User
       summary: Gets profile picture information
       description: Gets information about users profile pictures on WhatsApp, either a thumbnail (Preview=true) or full picture.
+      security:
+        - ApiKeyAuth: []
       requestBody:
         required: true
         content:
@@ -408,7 +443,8 @@ paths:
         - User
       summary: Gets all contacts for the account
       description: Gets complete list of contacts for the connected account
-
+      security:
+        - ApiKeyAuth: []
       responses:
         200:
           description: Response
@@ -422,6 +458,8 @@ paths:
         - Chat 
       summary: Marks a message as read
       description: Marks one or more received messages as read
+      security:
+        - ApiKeyAuth: []
       requestBody:
         required: true
         content:
@@ -442,6 +480,8 @@ paths:
         - Chat 
       summary: Reacts to a message
       description: Sends a reaction to some message. Phone, Body and Id are mandatory. If reaction is for your own message, prefix Phone with 'me:'. Body should be the reaction emoji.
+      security:
+        - ApiKeyAuth: []
       requestBody:
         required: true
         content:
@@ -463,6 +503,8 @@ paths:
         - Chat 
       summary: Sends a text message
       description: Sends a text message. Phone and Body are mandatory. If no Id is supplied, a random one will be generated. ContextInfo is optional and used when repyling to some message. StanzaId is the message id we are replying to and participant who wrote that message. If sending a new message, ContextInfo can be ommited altogether.
+      security:
+        - ApiKeyAuth: []
       requestBody:
         required: true
         content:
@@ -483,6 +525,8 @@ paths:
         - Chat 
       summary: Sends an image/picture message
       description: Sends an image message (must be base64 encoded in image/png or image/jpeg formats)
+      security:
+        - ApiKeyAuth: []
       requestBody:
         required: true
         content:
@@ -503,6 +547,8 @@ paths:
         - Chat 
       summary: Sends an audio message
       description: Sends an audio message (must be base64 encoded in opus format, mime type audio/ogg)
+      security:
+        - ApiKeyAuth: []
       requestBody:
         required: true
         content:
@@ -523,6 +569,8 @@ paths:
         - Chat 
       summary: Sends a document message
       description: Sends any document (must be base64 encoded using application/octet-stream mime)
+      security:
+        - ApiKeyAuth: []
       requestBody:
         required: true
         content:
@@ -544,6 +592,8 @@ paths:
         - Chat 
       summary: Sends a template message 
       description: Sends a template message, that can contain quick reply buttons, url buttons and call buttons
+      security:
+        - ApiKeyAuth: []
       requestBody:
         required: true
         content:
@@ -564,6 +614,8 @@ paths:
         - Chat 
       summary: Sends a video message
       description: Sends a video message (must be base64 encoded in video/mp4 or video/3gpp format. Only H.264 video codec and AAC audio codec is supported.)
+      security:
+        - ApiKeyAuth: []
       requestBody:
         required: true
         content:
@@ -584,6 +636,8 @@ paths:
         - Chat 
       summary: Sends a sticker message
       description: Sends a sticker message (must be base64 encoded in image/webp format)
+      security:
+        - ApiKeyAuth: []
       requestBody:
         required: true
         content:
@@ -605,6 +659,8 @@ paths:
         - Chat 
       summary: Sends a location message
       description: Sends a location message
+      security:
+        - ApiKeyAuth: []
       requestBody:
         required: true
         content:
@@ -626,6 +682,8 @@ paths:
         - Chat 
       summary: Sends a contact message
       description: Sends a contact message in VCARD format
+      security:
+        - ApiKeyAuth: []
       requestBody:
         required: true
         content:
@@ -647,6 +705,8 @@ paths:
         - Chat 
       summary: Downloads Image from message
       description: Downloads an Image from a message and returns it Base64 media encoded
+      security:
+        - ApiKeyAuth: []
       requestBody:
         required: true
         content:
@@ -668,6 +728,8 @@ paths:
         - Chat 
       summary: Downloads Video from message
       description: Downloads a Video from a message and returns it Base64 media encoded
+      security:
+        - ApiKeyAuth: []
       requestBody:
         required: true
         content:
@@ -689,6 +751,8 @@ paths:
         - Chat 
       summary: Downloads Document from message
       description: Downloads a Document from a message and returns it Base64 media encoded
+      security:
+        - ApiKeyAuth: []
       requestBody:
         required: true
         content:
@@ -710,6 +774,8 @@ paths:
         - Chat 
       summary: Sets chat presence
       description: Sends indication if you are writing or not (state could be either "composing" or "paused"). Optional Media can be set to "audio" for indicating recording a message
+      security:
+        - ApiKeyAuth: []
       requestBody:
         required: true
         content:
@@ -731,7 +797,8 @@ paths:
         - Group 
       summary: List subscribed groups
       description: Returns complete list of subscribed groups
-
+      security:
+        - ApiKeyAuth: []
       responses:
         200:
           description: Response
@@ -792,6 +859,8 @@ paths:
         - Group 
       summary: Changes group name
       description: Allows you to change a group name
+      security:
+        - ApiKeyAuth: []
       requestBody:
         required: true
         content:
@@ -812,6 +881,8 @@ paths:
         - Group 
       summary: Changes group photo
       description: Allows you to change a group photo/image. Returns the Picture ID number
+      security:
+        - ApiKeyAuth: []
       requestBody:
         required: true
         content:
@@ -852,7 +923,7 @@ definitions:
         example: 1
       name:
         type: string
-        example: John Doe
+        example: admin
 
   CreateUser:
     type: object
@@ -862,10 +933,10 @@ definitions:
     properties:
       name:
         type: string
-        example: John Doe
+        example: admin
       token:
         type: string
-        example: "1234ABCD"
+        example: "seu_token_aqui"
 
   DeleteUser:
     type: object
@@ -1356,6 +1427,10 @@ components:
       type: apiKey
       in: header
       name: token
+    AdminAuth:
+      type: apiKey
+      in: header
+      name: Authorization
 
 security:
   - ApiKeyAuth: []

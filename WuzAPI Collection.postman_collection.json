@@ -2150,13 +2150,15 @@
 		},
 		{
 			"key": "token",
-			"value": "1234ABCD",
-			"type": "string"
+			"value": "{{WUZAPI_ADMIN_TOKEN}}",
+			"type": "string",
+			"description": "Token usado para autenticação de usuário normal. Na primeira execução, o sistema cria automaticamente um usuário 'admin' com o token definido na variável de ambiente WUZAPI_ADMIN_TOKEN. Configure esta variável de ambiente no Postman ou substitua pelo valor real."
 		},
 		{
 			"key": "adminToken",
-			"value": "1234ABCD",
-			"type": "string"
+			"value": "{{WUZAPI_ADMIN_TOKEN}}",
+			"type": "string",
+			"description": "Token usado para autenticação em endpoints administrativos (rotas /admin/*). Configure a variável de ambiente WUZAPI_ADMIN_TOKEN no Postman com o mesmo valor definido no servidor, ou substitua pelo valor real do token administrativo."
 		}
 	]
 }
