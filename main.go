@@ -33,7 +33,7 @@ type server struct {
 
 var (
 	address     = flag.String("address", "0.0.0.0", "Bind IP Address")
-	port        = flag.String("port", "8080", "Listen Port")
+	port        = flag.String("port", "3000", "Listen Port")
 	waDebug     = flag.String("wadebug", "", "Enable whatsmeow debug (INFO or DEBUG)")
 	logType     = flag.String("logtype", "console", "Type of log output (console or json)")
 	colorOutput = flag.Bool("color", false, "Enable colored output for console logs")

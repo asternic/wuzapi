@@ -6,8 +6,8 @@ CREATE TABLE IF NOT EXISTS users (
     webhook TEXT NOT NULL DEFAULT '',
     jid TEXT NOT NULL DEFAULT '',
     qrcode TEXT NOT NULL DEFAULT '',
-    connected INTEGER,
-    expiration INTEGER,
+    connected INTEGER DEFAULT 0,
+    expiration INTEGER DEFAULT 0,
     proxy_url TEXT,
     events TEXT NOT NULL DEFAULT 'All'
 );

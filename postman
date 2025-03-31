@@ -1,0 +1,1318 @@
+{
+  "info": {
+    "_postman_id": "d52d8d04-1234-4c3f-9f7a-abcdef123456",
+    "name": "WuzAPI Complete Collection",
+    "description": "Collection completa da API WuzAPI com todos os endpoints, exemplos de request/response e schemas conforme o OpenAPI.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Admin",
+      "item": [
+        {
+          "name": "List Users",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{admin_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin/users",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "users"
+              ]
+            },
+            "description": "Recupera uma lista de usuários do banco de dados."
+          },
+          "response": []
+        },
+        {
+          "name": "Add User",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{admin_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"John Doe\",\n  \"token\": \"seu_token_aqui\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/admin/users",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "users"
+              ]
+            },
+            "description": "Adiciona um novo usuário no banco de dados."
+          },
+          "response": []
+        },
+        {
+          "name": "Delete User",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{admin_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin/users/1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "users",
+                "1"
+              ]
+            },
+            "description": "Exclui um usuário pelo ID informado."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Webhook",
+      "item": [
+        {
+          "name": "Get Webhook",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/webhook",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "webhook"
+              ]
+            },
+            "description": "Obtém o webhook configurado e os eventos inscritos."
+          },
+          "response": []
+        },
+        {
+          "name": "Set Webhook",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"webhook\": \"https://example.net/webhook\",\n  \"events\": [\"Message\", \"ReadReceipt\"]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/webhook",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "webhook"
+              ]
+            },
+            "description": "Configura o webhook para receber eventos."
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Webhook",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/webhook",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "webhook"
+              ]
+            },
+            "description": "Remove o webhook configurado."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Webhook",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"webhook\": \"https://example.net/webhook\",\n  \"events\": [\"Message\", \"ReadReceipt\"],\n  \"active\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/webhook/update",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "webhook",
+                "update"
+              ]
+            },
+            "description": "Atualiza a URL, os eventos e o status de ativação do webhook."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Session",
+      "item": [
+        {
+          "name": "Connect",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Subscribe\": [\"Message\", \"ReadReceipt\"],\n  \"Immediate\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/session/connect",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "session",
+                "connect"
+              ]
+            },
+            "description": "Inicia a conexão com os servidores do WhatsApp. Se não houver sessão, gera um QR Code."
+          },
+          "response": []
+        },
+        {
+          "name": "Disconnect",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/session/disconnect",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "session",
+                "disconnect"
+              ]
+            },
+            "description": "Fecha a conexão com os servidores do WhatsApp sem terminar a sessão."
+          },
+          "response": []
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/session/logout",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "session",
+                "logout"
+              ]
+            },
+            "description": "Finaliza a sessão do WhatsApp, exigindo novo QR Code para reconexão."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Status",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/session/status",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "session",
+                "status"
+              ]
+            },
+            "description": "Obtém o status da conexão e da sessão."
+          },
+          "response": []
+        },
+        {
+          "name": "Pair Phone",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Phone\": \"5491155553934\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/session/pairphone",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "session",
+                "pairphone"
+              ]
+            },
+            "description": "Obtém o código de pareamento via telefone."
+          },
+          "response": []
+        },
+        {
+          "name": "Get QR Code",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/session/qr",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "session",
+                "qr"
+              ]
+            },
+            "description": "Retorna o QR Code (caso não esteja logado)."
+          },
+          "response": []
+        },
+        {
+          "name": "Set Proxy",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"proxy_url\": \"http://host:port\",\n  \"enable\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/session/proxy",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "session",
+                "proxy"
+              ]
+            },
+            "description": "Configura ou desabilita o proxy para a conexão."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "User",
+      "item": [
+        {
+          "name": "Get User Info",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Phone\": [\"5491155553934\", \"5491155553935\"]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/user/info",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "user",
+                "info"
+              ]
+            },
+            "description": "Obtém informações detalhadas dos usuários do WhatsApp."
+          },
+          "response": []
+        },
+        {
+          "name": "Check User",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Phone\": [\"5491155553934\", \"5491155553935\"]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/user/check",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "user",
+                "check"
+              ]
+            },
+            "description": "Verifica se os números informados possuem conta no WhatsApp."
+          },
+          "response": []
+        },
+        {
+          "name": "User Presence",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"available\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/user/presence",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "user",
+                "presence"
+              ]
+            },
+            "description": "Define a presença global do usuário."
+          },
+          "response": []
+        },
+        {
+          "name": "Get User Avatar",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Phone\": \"5491155553934\",\n  \"Preview\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/user/avatar",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "user",
+                "avatar"
+              ]
+            },
+            "description": "Obtém as informações da foto de perfil do usuário."
+          },
+          "response": []
+        },
+        {
+          "name": "Get User Contacts",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/user/contacts",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "user",
+                "contacts"
+              ]
+            },
+            "description": "Obtém a lista completa de contatos da conta conectada."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Chat",
+      "item": [
+        {
+          "name": "Mark Read",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Id\": [\"AABBCC11223344\", \"DDEEFF55667788\"],\n  \"Chat\": \"5491155553934.0:1@s.whatsapp.net\",\n  \"Sender\": \"5491155553111.0:1@s.whatsapp.net\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/chat/markread",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "chat",
+                "markread"
+              ]
+            },
+            "description": "Marca uma ou mais mensagens como lidas."
+          },
+          "response": []
+        },
+        {
+          "name": "React to Message",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Phone\": \"5491155553935\",\n  \"Body\": \"❤️\",\n  \"Id\": \"me:3EB06F9067F80BAB89FF\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/chat/react",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "chat",
+                "react"
+              ]
+            },
+            "description": "Envia uma reação para uma mensagem."
+          },
+          "response": []
+        },
+        {
+          "name": "Send Text Message",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Phone\": \"5491155553935\",\n  \"Body\": \"How you doin\",\n  \"Id\": \"ABCDABCD1234\",\n  \"ContextInfo\": {\n    \"StanzaId\": \"3EB06F9067F80BAB89FF\",\n    \"Participant\": \"5491155553935@s.whatsapp.net\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/chat/send/text",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "chat",
+                "send",
+                "text"
+              ]
+            },
+            "description": "Envia uma mensagem de texto."
+          },
+          "response": []
+        },
+        {
+          "name": "Send Image",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Phone\": \"5491155553935\",\n  \"Image\": \"data:image/jpeg;base64,iVBORw0\",\n  \"Caption\": \"Image Description\",\n  \"Id\": \"ABCDABCD1234\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/chat/send/image",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "chat",
+                "send",
+                "image"
+              ]
+            },
+            "description": "Envia uma mensagem com imagem."
+          },
+          "response": []
+        },
+        {
+          "name": "Send Audio",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Phone\": \"5491155553935\",\n  \"Audio\": \"data:audio/ogg;base64,iVBORw0a\",\n  \"Id\": \"ABCDABCD1234\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/chat/send/audio",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "chat",
+                "send",
+                "audio"
+              ]
+            },
+            "description": "Envia uma mensagem de áudio."
+          },
+          "response": []
+        },
+        {
+          "name": "Send Document",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Phone\": \"5491155553935\",\n  \"Document\": \"data:application/octet-stream;base64,aG9sYSBxdWUKdGFsCmNvbW8KZXN0YXMK\",\n  \"FileName\": \"file.txt\",\n  \"Id\": \"ABCDABCD1234\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/chat/send/document",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "chat",
+                "send",
+                "document"
+              ]
+            },
+            "description": "Envia um documento."
+          },
+          "response": []
+        },
+        {
+          "name": "Send Template",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Phone\": \"5491155553935\",\n  \"Content\": \"Message title\",\n  \"Footer\": \"Text below title, above buttons\",\n  \"Buttons\": [\n    {\"DisplayText\":\"Yes\",\"Type\":\"quickreply\"},\n    {\"DisplayText\":\"No\",\"Type\":\"quickreply\"},\n    {\"DisplayText\":\"Visit Site\",\"Type\":\"url\",\"Url\":\"https://www.fop2.com\"},\n    {\"DisplayText\":\"Callme\",\"Type\":\"call\",\"PhoneNumber\":\"1155553934\"}\n  ],\n  \"Id\": \"ABCDABCD1234\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/chat/send/template",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "chat",
+                "send",
+                "template"
+              ]
+            },
+            "description": "Envia uma mensagem template com botões de ação."
+          },
+          "response": []
+        },
+        {
+          "name": "Send Video",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Phone\": \"5491155553935\",\n  \"Video\": \"data:video/mp4;base64,iVBORw0\",\n  \"Caption\": \"my video\",\n  \"Id\": \"ABCDABCD1234\",\n  \"JpegThumbnail\": \"AA00D010\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/chat/send/video",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "chat",
+                "send",
+                "video"
+              ]
+            },
+            "description": "Envia uma mensagem com vídeo."
+          },
+          "response": []
+        },
+        {
+          "name": "Send Sticker",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Phone\": \"5491155553935\",\n  \"Sticker\": \"data:image/webp;base64,iVBORw0\",\n  \"Id\": \"ABCDABCD1234\",\n  \"PngThumbnail\": \"AA00D010\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/chat/send/sticker",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "chat",
+                "send",
+                "sticker"
+              ]
+            },
+            "description": "Envia uma mensagem com sticker."
+          },
+          "response": []
+        },
+        {
+          "name": "Send Location",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Phone\": \"5491155553935\",\n  \"Name\": \"Party\",\n  \"Id\": \"ABCDABCD1234\",\n  \"Latitude\": 48.858370,\n  \"Longitude\": 2.294481,\n  \"ContextInfo\": {\n    \"StanzaId\": \"3EB06F9067F80BAB89FF\",\n    \"Participant\": \"5491155553935@s.whatsapp.net\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/chat/send/location",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "chat",
+                "send",
+                "location"
+              ]
+            },
+            "description": "Envia uma mensagem com localização."
+          },
+          "response": []
+        },
+        {
+          "name": "Send Contact",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Phone\": \"5491155553935\",\n  \"Name\": \"John\",\n  \"Id\": \"ABCDABCD1234\",\n  \"Vcard\": \"BEGIN:VCARD\\nVERSION:3.0\\nN:Doe;John;;;\\nFN:John Doe\\nORG:Example Inc.;\\nTEL:+1 6175551212\\nEND:VCARD\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/chat/send/contact",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "chat",
+                "send",
+                "contact"
+              ]
+            },
+            "description": "Envia uma mensagem de contato em formato VCARD."
+          },
+          "response": []
+        },
+        {
+          "name": "Download Image",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Url\": \"https://example.com/image.jpg\",\n  \"DirectPath\": \"/path/to/image\",\n  \"MediaKey\": \"media_key\",\n  \"Mimetype\": \"image/jpeg\",\n  \"FileEncSHA256\": \"enc_sha256\",\n  \"FileSHA256\": \"file_sha256\",\n  \"FileLength\": 12345\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/chat/downloadimage",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "chat",
+                "downloadimage"
+              ]
+            },
+            "description": "Faz o download de uma imagem a partir de uma mensagem."
+          },
+          "response": []
+        },
+        {
+          "name": "Download Video",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Url\": \"https://example.com/video.mp4\",\n  \"DirectPath\": \"/path/to/video\",\n  \"MediaKey\": \"media_key\",\n  \"Mimetype\": \"video/mp4\",\n  \"FileEncSHA256\": \"enc_sha256\",\n  \"FileSHA256\": \"file_sha256\",\n  \"FileLength\": 67890\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/chat/downloadvideo",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "chat",
+                "downloadvideo"
+              ]
+            },
+            "description": "Faz o download de um vídeo a partir de uma mensagem."
+          },
+          "response": []
+        },
+        {
+          "name": "Download Document",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Url\": \"https://example.com/document.pdf\",\n  \"DirectPath\": \"/path/to/document\",\n  \"MediaKey\": \"media_key\",\n  \"Mimetype\": \"application/pdf\",\n  \"FileEncSHA256\": \"enc_sha256\",\n  \"FileSHA256\": \"file_sha256\",\n  \"FileLength\": 23456\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/chat/downloaddocument",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "chat",
+                "downloaddocument"
+              ]
+            },
+            "description": "Faz o download de um documento a partir de uma mensagem."
+          },
+          "response": []
+        },
+        {
+          "name": "Chat Presence",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Phone\": \"5491155553935\",\n  \"State\": \"composing\",\n  \"Media\": \"audio\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/chat/presence",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "chat",
+                "presence"
+              ]
+            },
+            "description": "Envia indicação de presença no chat (ex.: digitando ou pausado)."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Group",
+      "item": [
+        {
+          "name": "List Groups",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/group/list",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "group",
+                "list"
+              ]
+            },
+            "description": "Retorna a lista completa de grupos inscritos."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Group Invite Link",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/group/invitelink?groupJID=120362023605733675@g.us&reset=false",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "group",
+                "invitelink"
+              ],
+              "query": [
+                {
+                  "key": "groupJID",
+                  "value": "120362023605733675@g.us"
+                },
+                {
+                  "key": "reset",
+                  "value": "false"
+                }
+              ]
+            },
+            "description": "Obtém o link de convite para um grupo, com opção de resetar o link."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Group Info",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/group/info?groupJID=120362023605733675@g.us",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "group",
+                "info"
+              ],
+              "query": [
+                {
+                  "key": "groupJID",
+                  "value": "120362023605733675@g.us"
+                }
+              ]
+            },
+            "description": "Recupera informações detalhadas de um grupo."
+          },
+          "response": []
+        },
+        {
+          "name": "Change Group Name",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"GroupJID\": \"120362023605733675@g.us\",\n  \"Name\": \"My group name\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/group/name",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "group",
+                "name"
+              ]
+            },
+            "description": "Altera o nome do grupo."
+          },
+          "response": []
+        },
+        {
+          "name": "Change Group Photo",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"GroupJID\": \"120362023605733675@g.us\",\n  \"Image\": \"data:image/jpeg;base64,Akd9300...\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/group/photo",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "group",
+                "photo"
+              ]
+            },
+            "description": "Altera a foto do grupo e retorna o PictureID."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Newsletter",
+      "item": [
+        {
+          "name": "List Newsletters",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/newsletter/list",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "newsletter",
+                "list"
+              ]
+            },
+            "description": "Retorna a lista de newsletters inscritas."
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "https://meow.example.com"
+    },
+    {
+      "key": "token",
+      "value": "seu_token_aqui"
+    },
+    {
+      "key": "admin_token",
+      "value": "admin_token_aqui"
+    }
+  ]
+}

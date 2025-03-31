@@ -1,0 +1,970 @@
+{
+  "info": {
+    "_postman_id": "b275f9a7-7fd5-4197-b5de-4e3a9c9d2d78",
+    "name": "WuzAPI Collection Completa",
+    "description": "API REST para interagir com WhatsApp usando a biblioteca whatsmeow.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Admin",
+      "item": [
+        {
+          "name": "List Users",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{admin_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin/users",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "users"]
+            },
+            "description": "Lista usuários"
+          },
+          "response": []
+        },
+        {
+          "name": "Add User",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{admin_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"usuario_teste\",\n  \"token\": \"token_do_usuario\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/admin/users",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "users"]
+            },
+            "description": "Adiciona usuário"
+          },
+          "response": []
+        },
+        {
+          "name": "Delete User",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{admin_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin/users/1",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "users", "1"]
+            },
+            "description": "Exclui usuário"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Session",
+      "item": [
+        {
+          "name": "Connect",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Subscribe\": [\"Message\", \"ReadReceipt\"],\n  \"Immediate\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/session/connect",
+              "host": ["{{baseUrl}}"],
+              "path": ["session", "connect"]
+            },
+            "description": "Conecta ao WhatsApp"
+          },
+          "response": []
+        },
+        {
+          "name": "Disconnect",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/session/disconnect",
+              "host": ["{{baseUrl}}"],
+              "path": ["session", "disconnect"]
+            },
+            "description": "Desconecta"
+          },
+          "response": []
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/session/logout",
+              "host": ["{{baseUrl}}"],
+              "path": ["session", "logout"]
+            },
+            "description": "Logout"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Status",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/session/status",
+              "host": ["{{baseUrl}}"],
+              "path": ["session", "status"]
+            },
+            "description": "Status"
+          },
+          "response": []
+        },
+        {
+          "name": "Get QR Code",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/session/qr",
+              "host": ["{{baseUrl}}"],
+              "path": ["session", "qr"]
+            },
+            "description": "QR Code"
+          },
+          "response": []
+        },
+        {
+          "name": "Pair Phone",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Phone\": \"5591155553934\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/session/pairphone",
+              "host": ["{{baseUrl}}"],
+              "path": ["session", "pairphone"]
+            },
+            "description": "Parear por telefone"
+          },
+          "response": []
+        },
+        {
+          "name": "Set Proxy",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"proxy_url\": \"socks5://user:pass@host:port\",\n  \"enable\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/session/proxy",
+              "host": ["{{baseUrl}}"],
+              "path": ["session", "proxy"]
+            },
+            "description": "Configurar proxy"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Webhook",
+      "item": [
+        {
+          "name": "Get Webhook",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/webhook",
+              "host": ["{{baseUrl}}"],
+              "path": ["webhook"]
+            },
+            "description": "Obter webhook"
+          },
+          "response": []
+        },
+        {
+          "name": "Set Webhook",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"webhook\": \"https://example.net/webhook\",\n  \"events\": [\"Message\", \"ReadReceipt\"]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/webhook",
+              "host": ["{{baseUrl}}"],
+              "path": ["webhook"]
+            },
+            "description": "Configurar webhook"
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Webhook",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/webhook",
+              "host": ["{{baseUrl}}"],
+              "path": ["webhook"]
+            },
+            "description": "Remover webhook"
+          },
+          "response": []
+        },
+        {
+          "name": "Update Webhook",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"webhook\": \"https://example.net/webhook\",\n  \"events\": [\"Message\", \"ReadReceipt\"],\n  \"active\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/webhook/update",
+              "host": ["{{baseUrl}}"],
+              "path": ["webhook", "update"]
+            },
+            "description": "Atualizar webhook"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Chat",
+      "item": [
+        {
+          "name": "Send Text Message",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Phone\": \"5491155553935\",\n  \"Body\": \"Olá, como você está?\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/chat/send/text",
+              "host": ["{{baseUrl}}"],
+              "path": ["chat", "send", "text"]
+            },
+            "description": "Enviar texto"
+          },
+          "response": []
+        },
+        {
+          "name": "Send Image",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Phone\": \"5491155553935\",\n  \"Image\": \"data:image/jpeg;base64,/9j/\",\n  \"Caption\": \"Imagem\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/chat/send/image",
+              "host": ["{{baseUrl}}"],
+              "path": ["chat", "send", "image"]
+            },
+            "description": "Enviar imagem"
+          },
+          "response": []
+        },
+        {
+          "name": "Send Audio",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Phone\": \"5491155553935\",\n  \"Audio\": \"data:audio/ogg;base64,/9j/\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/chat/send/audio",
+              "host": ["{{baseUrl}}"],
+              "path": ["chat", "send", "audio"]
+            },
+            "description": "Enviar áudio"
+          },
+          "response": []
+        },
+        {
+          "name": "Send Document",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Phone\": \"5491155553935\",\n  \"Document\": \"data:application/octet-stream;base64,/9j/\",\n  \"FileName\": \"doc.pdf\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/chat/send/document",
+              "host": ["{{baseUrl}}"],
+              "path": ["chat", "send", "document"]
+            },
+            "description": "Enviar documento"
+          },
+          "response": []
+        },
+        {
+          "name": "Send Video",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Phone\": \"5491155553935\",\n  \"Video\": \"data:video/mp4;base64,/9j/\",\n  \"Caption\": \"Vídeo\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/chat/send/video",
+              "host": ["{{baseUrl}}"],
+              "path": ["chat", "send", "video"]
+            },
+            "description": "Enviar vídeo"
+          },
+          "response": []
+        },
+        {
+          "name": "Send Sticker",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Phone\": \"5491155553935\",\n  \"Sticker\": \"data:image/webp;base64,/9j/\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/chat/send/sticker",
+              "host": ["{{baseUrl}}"],
+              "path": ["chat", "send", "sticker"]
+            },
+            "description": "Enviar sticker"
+          },
+          "response": []
+        },
+        {
+          "name": "Send Location",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Phone\": \"5491155553935\",\n  \"Name\": \"Local\",\n  \"Latitude\": 48.858,\n  \"Longitude\": 2.294\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/chat/send/location",
+              "host": ["{{baseUrl}}"],
+              "path": ["chat", "send", "location"]
+            },
+            "description": "Enviar localização"
+          },
+          "response": []
+        },
+        {
+          "name": "Send Contact",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Phone\": \"5491155553935\",\n  \"Name\": \"John\",\n  \"Vcard\": \"BEGIN:VCARD\\nVERSION:3.0\\nFN:John Doe\\nTEL:+16175551212\\nEND:VCARD\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/chat/send/contact",
+              "host": ["{{baseUrl}}"],
+              "path": ["chat", "send", "contact"]
+            },
+            "description": "Enviar contato"
+          },
+          "response": []
+        },
+        {
+          "name": "Send Template",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Phone\": \"5491155553935\",\n  \"Content\": \"Título\",\n  \"Footer\": \"Rodapé\",\n  \"Buttons\": [\n    {\"DisplayText\":\"Sim\",\"Type\":\"quickreply\"}\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/chat/send/template",
+              "host": ["{{baseUrl}}"],
+              "path": ["chat", "send", "template"]
+            },
+            "description": "Enviar template"
+          },
+          "response": []
+        },
+        {
+          "name": "Mark Read",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Id\": [\"AABBCC11223344\"],\n  \"Chat\": \"5491155553934.0:1@s.whatsapp.net\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/chat/markread",
+              "host": ["{{baseUrl}}"],
+              "path": ["chat", "markread"]
+            },
+            "description": "Marcar como lido"
+          },
+          "response": []
+        },
+        {
+          "name": "React to Message",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Phone\": \"5491155553935\",\n  \"Body\": \"❤️\",\n  \"Id\": \"me:3EB06F9067F80BAB89FF\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/chat/react",
+              "host": ["{{baseUrl}}"],
+              "path": ["chat", "react"]
+            },
+            "description": "Reagir a mensagem"
+          },
+          "response": []
+        },
+        {
+          "name": "Chat Presence",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Phone\": \"5491155553935\",\n  \"State\": \"composing\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/chat/presence",
+              "host": ["{{baseUrl}}"],
+              "path": ["chat", "presence"]
+            },
+            "description": "Definir presença"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "User",
+      "item": [
+        {
+          "name": "Check Users",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Phone\": [\"5491155553934\", \"5491155553935\"]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/user/check",
+              "host": ["{{baseUrl}}"],
+              "path": ["user", "check"]
+            },
+            "description": "Verificar usuários"
+          },
+          "response": []
+        },
+        {
+          "name": "Get User Info",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Phone\": [\"5491155553934\", \"5491155553935\"]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/user/info",
+              "host": ["{{baseUrl}}"],
+              "path": ["user", "info"]
+            },
+            "description": "Informações de usuário"
+          },
+          "response": []
+        },
+        {
+          "name": "User Presence",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"available\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/user/presence",
+              "host": ["{{baseUrl}}"],
+              "path": ["user", "presence"]
+            },
+            "description": "Presença global"
+          },
+          "response": []
+        },
+        {
+          "name": "Get User Avatar",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Phone\": \"5491155553934\",\n  \"Preview\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/user/avatar",
+              "host": ["{{baseUrl}}"],
+              "path": ["user", "avatar"]
+            },
+            "description": "Obter avatar"
+          },
+          "response": []
+        },
+        {
+          "name": "Get User Contacts",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/user/contacts",
+              "host": ["{{baseUrl}}"],
+              "path": ["user", "contacts"]
+            },
+            "description": "Listar contatos"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Group",
+      "item": [
+        {
+          "name": "List Groups",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/group/list",
+              "host": ["{{baseUrl}}"],
+              "path": ["group", "list"]
+            },
+            "description": "Listar grupos"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Group Info",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/group/info?groupJID=120362023605733675@g.us",
+              "host": ["{{baseUrl}}"],
+              "path": ["group", "info"],
+              "query": [
+                {
+                  "key": "groupJID",
+                  "value": "120362023605733675@g.us"
+                }
+              ]
+            },
+            "description": "Informações do grupo"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Group Invite Link",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/group/invitelink?groupJID=120362023605733675@g.us&reset=false",
+              "host": ["{{baseUrl}}"],
+              "path": ["group", "invitelink"],
+              "query": [
+                {
+                  "key": "groupJID",
+                  "value": "120362023605733675@g.us"
+                },
+                {
+                  "key": "reset",
+                  "value": "false"
+                }
+              ]
+            },
+            "description": "Link de convite"
+          },
+          "response": []
+        },
+        {
+          "name": "Change Group Name",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"GroupJID\": \"120362023605733675@g.us\",\n  \"Name\": \"Novo Nome\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/group/name",
+              "host": ["{{baseUrl}}"],
+              "path": ["group", "name"]
+            },
+            "description": "Alterar nome"
+          },
+          "response": []
+        },
+        {
+          "name": "Change Group Photo",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"GroupJID\": \"120362023605733675@g.us\",\n  \"Image\": \"data:image/jpeg;base64,/9j/\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/group/photo",
+              "host": ["{{baseUrl}}"],
+              "path": ["group", "photo"]
+            },
+            "description": "Alterar foto"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Newsletter",
+      "item": [
+        {
+          "name": "List Newsletters",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/newsletter/list",
+              "host": ["{{baseUrl}}"],
+              "path": ["newsletter", "list"]
+            },
+            "description": "Listar newsletters"
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "token",
+      "value": "seu_token_aqui"
+    },
+    {
+      "key": "admin_token",
+      "value": "admin_token_aqui"
+    }
+  ]
+}

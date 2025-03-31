@@ -268,7 +268,7 @@ func (s *server) startClient(userID int, textjid string, token string, subscript
 			log.Info().Str("userid", strconv.Itoa(userID)).Msg("Received kill signal")
 			client.Disconnect()
 			delete(clientPointer, userID)
-			sqlStmt := `UPDATE users SET qrcode=$1 connected=0 WHERE id=$1`
+			sqlStmt := `UPDATE users SET qrcode=$1, connected=0 WHERE id=$2`
 			_, err := s.db.Exec(sqlStmt, "", userID)
 			if err != nil {
 				log.Error().Err(err).Msg(sqlStmt)

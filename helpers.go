@@ -3,17 +3,18 @@ package main
 import (
 	"fmt"
 	"strconv"
-    "github.com/rs/zerolog/log"
 
+	"github.com/rs/zerolog/log"
 )
 
-func Find(slice []string, val string) bool {
-    for _, item := range slice {
-        if item == val {
-            return true
-        }
-    }
-    return false
+// Renomeando para FindInSlice para evitar conflito com a função em handlers.go
+func FindInSlice(slice []string, val string) bool {
+	for _, item := range slice {
+		if item == val {
+			return true
+		}
+	}
+	return false
 }
 
 // Update entry in User map
