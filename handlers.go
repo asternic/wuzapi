@@ -3127,28 +3127,96 @@ func (s *server) SetGroupName() http.HandlerFunc {
 	}
 }
 
+// List newsletters
+func (s *server) ListNewsletter() http.HandlerFunc {
+
+	type NewsletterCollection struct {
+		Newsletter []types.NewsletterMetadata
+	}
+
+	return func(w http.ResponseWriter, r *http.Request) {
+
+		txtid := r.Context().Value("userinfo").(Values).Get("Id")
+		userid, _ := strconv.Atoi(txtid)
+
+		if clientManager.GetWhatsmeowClient(userid) == nil {
+			s.Respond(w, r, http.StatusInternalServerError, errors.New("No session"))
+			return
+		}
+
+		resp, err := clientManager.GetWhatsmeowClient(userid).GetSubscribedNewsletters()
+
+		if err != nil {
+			msg := fmt.Sprintf("Failed to get newsletter list: %v", err)
+			log.Error().Msg(msg)
+			s.Respond(w, r, http.StatusInternalServerError, msg)
+			return
+		}
+
+		gc := new(NewsletterCollection)
+		gc.Newsletter = []types.NewsletterMetadata{}
+		for _, info := range resp {
+			gc.Newsletter = append(gc.Newsletter, *info)
+		}
+
+		responseJson, err := json.Marshal(gc)
+		if err != nil {
+			s.Respond(w, r, http.StatusInternalServerError, err)
+		} else {
+			s.Respond(w, r, http.StatusOK, string(responseJson))
+		}
+
+		return
+	}
+}
+
 // Admin List users
 func (s *server) ListUsers() http.HandlerFunc {
 	type usersStruct struct {
-		Id         int           `db:"id"`
-		Name       string        `db:"name"`
-		Token      string        `db:"token"`
-		Webhook    string        `db:"webhook"`
-		Jid        string        `db:"jid"`
-		Qrcode     string        `db:"qrcode"`
-		Connected  sql.NullBool  `db:"connected"`
-		Expiration sql.NullInt64 `db:"expiration"`
-		ProxyURL   string        `db:"proxy_url"`
-		Events     string        `db:"events"`
+		Id         int            `db:"id"`
+		Name       string         `db:"name"`
+		Token      string         `db:"token"`
+		Webhook    string         `db:"webhook"`
+		Jid        string         `db:"jid"`
+		Qrcode     string         `db:"qrcode"`
+		Connected  sql.NullBool   `db:"connected"`
+		Expiration sql.NullInt64  `db:"expiration"`
+		ProxyURL   sql.NullString `db:"proxy_url"`
+		Events     string         `db:"events"`
 	}
 	return func(w http.ResponseWriter, r *http.Request) {
-		// Query the database to get the list of users
-		rows, err := s.db.Queryx("SELECT id, name, token, webhook, jid, qrcode, connected, expiration, events FROM users")
+		vars := mux.Vars(r)
+		userID, hasID := vars["id"]
+
+		var query string
+		var args []interface{}
+
+		/*
+			// Query the database to get the list of users
+			rows, err := s.db.Queryx("SELECT id, name, token, webhook, jid, qrcode, connected, expiration, events FROM users")
+			if err != nil {
+				s.Respond(w, r, http.StatusInternalServerError, errors.New("Problem accessing DB"))
+				return
+			}
+			defer rows.Close()
+		*/
+
+		if hasID {
+			// Fetch a single user
+			query = "SELECT id, name, token, webhook, jid, qrcode, connected, expiration, proxy_url, events FROM users WHERE id = $1"
+			args = append(args, userID)
+		} else {
+			// Fetch all users
+			query = "SELECT id, name, token, webhook, jid, qrcode, connected, expiration, proxy_url, events FROM users"
+		}
+
+		rows, err := s.db.Queryx(query, args...)
 		if err != nil {
 			s.Respond(w, r, http.StatusInternalServerError, errors.New("Problem accessing DB"))
 			return
 		}
 		defer rows.Close()
+
 		// Create a slice to store the user data
 		users := []map[string]interface{}{}
 		// Iterate over the rows and populate the user data
@@ -3160,6 +3228,15 @@ func (s *server) ListUsers() http.HandlerFunc {
 				s.Respond(w, r, http.StatusInternalServerError, errors.New("Problem accessing DB"))
 				return
 			}
+
+			isConnected := false
+			isLoggedIn := false
+			if clientManager.GetWhatsmeowClient(user.Id) != nil {
+				isConnected = clientManager.GetWhatsmeowClient(user.Id).IsConnected()
+				isLoggedIn = clientManager.GetWhatsmeowClient(user.Id).IsLoggedIn()
+			}
+
+			//"connected":  user.Connected.Bool,
 			userMap := map[string]interface{}{
 				"id":         user.Id,
 				"name":       user.Name,
@@ -3167,9 +3244,10 @@ func (s *server) ListUsers() http.HandlerFunc {
 				"webhook":    user.Webhook,
 				"jid":        user.Jid,
 				"qrcode":     user.Qrcode,
-				"connected":  user.Connected.Bool,
+				"connected":  isConnected,
+				"loggedIn":   isLoggedIn,
 				"expiration": user.Expiration.Int64,
-				"proxy_url":  user.ProxyURL,
+				"proxy_url":  user.ProxyURL.String,
 				"events":     user.Events,
 			}
 			users = append(users, userMap)
@@ -3179,14 +3257,16 @@ func (s *server) ListUsers() http.HandlerFunc {
 			s.Respond(w, r, http.StatusInternalServerError, errors.New("Problem accessing DB"))
 			return
 		}
-		// Set the response content type to JSON
-		w.Header().Set("Content-Type", "application/json")
-		// Encode the user data as JSON and write the response
-		err = json.NewEncoder(w).Encode(users)
+
+		// Encode users slice into a JSON string
+		responseJson, err := json.Marshal(users)
 		if err != nil {
-			s.Respond(w, r, http.StatusInternalServerError, errors.New("Problem encoding JSON"))
+			s.Respond(w, r, http.StatusInternalServerError, err)
 			return
 		}
+
+		s.Respond(w, r, http.StatusOK, string(responseJson))
+
 	}
 }
 
@@ -3285,8 +3365,38 @@ func (s *server) DeleteUser() http.HandlerFunc {
 	}
 }
 
-// Writes JSON response to API clients
 func (s *server) Respond(w http.ResponseWriter, r *http.Request, status int, data interface{}) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+
+	dataenvelope := map[string]interface{}{"code": status}
+	if err, ok := data.(error); ok {
+		dataenvelope["error"] = err.Error()
+		dataenvelope["success"] = false
+	} else {
+		// Try to unmarshal into a map first
+		var mydata map[string]interface{}
+		if err := json.Unmarshal([]byte(data.(string)), &mydata); err == nil {
+			dataenvelope["data"] = mydata
+		} else {
+			// If unmarshaling into a map fails, try as a slice
+			var mySlice []interface{}
+			if err := json.Unmarshal([]byte(data.(string)), &mySlice); err == nil {
+				dataenvelope["data"] = mySlice
+			} else {
+				log.Error().Str("error", fmt.Sprintf("%v", err)).Msg("Error unmarshalling JSON")
+			}
+		}
+		dataenvelope["success"] = true
+	}
+
+	if err := json.NewEncoder(w).Encode(dataenvelope); err != nil {
+		panic("respond: " + err.Error())
+	}
+}
+
+// Writes JSON response to API clients
+func (s *server) old_Respond(w http.ResponseWriter, r *http.Request, status int, data interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 

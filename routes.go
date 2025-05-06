@@ -46,6 +46,7 @@ func (s *server) routes() {
 	adminRoutes := s.router.PathPrefix("/admin").Subrouter()
 	adminRoutes.Use(s.authadmin)
 	adminRoutes.Handle("/users", s.ListUsers()).Methods("GET")
+	adminRoutes.Handle("/users/{id}", s.ListUsers()).Methods("GET")
 	adminRoutes.Handle("/users", s.AddUser()).Methods("POST")
 	adminRoutes.Handle("/users/{id}", s.DeleteUser()).Methods("DELETE")
 
@@ -115,6 +116,8 @@ func (s *server) routes() {
 	s.router.Handle("/group/invitelink", c.Then(s.GetGroupInviteLink())).Methods("GET")
 	s.router.Handle("/group/photo", c.Then(s.SetGroupPhoto())).Methods("POST")
 	s.router.Handle("/group/name", c.Then(s.SetGroupName())).Methods("POST")
+
+	s.router.Handle("/newsletter/list", c.Then(s.ListNewsletter())).Methods("GET")
 
 	s.router.PathPrefix("/").Handler(http.FileServer(http.Dir(exPath + "/static/")))
 }
