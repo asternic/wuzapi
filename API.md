@@ -1,28 +1,28 @@
 # API Reference
 
-A API suporta dois tipos de autenticação:
+The API supports two authentication methods:
 
-1. **Token de usuário**: Para endpoints regulares, use o cabeçalho `Token` com o valor do token do usuário
-2. **Token administrativo**: Para endpoints de administração (/admin/*), use o cabeçalho `Authorization` com o valor do token administrativo definido em WUZAPI_ADMIN_TOKEN
+1. **User Token**: For regular endpoints, use the `Authorization` header with the user's token value.
+2. **Admin Token**: For admin endpoints (/admin/**), use the `Authorization` header with the admin token value (set in WUZAPI_ADMIN_TOKEN).
 
-Na primeira execução, o sistema cria automaticamente um usuário "admin" com o token definido na variável de ambiente WUZAPI_ADMIN_TOKEN.
-
-As chamadas à API devem ser feitas com o tipo de conteúdo JSON, com os parâmetros enviados no corpo da requisição, sempre passando o cabeçalho Token para autenticar a requisição.
+### Request Requirements
+Content-Type: application/json (JSON-encoded body)
+Authentication: Include the `Authorization` header in all requests.
 
 ---
 
-## Admin
+## Admin Endpoints (User Management)
 
-Os seguintes endpoints de _admin_ são usados para gerenciar usuários no sistema.
+The following admin-only endpoints are used to manage users in the system. All require the Authorization header with the admin token (WUZAPI_ADMIN_TOKEN).
 
-## Listar usuários
 
-Lista todos os usuários cadastrados no sistema.
+## List All Users
 
-Endpoint: _/admin/users_
+*GET /admin/users*
 
-Method: **GET**
+Returns a list of registered users.
 
+Example Request:
 ```
 curl -s -X GET -H 'Authorization: {{WUZAPI_ADMIN_TOKEN}}' http://localhost:8080/admin/users
 ```
@@ -45,14 +45,13 @@ Response:
 ]
 ```
 
-## Adicionar usuário
+## Add User
 
-Adiciona um novo usuário ao sistema.
+*POST /admin/users*
 
-Endpoint: _/admin/users_
+Adds a new user
 
-Method: **POST**
-
+Example Request:
 ```
 curl -s -X POST -H 'Authorization: {{WUZAPI_ADMIN_TOKEN}}' -H 'Content-Type: application/json' --data '{"name":"usuario2","token":"token2","webhook":"https://example.com/webhook2","events":"Message,ReadReceipt"}' http://localhost:8080/admin/users
 ```
@@ -65,14 +64,13 @@ Response:
 }
 ```
 
-## Remover usuário
+## Delete User 
 
-Remove um usuário do sistema pelo seu ID.
+*DELETE /admin/users/{id}*
 
-Endpoint: _/admin/users/{id}_
+Deletes one user from the system by ID
 
-Method: **DELETE**
-
+Example Request:
 ```
 curl -s -X DELETE -H 'Authorization: {{WUZAPI_ADMIN_TOKEN}}' http://localhost:8080/admin/users/2
 ```
