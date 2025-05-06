@@ -1,6 +1,89 @@
 # API Reference
 
-API calls should be made with content type json, and parameters sent into the request body, always passing the Token header for authenticating the request.
+A API suporta dois tipos de autenticação:
+
+1. **Token de usuário**: Para endpoints regulares, use o cabeçalho `Token` com o valor do token do usuário
+2. **Token administrativo**: Para endpoints de administração (/admin/*), use o cabeçalho `Authorization` com o valor do token administrativo definido em WUZAPI_ADMIN_TOKEN
+
+Na primeira execução, o sistema cria automaticamente um usuário "admin" com o token definido na variável de ambiente WUZAPI_ADMIN_TOKEN.
+
+As chamadas à API devem ser feitas com o tipo de conteúdo JSON, com os parâmetros enviados no corpo da requisição, sempre passando o cabeçalho Token para autenticar a requisição.
+
+---
+
+## Admin
+
+Os seguintes endpoints de _admin_ são usados para gerenciar usuários no sistema.
+
+## Listar usuários
+
+Lista todos os usuários cadastrados no sistema.
+
+Endpoint: _/admin/users_
+
+Method: **GET**
+
+```
+curl -s -X GET -H 'Authorization: {{WUZAPI_ADMIN_TOKEN}}' http://localhost:8080/admin/users
+```
+
+Response:
+
+```json
+[
+  {
+    "id": 1,
+    "name": "admin",
+    "token": "H4Zbhwr72PBrtKdTIgS",
+    "webhook": "https://example.com/webhook",
+    "jid": "5491155553934@s.whatsapp.net",
+    "qrcode": "",
+    "connected": true,
+    "expiration": 0,
+    "events": "Message,ReadReceipt"
+  }
+]
+```
+
+## Adicionar usuário
+
+Adiciona um novo usuário ao sistema.
+
+Endpoint: _/admin/users_
+
+Method: **POST**
+
+```
+curl -s -X POST -H 'Authorization: {{WUZAPI_ADMIN_TOKEN}}' -H 'Content-Type: application/json' --data '{"name":"usuario2","token":"token2","webhook":"https://example.com/webhook2","events":"Message,ReadReceipt"}' http://localhost:8080/admin/users
+```
+
+Response:
+
+```json
+{
+  "id": 2
+}
+```
+
+## Remover usuário
+
+Remove um usuário do sistema pelo seu ID.
+
+Endpoint: _/admin/users/{id}_
+
+Method: **DELETE**
+
+```
+curl -s -X DELETE -H 'Authorization: {{WUZAPI_ADMIN_TOKEN}}' http://localhost:8080/admin/users/2
+```
+
+Response:
+
+```json
+{
+  "Details": "User deleted successfully"
+}
+```
 
 ---
 

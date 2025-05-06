@@ -1,0 +1,2164 @@
+{
+	"info": {
+		"_postman_id": "7275f9a7-7fd5-4197-b5de-4e3a9c9d2d78",
+		"name": "WuzAPI Collection",
+		"description": "API para interagir com WhatsApp usando a biblioteca whatsmeow",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "29414803"
+	},
+	"item": [
+		{
+			"name": "Webhook",
+			"item": [
+				{
+					"name": "Get Webhook",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "token",
+								"value": "{{token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/webhook",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"webhook"
+							]
+						},
+						"description": "Obtém o webhook configurado e eventos inscritos"
+					},
+					"response": [
+						{
+							"name": "Success",
+							"originalRequest": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "token",
+										"value": "{{token}}",
+										"type": "text"
+									}
+								],
+								"url": {
+									"raw": "{{baseUrl}}/webhook",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"webhook"
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "Text",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n  \"code\": 200,\n  \"data\": {\n    \"subscribe\": [\"Message\", \"ReadReceipt\"],\n    \"webhook\": \"https://example.net/webhook\"\n  },\n  \"success\": true\n}"
+						}
+					]
+				},
+				{
+					"name": "Set Webhook",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "token",
+								"value": "{{token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"webhook\": \"https://example.net/webhook\",\n  \"events\": [\"Message\", \"ReadReceipt\"]\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/webhook",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"webhook"
+							]
+						},
+						"description": "Configura um webhook para receber eventos"
+					},
+					"response": [
+						{
+							"name": "Success",
+							"originalRequest": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "token",
+										"value": "{{token}}",
+										"type": "text"
+									},
+									{
+										"key": "Content-Type",
+										"value": "application/json",
+										"type": "text"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"webhook\": \"https://example.net/webhook\",\n  \"events\": [\"Message\", \"ReadReceipt\"]\n}"
+								},
+								"url": {
+									"raw": "{{baseUrl}}/webhook",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"webhook"
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "Text",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n  \"code\": 200,\n  \"data\": {\n    \"webhook\": \"https://example.net/webhook\",\n    \"events\": [\"Message\", \"ReadReceipt\"]\n  },\n  \"success\": true\n}"
+						}
+					]
+				},
+				{
+					"name": "Delete Webhook",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "token",
+								"value": "{{token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/webhook",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"webhook"
+							]
+						},
+						"description": "Remove o webhook configurado"
+					},
+					"response": [
+						{
+							"name": "Success",
+							"originalRequest": {
+								"method": "DELETE",
+								"header": [
+									{
+										"key": "token",
+										"value": "{{token}}",
+										"type": "text"
+									}
+								],
+								"url": {
+									"raw": "{{baseUrl}}/webhook",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"webhook"
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "Text",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n  \"code\": 200,\n  \"data\": {\n    \"Details\": \"Webhook and events deleted successfully\"\n  },\n  \"success\": true\n}"
+						}
+					]
+				},
+				{
+					"name": "Update Webhook",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "token",
+								"value": "{{token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"webhook\": \"https://example.net/webhook\",\n  \"events\": [\"Message\", \"ReadReceipt\"],\n  \"active\": true\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/webhook/update",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"webhook",
+								"update"
+							]
+						},
+						"description": "Atualiza um webhook existente"
+					},
+					"response": [
+						{
+							"name": "Success",
+							"originalRequest": {
+								"method": "PUT",
+								"header": [
+									{
+										"key": "token",
+										"value": "{{token}}",
+										"type": "text"
+									},
+									{
+										"key": "Content-Type",
+										"value": "application/json",
+										"type": "text"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"webhook\": \"https://example.net/webhook\",\n  \"events\": [\"Message\", \"ReadReceipt\"],\n  \"active\": true\n}"
+								},
+								"url": {
+									"raw": "{{baseUrl}}/webhook/update",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"webhook",
+										"update"
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "Text",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n  \"code\": 200,\n  \"data\": {\n    \"webhook\": \"https://example.net/webhook\",\n    \"events\": [\"Message\", \"ReadReceipt\"],\n    \"active\": true\n  },\n  \"success\": true\n}"
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "Session",
+			"item": [
+				{
+					"name": "Connect",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "token",
+								"value": "{{token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"Subscribe\": [\"Message\", \"ReadReceipt\"],\n  \"Immediate\": true\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/session/connect",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"session",
+								"connect"
+							]
+						},
+						"description": "Conecta aos servidores do WhatsApp"
+					},
+					"response": [
+						{
+							"name": "Success",
+							"originalRequest": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "token",
+										"value": "{{token}}",
+										"type": "text"
+									},
+									{
+										"key": "Content-Type",
+										"value": "application/json",
+										"type": "text"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"Subscribe\": [\"Message\", \"ReadReceipt\"],\n  \"Immediate\": true\n}"
+								},
+								"url": {
+									"raw": "{{baseUrl}}/session/connect",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"session",
+										"connect"
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "Text",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n  \"code\": 200,\n  \"data\": {\n    \"details\": \"Connected!\",\n    \"events\": \"Message,ReadReceipt\",\n    \"jid\": \"5491155555555.0:53@s.whatsapp.net\",\n    \"webhook\": \"https://some.site/webhook?request=parameter\"\n  },\n  \"success\": true\n}"
+						}
+					]
+				},
+				{
+					"name": "Disconnect",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "token",
+								"value": "{{token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/session/disconnect",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"session",
+								"disconnect"
+							]
+						},
+						"description": "Desconecta dos servidores do WhatsApp"
+					},
+					"response": [
+						{
+							"name": "Success",
+							"originalRequest": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "token",
+										"value": "{{token}}",
+										"type": "text"
+									}
+								],
+								"url": {
+									"raw": "{{baseUrl}}/session/disconnect",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"session",
+										"disconnect"
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "Text",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n  \"code\": 200,\n  \"data\": {\n    \"Details\": \"Disconnected\"\n  },\n  \"success\": true\n}"
+						}
+					]
+				},
+				{
+					"name": "Logout",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "token",
+								"value": "{{token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/session/logout",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"session",
+								"logout"
+							]
+						},
+						"description": "Termina a sessão do WhatsApp"
+					},
+					"response": [
+						{
+							"name": "Success",
+							"originalRequest": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "token",
+										"value": "{{token}}",
+										"type": "text"
+									}
+								],
+								"url": {
+									"raw": "{{baseUrl}}/session/logout",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"session",
+										"logout"
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "Text",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n  \"code\": 200,\n  \"data\": {\n    \"Details\": \"Logged out\"\n  },\n  \"success\": true\n}"
+						}
+					]
+				},
+				{
+					"name": "Get Status",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "token",
+								"value": "{{token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/session/status",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"session",
+								"status"
+							]
+						},
+						"description": "Obtém o status da conexão"
+					},
+					"response": [
+						{
+							"name": "Success",
+							"originalRequest": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "token",
+										"value": "{{token}}",
+										"type": "text"
+									}
+								],
+								"url": {
+									"raw": "{{baseUrl}}/session/status",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"session",
+										"status"
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "Text",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n  \"code\": 200,\n  \"data\": {\n    \"Connected\": true,\n    \"LoggedIn\": true\n  },\n  \"success\": true\n}"
+						}
+					]
+				},
+				{
+					"name": "Get QR Code",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "token",
+								"value": "{{token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/session/qr",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"session",
+								"qr"
+							]
+						},
+						"description": "Obtém o código QR para escaneamento"
+					},
+					"response": [
+						{
+							"name": "Success",
+							"originalRequest": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "token",
+										"value": "{{token}}",
+										"type": "text"
+									}
+								],
+								"url": {
+									"raw": "{{baseUrl}}/session/qr",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"session",
+										"qr"
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "Text",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n  \"code\": 200,\n  \"data\": {\n    \"QRCode\": \"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAQAAAAEAAQMAAABmvDolAAAABlBMVEX///8AAABVwtN+AAAEw0lEQVR42uyZPa7zqhaGX0ThLmsCkZlGCktMKaU76FxmSkgUmQZWJkA6CuT3avlLvrNvvRMX9x6KXWQ/UhCsn2cR/Lv+v5YhudQ6njEs1bBjqGYDwlJJpoOAArtUbK4Pi5jN3qPAlCkstcAeBazMUaoj78RpxGW4yWYzWVfmzwFLlLX4O+VkkucN5tFDOxiIAvfoA/X4uVQ4sgUcCBTYCG7AEGGKvbdrBabQ8OOyvg3ovm4ynqfLXJ9rvi+303ie5vm/gvZXgK6BLC7fo5hiG4KwW7b6I/2+DJi1+ybVFQyx6o6bbKPVDCyjTwcBZB9uevBtAEafhiosCFH/4kNA8i1gg02B3KxezGbzEjUCDgIwYppR3SNdgtY3H0M1j8xFzCscvg/8uQvZAB9piidv1RXfZhbHdAwAlzsCNCaJDdMF4WQeeSGACZ8BMNl4FZYJA7j2YalPPhhngetHAaZPcyBg2wyYdAk0fKQ5yPja5PcBzTZW4uxJ2bTGwmxnu/BH4vwSgEsYItcCH+VZJt/AYhmHatbXdX8d2JvaTVzxCVW2aVhqheXSqvnR9b4L6AoUx3zX+jZd5rDB5jbLuv0txd8GRs+liuv+TsKloQWujxxRYf5s8gOA7fMVK9PQuDtMNCx2ibIdCMCy1s0yQU6Od9bqim1BuzoOAgzTHOiKv0d5Mt+XClN8DBxN/wxg2G2DbDYNJExCqE+Ne8poXoLxdUA/w5VrnxBQ9fjlqaJMwWgPAzLjtfKRW4A21ojnStX0dX2d5PeB0fawu2pChcuM4bk+tLmbMn0GMJslb5ptDXySbb5W1+0SyVcJOgRIQxSc7X0RUSvGs2DSeaz4gwCMNi/7XNACZc0KbPBtruv2KQA+DVFladBvt4xywhmh1Xd2fx8wzGTUltqCWrHWgqL7Jg8E0hSiFJfbUJ/Fpx3L1OHsVR8+APgoZMclUKvcft2+zTBrwjHArosim4ZcfW4Y4lVWnYXg2A8C9C5aEFXDoEJzmXFyfZoH/p0Wvw7oXoZbNQ823ase1wk2DQ3u7XK/BkzOqovwpM68Ko+jUyPFu6F8H4DvqsAuaUMZJ6+azjTPdS32KMBkLnpQ3VPnbsZgiktALW91/wDQEV5V7gT4JT6L62GRzeV0EDDC7rVFax2ZW6Aa6V5h/FEAgBlSbLrMVScU1s09+jxwG/9q87cB/Yxw3acBsk2Yw+nPf9Y1p88ARlNPtvPkF3LlPQYp8MtSx/FtpF8H4DNrZd8fOtTOxJSzXdo/c/fXAbN2DLeKs1dxHeEZZVWaju/3h18CcDk3qePZpllglDZ89MCq8nIQoDPAVaPi3iAFFwS1xjjr+HcYwD+hri216vBZzQbbZsE44RhAp+sQxfTpApGCoV1NOfsl4pX+nwC65a1uLnkK9TSuVTOhaQ4cBOzvtDcZXU5Bdl28SrF9HqrZJhwD7O/VsZpi7xSz7pXW6ahQ1/dB/RrYf2QhLBmr1lNINVRZfw9BBwArc4SszGlWWd2fxB9cFvJQYKnUUWAgV22y5v1e/ffHpiOAqMLCiOpymwNGtxvk9s8mfwcU2CiydqvJbdKuSX0K8a/KHQDsMQkyeVbtISFif8mRcfwRtF8F/l3/O+s/AQAA///lM0dZSaTeTQAAAABJRU5ErkJggg==\"\n  },\n  \"success\": true\n}"
+						}
+					]
+				},
+				{
+					"name": "Pair Phone",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "token",
+								"value": "{{token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"Phone\": \"5491155553934\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/session/pairphone",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"session",
+								"pairphone"
+							]
+						},
+						"description": "Obtém código para parear por telefone"
+					},
+					"response": [
+						{
+							"name": "Success",
+							"originalRequest": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "token",
+										"value": "{{token}}",
+										"type": "text"
+									},
+									{
+										"key": "Content-Type",
+										"value": "application/json",
+										"type": "text"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"Phone\": \"5491155553934\"\n}"
+								},
+								"url": {
+									"raw": "{{baseUrl}}/session/pairphone",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"session",
+										"pairphone"
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "Text",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n  \"code\": 200,\n  \"data\": {\n    \"LinkingCode\": \"9H3J-H3J8\"\n  },\n  \"success\": true\n}"
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "User",
+			"item": [
+				{
+					"name": "Get User Info",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "token",
+								"value": "{{token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"Phone\": [\"5521971532700\"]\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/user/info",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"user",
+								"info"
+							]
+						},
+						"description": "Obtém informações sobre usuários no WhatsApp"
+					},
+					"response": [
+						{
+							"name": "Success",
+							"originalRequest": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "token",
+										"value": "{{token}}",
+										"type": "text"
+									},
+									{
+										"key": "Content-Type",
+										"value": "application/json",
+										"type": "text"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"Phone\": [\"5491155553934\", \"5491155553935\"]\n}"
+								},
+								"url": {
+									"raw": "{{baseUrl}}/user/info",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"user",
+										"info"
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "Text",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n  \"code\": 200,\n  \"data\": {\n    \"Users\": {\n      \"5491155553935@s.whatsapp.net\": {\n        \"Devices\": [],\n        \"PictureID\": \"\",\n        \"Status\": \"\",\n        \"VerifiedName\": null\n      },\n      \"5491155553934@s.whatsapp.net\": {\n        \"Devices\": [\n          \"5491155553934.0:0@s.whatsapp.net\",\n          \"5491155955934.0:6@s.whatsapp.net\"\n        ],\n        \"PictureID\": \"1582328807\",\n        \"Status\": \"🇦🇷\",\n        \"VerifiedName\": null\n      }\n    }\n  },\n  \"success\": true\n}"
+						}
+					]
+				},
+				{
+					"name": "Check User",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "token",
+								"value": "{{token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"Phone\": [\"5521971532700\"]\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/user/check",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"user",
+								"check"
+							]
+						},
+						"description": "Verifica se números têm WhatsApp"
+					},
+					"response": [
+						{
+							"name": "Success",
+							"originalRequest": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "token",
+										"value": "{{token}}",
+										"type": "text"
+									},
+									{
+										"key": "Content-Type",
+										"value": "application/json",
+										"type": "text"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"Phone\": [\"5491155553934\", \"5491155553935\"]\n}"
+								},
+								"url": {
+									"raw": "{{baseUrl}}/user/check",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"user",
+										"check"
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "Text",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n  \"code\": 200,\n  \"data\": {\n    \"Users\": [\n      {\n        \"IsInWhatsapp\": true,\n        \"JID\": \"5491155553934@s.whatsapp.net\",\n        \"Query\": \"5491155553934\",\n        \"VerifiedName\": \"Company Name\"\n      },\n      {\n        \"IsInWhatsapp\": false,\n        \"JID\": \"5491155553935@s.whatsapp.net\",\n        \"Query\": \"5491155553935\",\n        \"VerifiedName\": \"\"\n      }\n    ]\n  },\n  \"success\": true\n}"
+						}
+					]
+				},
+				{
+					"name": "Get Avatar",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "token",
+								"value": "{{token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"Phone\": \"5491155553934\",\n  \"Preview\": true\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/user/avatar",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"user",
+								"avatar"
+							]
+						},
+						"description": "Obtém avatar de usuário"
+					},
+					"response": [
+						{
+							"name": "Success",
+							"originalRequest": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "token",
+										"value": "{{token}}",
+										"type": "text"
+									},
+									{
+										"key": "Content-Type",
+										"value": "application/json",
+										"type": "text"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"Phone\": \"5491155553934\",\n  \"Preview\": true\n}"
+								},
+								"url": {
+									"raw": "{{baseUrl}}/user/avatar",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"user",
+										"avatar"
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "Text",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n  \"URL\": \"https://pps.whatsapp.net/v/t61.24694-24/227295214_112447507729487_4643695328050510566_n.jpg?stp=dst-jpg_s96x96&ccb=11-4&oh=ja432434a91e8f41d86d341bx889c217&oe=543222A4\",\n  \"ID\": \"1645308319\",\n  \"Type\": \"preview\",\n  \"DirectPath\": \"/v/t61.24694-24/227295214_112447507729487_4643695328050510566_n.jpg?stp=dst-jpg_s96x96&ccb=11-4&oh=ja432434a91e8f41d86d341ba889c217&oe=543222A4\"\n}"
+						}
+					]
+				},
+				{
+					"name": "Get Contacts",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "token",
+								"value": "{{token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/user/contacts",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"user",
+								"contacts"
+							]
+						},
+						"description": "Obtém lista de contatos"
+					},
+					"response": [
+						{
+							"name": "Success",
+							"originalRequest": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "token",
+										"value": "{{token}}",
+										"type": "text"
+									}
+								],
+								"url": {
+									"raw": "{{baseUrl}}/user/contacts",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"user",
+										"contacts"
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "Text",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n  \"code\": 200,\n  \"data\": {\n    \"5491122223333@s.whatsapp.net\": {\n      \"BusinessName\": \"\",\n      \"FirstName\": \"\",\n      \"Found\": true,\n      \"FullName\": \"\",\n      \"PushName\": \"FOP2\"\n    },\n    \"549113334444@s.whatsapp.net\": {\n      \"BusinessName\": \"\",\n      \"FirstName\": \"\",\n      \"Found\": true,\n      \"FullName\": \"\",\n      \"PushName\": \"Asternic\"\n    }\n  }\n}"
+						}
+					]
+				},
+				{
+					"name": "Send Presence",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "token",
+								"value": "{{token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"type\": \"available\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/user/presence",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"user",
+								"presence"
+							]
+						},
+						"description": "Define presença global"
+					},
+					"response": [
+						{
+							"name": "Success",
+							"originalRequest": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "token",
+										"value": "{{token}}",
+										"type": "text"
+									},
+									{
+										"key": "Content-Type",
+										"value": "application/json",
+										"type": "text"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"type\": \"available\"\n}"
+								},
+								"url": {
+									"raw": "{{baseUrl}}/user/presence",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"user",
+										"presence"
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "Text",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n  \"code\": 200,\n  \"data\": {\n    \"Details\": \"Presence set successfuly\"\n  },\n  \"success\": true\n}"
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "Chat",
+			"item": [
+				{
+					"name": "Send Text Message",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "token",
+								"value": "{{token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"Phone\": \"5491155553935\",\n  \"Body\": \"Hello World\",\n  \"Id\": \"ABCDABCD1234\",\n  \"ContextInfo\": {\n    \"StanzaId\": \"3EB06F9067F80BAB89FF\",\n    \"Participant\": \"5491155553935@s.whatsapp.net\"\n  }\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/chat/send/text",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"chat",
+								"send",
+								"text"
+							]
+						},
+						"description": "Envia mensagem de texto"
+					},
+					"response": [
+						{
+							"name": "Success",
+							"originalRequest": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "token",
+										"value": "{{token}}",
+										"type": "text"
+									},
+									{
+										"key": "Content-Type",
+										"value": "application/json",
+										"type": "text"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"Phone\": \"5491155553935\",\n  \"Body\": \"Hello World\",\n  \"Id\": \"ABCDABCD1234\",\n  \"ContextInfo\": {\n    \"StanzaId\": \"3EB06F9067F80BAB89FF\",\n    \"Participant\": \"5491155553935@s.whatsapp.net\"\n  }\n}"
+								},
+								"url": {
+									"raw": "{{baseUrl}}/chat/send/text",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"chat",
+										"send",
+										"text"
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "Text",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n  \"code\": 200,\n  \"data\": {\n    \"Details\": \"Sent\",\n    \"Id\": \"ABCDABCD1234\",\n    \"Timestamp\": \"2022-04-20T12:49:08-03:00\"\n  },\n  \"success\": true\n}"
+						}
+					]
+				},
+				{
+					"name": "Send Image",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "token",
+								"value": "{{token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"Phone\": \"5491155553935\",\n  \"Image\": \"data:image/jpeg;base64,iVBORw0...\",\n  \"Caption\": \"Image Description\",\n  \"Id\": \"ABCDABCD1234\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/chat/send/image",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"chat",
+								"send",
+								"image"
+							]
+						},
+						"description": "Envia imagem"
+					},
+					"response": [
+						{
+							"name": "Success",
+							"originalRequest": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "token",
+										"value": "{{token}}",
+										"type": "text"
+									},
+									{
+										"key": "Content-Type",
+										"value": "application/json",
+										"type": "text"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"Phone\": \"5491155553935\",\n  \"Image\": \"data:image/jpeg;base64,iVBORw0...\",\n  \"Caption\": \"Image Description\",\n  \"Id\": \"ABCDABCD1234\"\n}"
+								},
+								"url": {
+									"raw": "{{baseUrl}}/chat/send/image",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"chat",
+										"send",
+										"image"
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "Text",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n  \"code\": 200,\n  \"data\": {\n    \"Details\": \"Sent\",\n    \"Id\": \"ABCDABCD1234\",\n    \"Timestamp\": \"2022-04-20T12:49:08-03:00\"\n  },\n  \"success\": true\n}"
+						}
+					]
+				},
+				{
+					"name": "Send Audio",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "token",
+								"value": "{{token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"Phone\": \"5491155553935\",\n  \"Audio\": \"data:audio/ogg;base64,iVBORw0a\",\n  \"Id\": \"ABCDABCD1234\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/chat/send/audio",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"chat",
+								"send",
+								"audio"
+							]
+						},
+						"description": "Envia áudio"
+					},
+					"response": [
+						{
+							"name": "Success",
+							"originalRequest": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "token",
+										"value": "{{token}}",
+										"type": "text"
+									},
+									{
+										"key": "Content-Type",
+										"value": "application/json",
+										"type": "text"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"Phone\": \"5491155553935\",\n  \"Audio\": \"data:audio/ogg;base64,iVBORw0a\",\n  \"Id\": \"ABCDABCD1234\"\n}"
+								},
+								"url": {
+									"raw": "{{baseUrl}}/chat/send/audio",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"chat",
+										"send",
+										"audio"
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "Text",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n  \"code\": 200,\n  \"data\": {\n    \"Details\": \"Sent\",\n    \"Id\": \"ABCDABCD1234\",\n    \"Timestamp\": \"2022-04-20T12:49:08-03:00\"\n  },\n  \"success\": true\n}"
+						}
+					]
+				},
+				{
+					"name": "Send Document",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "token",
+								"value": "{{token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"Phone\": \"5491155553935\",\n  \"Document\": \"data:application/octet-stream;base64,aG9sYSBxdWUKdGFsCmNvbW8KZXN0YXMK\",\n  \"FileName\": \"file.txt\",\n  \"Id\": \"ABCDABCD1234\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/chat/send/document",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"chat",
+								"send",
+								"document"
+							]
+						},
+						"description": "Envia documento"
+					},
+					"response": [
+						{
+							"name": "Success",
+							"originalRequest": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "token",
+										"value": "{{token}}",
+										"type": "text"
+									},
+									{
+										"key": "Content-Type",
+										"value": "application/json",
+										"type": "text"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"Phone\": \"5491155553935\",\n  \"Document\": \"data:application/octet-stream;base64,aG9sYSBxdWUKdGFsCmNvbW8KZXN0YXMK\",\n  \"FileName\": \"file.txt\",\n  \"Id\": \"ABCDABCD1234\"\n}"
+								},
+								"url": {
+									"raw": "{{baseUrl}}/chat/send/document",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"chat",
+										"send",
+										"document"
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "Text",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n  \"code\": 200,\n  \"data\": {\n    \"Details\": \"Sent\",\n    \"Id\": \"ABCDABCD1234\",\n    \"Timestamp\": \"2022-04-20T12:49:08-03:00\"\n  },\n  \"success\": true\n}"
+						}
+					]
+				},
+				{
+					"name": "Mark Read",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "token",
+								"value": "{{token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"Id\": [\"AABBCC11223344\", \"DDEEFF55667788\"],\n  \"Chat\": \"5491155553934.0:1@s.whatsapp.net\",\n  \"Sender\": \"5491155553111.0:1@s.whatsapp.net\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/chat/markread",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"chat",
+								"markread"
+							]
+						},
+						"description": "Marca mensagens como lidas"
+					},
+					"response": [
+						{
+							"name": "Success",
+							"originalRequest": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "token",
+										"value": "{{token}}",
+										"type": "text"
+									},
+									{
+										"key": "Content-Type",
+										"value": "application/json",
+										"type": "text"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"Id\": [\"AABBCC11223344\", \"DDEEFF55667788\"],\n  \"Chat\": \"5491155553934.0:1@s.whatsapp.net\",\n  \"Sender\": \"5491155553111.0:1@s.whatsapp.net\"\n}"
+								},
+								"url": {
+									"raw": "{{baseUrl}}/chat/markread",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"chat",
+										"markread"
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "Text",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n  \"code\": 200,\n  \"data\": {\n    \"Details\": \"Message(s) marked as read\"\n  },\n  \"success\": true\n}"
+						}
+					]
+				},
+				{
+					"name": "Chat Presence",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "token",
+								"value": "{{token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"Phone\": \"5491155554444\",\n  \"State\": \"composing\",\n  \"Media\": \"\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/chat/presence",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"chat",
+								"presence"
+							]
+						},
+						"description": "Define presença de chat (digitando/gravando)"
+					},
+					"response": [
+						{
+							"name": "Success",
+							"originalRequest": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "token",
+										"value": "{{token}}",
+										"type": "text"
+									},
+									{
+										"key": "Content-Type",
+										"value": "application/json",
+										"type": "text"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"Phone\": \"5491155554444\",\n  \"State\": \"composing\",\n  \"Media\": \"\"\n}"
+								},
+								"url": {
+									"raw": "{{baseUrl}}/chat/presence",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"chat",
+										"presence"
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "Text",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n  \"code\": 200,\n  \"data\": {\n    \"Details\": \"Chat presence set successfuly\"\n  },\n  \"success\": true\n}"
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "Group",
+			"item": [
+				{
+					"name": "List Groups",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "token",
+								"value": "{{token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/group/list",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"group",
+								"list"
+							]
+						},
+						"description": "Lista grupos do usuário"
+					},
+					"response": [
+						{
+							"name": "Success",
+							"originalRequest": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "token",
+										"value": "{{token}}",
+										"type": "text"
+									}
+								],
+								"url": {
+									"raw": "{{baseUrl}}/group/list",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"group",
+										"list"
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "Text",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n  \"code\": 200,\n  \"data\": {\n    \"Groups\": [\n      {\n        \"AnnounceVersionID\": \"1650572126123738\",\n        \"DisappearingTimer\": 0,\n        \"GroupCreated\": \"2022-04-21T17:15:26-03:00\",\n        \"IsAnnounce\": false,\n        \"IsEphemeral\": false,\n        \"IsLocked\": false,\n        \"JID\": \"120362023605733675@g.us\",\n        \"Name\": \"Super Group\",\n        \"NameSetAt\": \"2022-04-21T17:15:26-03:00\",\n        \"NameSetBy\": \"5491155554444@s.whatsapp.net\",\n        \"OwnerJID\": \"5491155554444@s.whatsapp.net\",\n        \"ParticipantVersionID\": \"1650234126145738\",\n        \"Participants\": [\n          {\n            \"IsAdmin\": true,\n            \"IsSuperAdmin\": true,\n            \"JID\": \"5491155554444@s.whatsapp.net\"\n          },\n          {\n            \"IsAdmin\": false,\n            \"IsSuperAdmin\": false,\n            \"JID\": \"5491155553333@s.whatsapp.net\"\n          },\n          {\n            \"IsAdmin\": false,\n            \"IsSuperAdmin\": false,\n            \"JID\": \"5491155552222@s.whatsapp.net\"\n          }\n        ],\n        \"Topic\": \"\",\n        \"TopicID\": \"\",\n        \"TopicSetAt\": \"0001-01-01T00:00:00Z\",\n        \"TopicSetBy\": \"\"\n      }\n    ]\n  },\n  \"success\": true\n}"
+						}
+					]
+				},
+				{
+					"name": "Get Group Info",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "token",
+								"value": "{{token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/group/info?groupJID=120362023605733675@g.us",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"group",
+								"info"
+							],
+							"query": [
+								{
+									"key": "groupJID",
+									"value": "120362023605733675@g.us"
+								}
+							]
+						},
+						"description": "Obtém informações de um grupo"
+					},
+					"response": [
+						{
+							"name": "Success",
+							"originalRequest": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "token",
+										"value": "{{token}}",
+										"type": "text"
+									}
+								],
+								"url": {
+									"raw": "{{baseUrl}}/group/info?groupJID=120362023605733675@g.us",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"group",
+										"info"
+									],
+									"query": [
+										{
+											"key": "groupJID",
+											"value": "120362023605733675@g.us"
+										}
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "Text",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n  \"code\": 200,\n  \"data\": {\n    \"AnnounceVersionID\": \"1650572126123738\",\n    \"DisappearingTimer\": 0,\n    \"GroupCreated\": \"2022-04-21T17:15:26-03:00\",\n    \"IsAnnounce\": false,\n    \"IsEphemeral\": false,\n    \"IsLocked\": false,\n    \"JID\": \"120362023605733675@g.us\",\n    \"Name\": \"Super Group\",\n    \"NameSetAt\": \"2022-04-21T17:15:26-03:00\",\n    \"NameSetBy\": \"5491155554444@s.whatsapp.net\",\n    \"OwnerJID\": \"5491155554444@s.whatsapp.net\",\n    \"ParticipantVersionID\": \"1650234126145738\",\n    \"Participants\": [\n      {\n        \"IsAdmin\": true,\n        \"IsSuperAdmin\": true,\n        \"JID\": \"5491155554444@s.whatsapp.net\"\n      },\n      {\n        \"IsAdmin\": false,\n        \"IsSuperAdmin\": false,\n        \"JID\": \"5491155553333@s.whatsapp.net\"\n      },\n      {\n        \"IsAdmin\": false,\n        \"IsSuperAdmin\": false,\n        \"JID\": \"5491155552222@s.whatsapp.net\"\n      }\n    ],\n    \"Topic\": \"\",\n    \"TopicID\": \"\",\n    \"TopicSetAt\": \"0001-01-01T00:00:00Z\",\n    \"TopicSetBy\": \"\"\n  },\n  \"success\": true\n}"
+						}
+					]
+				},
+				{
+					"name": "Get Group Invite Link",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "token",
+								"value": "{{token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/group/invitelink?groupJID=120362023605733675@g.us&reset=false",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"group",
+								"invitelink"
+							],
+							"query": [
+								{
+									"key": "groupJID",
+									"value": "120362023605733675@g.us"
+								},
+								{
+									"key": "reset",
+									"value": "false"
+								}
+							]
+						},
+						"description": "Obtém link de convite de grupo"
+					},
+					"response": [
+						{
+							"name": "Success",
+							"originalRequest": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "token",
+										"value": "{{token}}",
+										"type": "text"
+									}
+								],
+								"url": {
+									"raw": "{{baseUrl}}/group/invitelink?groupJID=120362023605733675@g.us&reset=false",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"group",
+										"invitelink"
+									],
+									"query": [
+										{
+											"key": "groupJID",
+											"value": "120362023605733675@g.us"
+										},
+										{
+											"key": "reset",
+											"value": "false"
+										}
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "Text",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n  \"code\": 200,\n  \"data\": {\n    \"InviteLink\": \"https://chat.whatsapp.com/HffXhYmzzyJGec61oqMXiz\"\n  },\n  \"success\": true\n}"
+						}
+					]
+				},
+				{
+					"name": "Set Group Name",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "token",
+								"value": "{{token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"GroupJID\": \"120362023605733675@g.us\",\n  \"Name\": \"New Group Name\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/group/name",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"group",
+								"name"
+							]
+						},
+						"description": "Altera nome do grupo"
+					},
+					"response": [
+						{
+							"name": "Success",
+							"originalRequest": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "token",
+										"value": "{{token}}",
+										"type": "text"
+									},
+									{
+										"key": "Content-Type",
+										"value": "application/json",
+										"type": "text"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"GroupJID\": \"120362023605733675@g.us\",\n  \"Name\": \"New Group Name\"\n}"
+								},
+								"url": {
+									"raw": "{{baseUrl}}/group/name",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"group",
+										"name"
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "Text",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n  \"code\": 200,\n  \"data\": {\n    \"Details\": \"Group Name set successfully\"\n  },\n  \"success\": true\n}"
+						}
+					]
+				},
+				{
+					"name": "Set Group Photo",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "token",
+								"value": "{{token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"GroupJID\": \"120362023605733675@g.us\",\n  \"Image\": \"data:image/jpeg;base64,Akd9300...\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/group/photo",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"group",
+								"photo"
+							]
+						},
+						"description": "Altera foto do grupo"
+					},
+					"response": [
+						{
+							"name": "Success",
+							"originalRequest": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "token",
+										"value": "{{token}}",
+										"type": "text"
+									},
+									{
+										"key": "Content-Type",
+										"value": "application/json",
+										"type": "text"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"GroupJID\": \"120362023605733675@g.us\",\n  \"Image\": \"data:image/jpeg;base64,Akd9300...\"\n}"
+								},
+								"url": {
+									"raw": "{{baseUrl}}/group/photo",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"group",
+										"photo"
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "Text",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n  \"code\": 200,\n  \"data\": {\n    \"Details\": \"Group Photo set successfully\",\n    \"PictureID\": \"1222332123\"\n  },\n  \"success\": true\n}"
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "Admin",
+			"item": [
+				{
+					"name": "List Users",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "{{adminToken}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/admin/users",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"admin",
+								"users"
+							]
+						},
+						"description": "Lista todos os usuários"
+					},
+					"response": [
+						{
+							"name": "Success",
+							"originalRequest": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "{{adminToken}}",
+										"type": "text"
+									}
+								],
+								"url": {
+									"raw": "{{baseUrl}}/admin/users",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"admin",
+										"users"
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "Text",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "[\n  {\n    \"id\": 1,\n    \"name\": \"John\",\n    \"token\": \"1234ABCD\",\n    \"webhook\": \"https://example.com/webhook\",\n    \"jid\": \"5491155553934@s.whatsapp.net\",\n    \"qrcode\": \"\",\n    \"connected\": true,\n    \"expiration\": 0,\n    \"events\": \"Message,ReadReceipt\"\n  },\n  {\n    \"id\": 2,\n    \"name\": \"Jane\",\n    \"token\": \"5678EFGH\",\n    \"webhook\": \"\",\n    \"jid\": \"\",\n    \"qrcode\": \"\",\n    \"connected\": false,\n    \"expiration\": 0,\n    \"events\": \"\"\n  }\n]"
+						}
+					]
+				},
+				{
+					"name": "Add User",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "{{adminToken}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"John Doe\",\n  \"token\": \"1234ABCD\",\n  \"webhook\": \"https://example.com/webhook\",\n  \"expiration\": 1672531200,\n  \"events\": \"Message,ReadReceipt\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/admin/users",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"admin",
+								"users"
+							]
+						},
+						"description": "Adiciona novo usuário"
+					},
+					"response": [
+						{
+							"name": "Success",
+							"originalRequest": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "{{adminToken}}",
+										"type": "text"
+									},
+									{
+										"key": "Content-Type",
+										"value": "application/json",
+										"type": "text"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"name\": \"John Doe\",\n  \"token\": \"1234ABCD\",\n  \"webhook\": \"https://example.com/webhook\",\n  \"expiration\": 1672531200,\n  \"events\": \"Message,ReadReceipt\"\n}"
+								},
+								"url": {
+									"raw": "{{baseUrl}}/admin/users",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"admin",
+										"users"
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "Text",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n  \"id\": 3\n}"
+						}
+					]
+				},
+				{
+					"name": "Delete User",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "{{adminToken}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/admin/users/2",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"admin",
+								"users",
+								"2"
+							]
+						},
+						"description": "Remove um usuário"
+					},
+					"response": [
+						{
+							"name": "Success",
+							"originalRequest": {
+								"method": "DELETE",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "{{adminToken}}",
+										"type": "text"
+									}
+								],
+								"url": {
+									"raw": "{{baseUrl}}/admin/users/2",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"admin",
+										"users",
+										"2"
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "Text",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n  \"Details\": \"User deleted successfully\"\n}"
+						}
+					]
+				}
+			]
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"packages": {},
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"packages": {},
+				"exec": [
+					""
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "https://meow.example.com",
+			"type": "string"
+		},
+		{
+			"key": "token",
+			"value": "{{WUZAPI_ADMIN_TOKEN}}",
+			"type": "string",
+			"description": "Token usado para autenticação de usuário normal. Na primeira execução, o sistema cria automaticamente um usuário 'admin' com o token definido na variável de ambiente WUZAPI_ADMIN_TOKEN. Configure esta variável de ambiente no Postman ou substitua pelo valor real."
+		},
+		{
+			"key": "adminToken",
+			"value": "{{WUZAPI_ADMIN_TOKEN}}",
+			"type": "string",
+			"description": "Token usado para autenticação em endpoints administrativos (rotas /admin/*). Configure a variável de ambiente WUZAPI_ADMIN_TOKEN no Postman com o mesmo valor definido no servidor, ou substitua pelo valor real do token administrativo."
+		}
+	]
+}

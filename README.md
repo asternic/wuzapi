@@ -43,6 +43,15 @@ Optional:
 
 * Docker (Containerization)
 
+## Atualização de dependências
+
+Este projeto utiliza a biblioteca whatsmeow para comunicação com o WhatsApp. Para atualizar a biblioteca para a versão mais recente, execute:
+
+```bash
+go get -u go.mau.fi/whatsmeow@latest
+go mod tidy
+```
+
 ## Building
 
 ```
@@ -61,52 +70,65 @@ you can use to alter behaviour
 * -sslcertificate : SSL Certificate File
 * -sslprivatekey : SSL Private Key File
 * -admintoken : your admin token to create, get, or delete users from database
+* --logtype=console --color=true
+* --logtype json
 
 Example:
 
+Para ter logs coloridos:
 ```
-./wuzapi -logtype json
+Depois:
 ```
+./wuzapi --logtype=console --color=true
+```
+ (ou -color no Docker, etc.)
+
+Para logs em JSON:
+Rode:
+```
+./wuzapi --logtype json Nesse caso, color é irrelevante.
+```
+
+Com fuso horário:
+Defina TZ=America/Sao_Paulo ./wuzapi ... no seu shell, ou no Docker Compose environment: TZ=America/Sao_Paulo.
 
 ## Usage
 
-In order to open up sessions, you first need to create a user and set an
-authentication token for it. You can do so by updating the SQLite _users.db_
-database:
+Na primeira execução, o sistema cria automaticamente um usuário "admin" com o token administrativo definido na variável de ambiente `WUZAPI_ADMIN_TOKEN` ou no parâmetro `-admintoken`. Este usuário pode ser usado para autenticação e para gerenciar outros usuários.
 
-``` 
-sqlite3 dbdata/users.db "insert into users ('name','token') values ('John','1234ABCD')" 
-```
+Para interagir com a API, você deve incluir o cabeçalho `Token` nas requisições HTTP, contendo o token de autenticação do usuário. Você pode ter vários usuários (diferentes números de WhatsApp) no mesmo servidor.
 
-Once you have some users created, you can talk to the API passing the **Token**
-header as a simple means of authentication. You can have several users
-(different numbers), on the same server.
+O daemon também serve alguns arquivos web estáticos, úteis para desenvolvimento/teste, que você pode acessar com seu navegador:
 
-The daemon also serves some static web files, useful for development/testing
-that you can load with your browser:
-
-* An API swagger reference in [/api](/api) A sample web page to connect and
-* scan QR codes in [/login](/login) (where you will need to pass
-?token=1234ABCD)
+* Uma referência da API Swagger em [/api](/api)
+* Uma página web de exemplo para conectar e escanear códigos QR em [/login](/login) (onde você precisará passar ?token=seu_token_aqui)
 
 ## ADMIN Actions
 
-You can also list, add and delete users using an admin enpoint. In order to
-use it you must either pass the -admintoken parameter on the command line when
-starting wuzapi, or set the enviornment variable WUZAPI\_ADMIN\_TOKEN
+Você pode listar, adicionar e excluir usuários usando os endpoints de administração. Para usar essa funcionalidade, você deve configurar o token de administrador de uma das seguintes formas:
 
-Then you can use the /admin/users endpoint to GET the list of users, you can
-POST to /admin/users to create a new user, or you can DELETE to /admin/users/{id}
-to remove one. You need to set the header Authorization and pass the token
-defined either via environment or command line.
+1. Definir a variável de ambiente `WUZAPI_ADMIN_TOKEN` antes de iniciar o aplicativo
+   ```shell
+   export WUZAPI_ADMIN_TOKEN=seu_token_seguro
+   ```
 
-The JSON body to create a new user must contain:
+2. Ou passar o parâmetro `-admintoken` na linha de comando
+   ```shell
+   ./wuzapi -admintoken=seu_token_seguro
+   ```
 
-- name [string] : User name
-- token [string] : Security token for authorizing/authenticating this user
-- webhook [string] : URL to send events via POST
-- events [string] : comma separated list of events to receive, valid events are: "Message", "ReadReceipt", "Presence", "HistorySync", "ChatPresence", "All"
-- expiration [int] : Some expiration timestamp, it is not enforced not used by the daemon
+Então você pode usar o endpoint `/admin/users` com o cabeçalho `Authorization` contendo o token para:
+- `GET /admin/users` - Listar todos os usuários
+- `POST /admin/users` - Criar um novo usuário
+- `DELETE /admin/users/{id}` - Remover um usuário
+
+O corpo JSON para criar um novo usuário deve conter:
+
+- `name` [string] : Nome do usuário
+- `token` [string] : Token de segurança para autorizar/autenticar este usuário
+- `webhook` [string] : URL para enviar eventos via POST (opcional)
+- `events` [string] : Lista de eventos separados por vírgula a serem recebidos (opcional) - Eventos válidos são: "Message", "ReadReceipt", "Presence", "HistorySync", "ChatPresence", "All"
+- `expiration` [int] : Timestamp de expiração (opcional, não é aplicado pelo sistema)
 
 ## API reference 
 

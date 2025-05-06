@@ -1,37 +1,68 @@
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link href="//cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-1BmE4kWBq78iYhFldvKuhfTAU6auU8tT94WrHftjDbrCEXSU1oBoqyl2QvZ6jIW3" crossorigin="anonymous">
-    <title>WuzAPI</title>
-  </head>
-  <body class="px-4 py-4">
-    <div class="container border rounded-3">
-      <div class="row justify-content-md-center px-4 py-5">
-        <div class="col col-md-auto">
-          <h1 class="display-5 fw-bold">Welcome to WuzAPI</h1>
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="WuzAPI - Gerenciador completo de instâncias WhatsApp">
+    <meta name="theme-color" content="#075e54">
+    <link rel="icon" href="/images/favicon.png" type="image/png">
+    <title>WuzAPI - Login Simples</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+    <link href="styles.css" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <div class="border rounded-3">
+            <div class="row justify-content-md-center px-4 py-4">
+                <div class="col col-md-auto text-center">
+                    <i class="bi bi-whatsapp display-1 mb-4"></i>
+                    <h1 class="display-5 fw-bold">Bem-vindo ao WuzAPI</h1>
+                </div>
+            </div>
+            <div class="row justify-content-md-center">
+                <div class="col-md-8 text-center mb-4">
+                    <p class="lead">
+                        Para acessar esta página, inclua seu token na URL: <code>?token=seu_token_aqui</code>
+                    </p>
+                    <p class="text-muted mb-4">
+                        Por padrão, o sistema cria um usuário "admin" com o token definido na variável de ambiente <code>WUZAPI_ADMIN_TOKEN</code>.
+                    </p>
+                    <div class="d-flex flex-column align-items-center">
+                        <a href="/dashboard" class="dashboard-button">Acessar o Gerenciador de Instâncias</a>
+                        <a href="/api" class="dashboard-button">Acessar a API</a>
+                        <a href="/" class="dashboard-button">Voltar para a Home</a>
+                    </div>
+                </div>
+            </div>
+            <div class="row justify-content-md-center">
+                <div class="col col-md-auto" id="buttonContainer" style="display:none;">
+                    <button id="connectButton" class="dashboard-button mb-3" onclick="handleConnect()" style="display:none;">Conectar WhatsApp</button>
+                    <button id="disconnectButton" class="dashboard-button mb-3" onclick="handleDisconnect()" style="display:none;">Desconectar WhatsApp</button>
+                </div>
+            </div>
+            <div class="row justify-content-md-center">
+                <div class="col col-md-auto" id="qr" style="display:none;">
+                    <div><h4>Por favor, escaneie este código QR com o WhatsApp para habilitar a API</h4></div> 
+                    <div id="qrContainer" class="text-center" style="width:275px;height:275px; border: 10px solid green; margin:auto;"></div>
+                </div>
+            </div>
+            <div class="row justify-content-md-center">
+                <div class="col col-md-auto">
+                    <div id="connectstatus" class="lead py-5"></div>
+                </div>
+            </div>
         </div>
-      </div>
-      <div class="row justify-content-md-center">
-        <div class="col col-md-auto" id="qr" style="display:none;">
-          <div><h4>Please scan this QR Code with Whatsapp in order to enable the API</h4></div> 
-          <div id="qrContainer" class="text-center" style="width:275px;height:275px; border: 10px solid green; margin:auto;"></div>
-        </div>
-      </div>
-      <div class="row justify-content-md-center">
-        <div class="col col-md-auto">
-          <div id="connectstatus" class="lead py-5"></div>
-        </div>
-      </div>
     </div>
 
-    <script src="http://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-ka7Sk0Gln4gmtz2MlQnikT1wXgYsOg+OMhuP+IlRH9sENBO0LRn5q+8nbTov4+1p" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 
     <script type="text/javascript">
 
       let baseUrl = window.location.origin;
       let scanned = false;
+      let scanInterval;
+      let qrCheckInterval;
 
       async function wait(time) {
         return new Promise(resolve => {
@@ -41,87 +72,419 @@
         });
       }
 
-      function checkStatus() {
-        console.log("checkStatus");
-        statusRequest().then((status) => {
-          if(status.success==true) {
-            if(status.data.LoggedIn === true) {
-              scanned = true;
-              document.getElementById("connectstatus").innerHTML = "Connected!";
-              clearInterval(scanInterval);
-              var imageParent = document.getElementById("qr");
-              imageParent.style.display = "none";
-            }
-          } else {
-            clearInterval(scanInterval);
-          }
-        });
+      function updateButtons(isConnected, isLoggedIn) {
+        const buttonContainer = document.getElementById("buttonContainer");
+        const connectButton = document.getElementById("connectButton");
+        const disconnectButton = document.getElementById("disconnectButton");
+
+        buttonContainer.style.display = "block";
+        
+        if (isLoggedIn) {
+            connectButton.style.display = "none";
+            disconnectButton.style.display = "block";
+            document.getElementById("connectstatus").innerHTML = "Conectado ao WhatsApp!";
+        } else if (isConnected) {
+            connectButton.style.display = "none";
+            disconnectButton.style.display = "block";
+            document.getElementById("connectstatus").innerHTML = "Conectado ao servidor. Aguardando escaneamento do QR code.";
+        } else {
+            connectButton.style.display = "block";
+            disconnectButton.style.display = "none";
+            document.getElementById("connectstatus").innerHTML = "Desconectado. Clique em Conectar para iniciar.";
+        }
       }
 
-      async function showQr() {
-        clearInterval(scanInterval);
-        scanInterval = setInterval(checkStatus, 1000);
-        console.log("showQr");
-        while (!scanned) {
-          console.log("not scanned");
-          var qrData = await getQr();
-          if(qrData.success==true) {
-            var qrString = qrData.data.QRCode;
+      async function resetSession() {
+        console.log("[DEBUG] Iniciando reset da sessão");
+        try {
+          // Verificar status atual
+          const statusResult = await statusRequest();
+          console.log("[DEBUG] Status antes do reset:", statusResult);
+          
+          // 1. Logout (apenas se estiver logado)
+          if (statusResult.data && statusResult.data.LoggedIn) {
+            console.log("[DEBUG] Fazendo logout...");
+            try {
+              const logoutRes = await fetch(baseUrl + "/session/logout", {
+                method: "POST",
+                headers: { token }
+              });
+              const logoutData = await logoutRes.json();
+              console.log("[DEBUG] Resposta do logout:", logoutData);
+            } catch (logoutErr) {
+              console.warn("[WARN] Erro no logout (continuando):", logoutErr);
+            }
+            await wait(1000);
+          } else {
+            console.log("[DEBUG] Pulando logout - não está logado");
+          }
+      
+          // 2. Disconnect (apenas se estiver conectado)
+          if (statusResult.data && statusResult.data.Connected) {
+            console.log("[DEBUG] Desconectando...");
+            try {
+              const disconnectRes = await fetch(baseUrl + "/session/disconnect", {
+                method: "POST",
+                headers: { token }
+              });
+              const disconnectData = await disconnectRes.json();
+              console.log("[DEBUG] Resposta da desconexão:", disconnectData);
+            } catch (disconnectErr) {
+              console.warn("[WARN] Erro na desconexão (continuando):", disconnectErr);
+            }
+            await wait(1000);
+          } else {
+            console.log("[DEBUG] Pulando disconnect - não está conectado");
+          }
+      
+          // 3. Connect (sempre tentamos conectar)
+          console.log("[DEBUG] Conectando...");
+          try {
+            const connectRes = await fetch(baseUrl + "/session/connect", {
+              method: "POST",
+              headers: {
+                token,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                Subscribe: ["All"],
+                Immediate: true
+              })
+            });
+            const connectData = await connectRes.json();
+            console.log("[DEBUG] Resposta da conexão:", connectData);
+          } catch (connectErr) {
+            console.warn("[WARN] Erro na conexão:", connectErr);
+            // Se falhar a conexão, podemos tentar continuar
+          }
+          await wait(2000);
+      
+          return true;
+        } catch (error) {
+          console.error("[ERROR] Erro ao resetar sessão:", error);
+          return false;
+        }
+      }
+
+      async function refreshQrCode() {
+        console.log("[DEBUG] Atualizando QR code");
+        
+        try {
+          // 1. Garantir uma conexão ativa
+          console.log("[DEBUG] Garantindo conexão antes de solicitar QR code...");
+          try {
+            const connectRes = await fetch(baseUrl + "/session/connect", {
+              method: "POST",
+              headers: {
+                token,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                Subscribe: ["All"],
+                Immediate: true
+              })
+            });
+            const connectData = await connectRes.json();
+            console.log("[DEBUG] Resposta da conexão:", connectData);
+            
+            // Mesmo com erro, continuamos para tentar obter o QR
+            if (connectData.error) {
+              console.warn("[WARN] Aviso na conexão (continuando):", connectData.error);
+            }
+          } catch (connectErr) {
+            console.warn("[WARN] Erro ao conectar (continuando):", connectErr);
+          }
+          
+          // Aguardar um pouco para garantir que a conexão esteja estabelecida
+          await wait(1000);
+          
+          // 2. Solicitar QR code
+          console.log("[DEBUG] Solicitando novo QR code");
+          const qrRes = await fetch(baseUrl + "/session/qr", {
+            method: "GET",
+            headers: { token }
+          });
+          const qrData = await qrRes.json();
+          console.log("[DEBUG] Resposta do QR code:", qrData);
+          
+          // Verificar se o QR code está na raiz ou dentro de data
+          const qrCode = qrData.QRCode || (qrData.data && qrData.data.QRCode);
+          
+          if (qrCode) {
+            console.log("[DEBUG] QR code recebido com sucesso");
             var image = document.createElement("img");
             var imageParent = document.getElementById("qr");
             var imageContainer = document.getElementById("qrContainer");
             imageParent.style.display = "block";
             image.id = "qrcode";
-            image.src = qrString;
+            image.src = qrCode;
             imageContainer.innerHTML = "";
             imageContainer.appendChild(image);
-			if(qrData.data.QRCode != "") {
-              await wait(15 * 1000);
-            }
+            document.getElementById("connectstatus").innerHTML = "Novo QR code gerado. Por favor, escaneie.";
+            return true;
           } else {
+            console.log("[DEBUG] QR code vazio ou inválido, tentando reset completo");
+            
+            // Se o QR code estiver vazio, tente um reset completo
+            const resetSuccess = await resetSession();
+            if (resetSuccess) {
+              // Tentar obter QR code novamente após reset
+              await wait(1000);
+              const retryQrRes = await fetch(baseUrl + "/session/qr", {
+                method: "GET",
+                headers: { token }
+              });
+              const retryQrData = await retryQrRes.json();
+              console.log("[DEBUG] Resposta do QR code após reset:", retryQrData);
+              
+              const retryQrCode = retryQrData.QRCode || (retryQrData.data && retryQrData.data.QRCode);
+              if (retryQrCode) {
+                console.log("[DEBUG] QR code recebido com sucesso após reset");
+                var image = document.createElement("img");
+                var imageParent = document.getElementById("qr");
+                var imageContainer = document.getElementById("qrContainer");
+                imageParent.style.display = "block";
+                image.id = "qrcode";
+                image.src = retryQrCode;
+                imageContainer.innerHTML = "";
+                imageContainer.appendChild(image);
+                document.getElementById("connectstatus").innerHTML = "Novo QR code gerado. Por favor, escaneie.";
+                return true;
+              }
+            }
+            
+            document.getElementById("connectstatus").innerHTML = "Erro ao gerar QR code. Tentando novamente em breve...";
+            return false;
+          }
+        } catch (error) {
+          console.error("[ERROR] Erro ao obter QR code:", error);
+          document.getElementById("connectstatus").innerHTML = "Erro ao obter QR code: " + error.message;
+          return false;
+        }
+      }
+
+      async function showQr() {
+        console.log("[DEBUG] Iniciando exibição do QR code");
+        document.getElementById("connectstatus").innerHTML = "Aguardando QR code...";
+        
+        // Limpar intervalos existentes
+        if (scanInterval) {
+          console.log("[DEBUG] Limpando intervalo de verificação anterior");
+          clearInterval(scanInterval);
+        }
+        if (qrCheckInterval) {
+          console.log("[DEBUG] Limpando intervalo de QR anterior");
+          clearInterval(qrCheckInterval);
+        }
+        
+        // Verificar status periodicamente
+        console.log("[DEBUG] Configurando verificação periódica de status");
+        scanInterval = setInterval(checkStatus, 3000);
+        
+        // Atualizar QR code a cada 40 segundos
+        console.log("[DEBUG] Configurando atualização periódica do QR code (40s)");
+        qrCheckInterval = setInterval(refreshQrCode, 40000);
+        
+        // Primeira verificação imediata
+        console.log("[DEBUG] Realizando primeira verificação do QR code");
+        await refreshQrCode();
+      }
+
+      function checkStatus() {
+        console.log("[DEBUG] Verificando status...");
+        statusRequest().then((status) => {
+          console.log("[DEBUG] Status recebido:", status);
+          
+          if (!status.success) {
+            console.error("[ERROR] Erro ao verificar status:", status.error);
+            return;
+          }
+          
+          const isConnected = status.data.Connected;
+          const isLoggedIn = status.data.LoggedIn;
+          
+          console.log("[DEBUG] Status processado - Conectado:", isConnected, "Logado:", isLoggedIn);
+          updateButtons(isConnected, isLoggedIn);
+          
+          if (isLoggedIn) {
             scanned = true;
+            document.getElementById("connectstatus").innerHTML = "Conectado ao WhatsApp!";
             clearInterval(scanInterval);
-            document.getElementById("connectstatus").innerHTML = "Timeout! Please refresh the page when you are ready to scan the QR code";
+            if (qrCheckInterval) clearInterval(qrCheckInterval);
             var imageParent = document.getElementById("qr");
             imageParent.style.display = "none";
+          } else if (isConnected && !scanned) {
+            console.log("[DEBUG] Conectado mas não logado, mantendo QR code");
+          } else if (!isConnected) {
+            console.log("[DEBUG] Não conectado, tentando reconectar");
+            // Tentar reconectar automaticamente
+            connect().then(connectResult => {
+              console.log("[DEBUG] Tentativa de reconexão:", connectResult);
+              if (connectResult.success || connectResult.code == 500) {
+                // Mesmo com erro 500 (Already Connected), tentamos atualizar o QR
+                refreshQrCode();
+              }
+            });
           }
+        });
+      }
+
+      async function handleConnect() {
+        console.log("[DEBUG] Botão de conectar clicado");
+        document.getElementById("connectstatus").innerHTML = "Iniciando conexão...";
+        
+        try {
+          // Sempre tentar conectar primeiro
+          console.log("[DEBUG] Tentando conectar...");
+          const connectRes = await fetch(baseUrl + "/session/connect", {
+            method: "POST",
+            headers: {
+              token,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              Subscribe: ["All"],
+              Immediate: true
+            })
+          });
+          const connectData = await connectRes.json();
+          console.log("[DEBUG] Resposta da conexão:", connectData);
+          
+          // Mesmo com erro (pode ser "Already Connected"), continuamos
+          
+          // Aguardar um pouco e mostrar QR
+          await wait(1000);
+          showQr();
+        } catch (error) {
+          console.error("[ERROR] Erro ao conectar:", error);
+          document.getElementById("connectstatus").innerHTML = "Erro ao conectar: " + error.message;
+        }
+      }
+
+      async function handleDisconnect() {
+        console.log("[DEBUG] Botão de desconectar clicado");
+        document.getElementById("connectstatus").innerHTML = "Desconectando...";
+        
+        try {
+          // 1. Logout primeiro
+          console.log("[DEBUG] Fazendo logout...");
+          try {
+            const logoutRes = await fetch(baseUrl + "/session/logout", {
+              method: "POST",
+              headers: { token }
+            });
+            const logoutData = await logoutRes.json();
+            console.log("[DEBUG] Resposta do logout:", logoutData);
+          } catch (logoutErr) {
+            console.warn("[WARN] Erro no logout (continuando):", logoutErr);
+          }
+          
+          // 2. Disconnect
+          console.log("[DEBUG] Desconectando...");
+          const disconnectRes = await fetch(baseUrl + "/session/disconnect", {
+            method: "POST",
+            headers: { token }
+          });
+          const disconnectData = await disconnectRes.json();
+          console.log("[DEBUG] Resposta do disconnect:", disconnectData);
+          
+          document.getElementById("connectstatus").innerHTML = "Desconectado com sucesso";
+          scanned = false;
+          var imageParent = document.getElementById("qr");
+          imageParent.style.display = "none";
+          
+          // Atualizar botões
+          updateButtons(false, false);
+          
+          // Limpar intervalos
+          if (scanInterval) clearInterval(scanInterval);
+          if (qrCheckInterval) clearInterval(qrCheckInterval);
+        } catch (error) {
+          console.error("[ERROR] Erro ao desconectar:", error);
+          document.getElementById("connectstatus").innerHTML = "Erro ao desconectar: " + error.message;
         }
       }
 
       async function connect() {
-        console.log("Connecting...");
-        const myHeaders = new Headers();
-        myHeaders.append('token', token);
-        myHeaders.append('Content-Type', 'application/json');
-        res = await fetch(baseUrl + "/session/connect", {
-          method: "POST",
-          headers: myHeaders,
-          body: JSON.stringify({Events: 'All', Immediate: true})
-        });
-        data = await res.json();
-        return data;
+        console.log("[DEBUG] Iniciando conexão com token:", token);
+        try {
+          console.log("[DEBUG] Enviando requisição de conexão...");
+          const res = await fetch(baseUrl + "/session/connect", {
+            method: "POST",
+            headers: {
+              token,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              Subscribe: ["All"],
+              Immediate: true
+            })
+          });
+          const data = await res.json();
+          console.log("[DEBUG] Resposta da conexão (raw):", data);
+          
+          // Formatar resposta
+          if (data.code === 500 && data.error === "Already Connected") {
+            // Se já estiver conectado, considerar sucesso
+            return { success: true, alreadyConnected: true };
+          }
+          
+          return data;
+        } catch (error) {
+          console.error("[ERROR] Erro ao conectar:", error);
+          return { success: false, error: error.message };
+        }
       }
 
       async function getQr() {
+        console.log("[DEBUG] Solicitando QR code para token:", token);
         const myHeaders = new Headers();
         myHeaders.append('token', token);
-        res = await fetch(baseUrl + "/session/qr", {
-          method: "GET",
-          headers: myHeaders,
-        });
-        data = await res.json();
-        return data;
+        try {
+          const res = await fetch(baseUrl + "/session/qr", {
+            method: "GET",
+            headers: myHeaders,
+          });
+          const data = await res.json();
+          console.log("[DEBUG] Resposta do QR code (raw):", data);
+          
+          // Formatar a resposta para o formato esperado
+          return {
+            success: true,
+            data: {
+              QRCode: data.QRCode || null
+            }
+          };
+        } catch (error) {
+          console.error("[ERROR] Erro ao obter QR code:", error);
+          return { success: false, error: error.message };
+        }
       }
 
       async function statusRequest() {
+        console.log("[DEBUG] Verificando status para token:", token);
         const myHeaders = new Headers();
         myHeaders.append('token', token);
-        res = await fetch(baseUrl + "/session/status", {
-          method: "GET",
-          headers: myHeaders,
-        });
-        data = await res.json();
-        return data;
+        try {
+          const res = await fetch(baseUrl + "/session/status", {
+            method: "GET",
+            headers: myHeaders,
+          });
+          const data = await res.json();
+          console.log("[DEBUG] Resposta do status (raw):", data);
+          
+          // Formatar a resposta para o formato esperado
+          return {
+            success: true,
+            data: {
+              Connected: data.Connected || false,
+              LoggedIn: data.LoggedIn || false
+            }
+          };
+        } catch (error) {
+          console.error("[ERROR] Erro ao verificar status:", error);
+          return { success: false, error: error.message };
+        }
       }
 
       function parseURLParams(url) {
@@ -142,10 +505,10 @@
         return parms;
       }
 
-      // Starting
+      // Inicialização
+      console.log("[DEBUG] Página de login inicializada");
       let notoken=0;
       let token="";
-      let scanInterval;
       let param = parseURLParams(window.location.href);
 
       if(param!=undefined) {
@@ -157,48 +520,41 @@
       }
 
       if(notoken==1) {
-        document.getElementById("connectstatus").innerHTML = "No auth token specified";
+        console.log("[DEBUG] Token não especificado");
+        document.getElementById("connectstatus").innerHTML = "Token de autenticação não especificado";
       } else {
-
         token = param["token"][0];
-
+        console.log("[DEBUG] Token encontrado:", token);
+        document.getElementById("connectstatus").innerHTML = "Verificando status...";
+        
         statusRequest().then((status) => {
-          if(status.success==true) {
-              if(status.data.LoggedIn === false) {
-                  if(status.data.Connected === true) {
-                      showQr();
-                  } else {
-                      console.log("Not connected, attempting to connect.");
-                      connect().then((data) => {console.log("promise connect 1"); console.log(data);});
-                  }
-              } else {
-                  if(status.data.Connected === false) {
-                      connect().then((data) => {console.log("promise connect 2"); console.log(data);});
-                  }
-                  document.getElementById("connectstatus").innerHTML = "Connected!";
-                  scanned = true;
-                  var imageParent = document.getElementById("qr");
-                  imageParent.style.display = "none";
-              }
-          } else if(status.success==false) {
-              if(status.error=="No session") {
-                  connect().then((data) => {
-                      if(data.success==true) {
-                          showQr();
-                      } else {
-                          document.getElementById("connectstatus").innerHTML = "Could not connect";
-                      }
-                  });
-              } else if(status.error=="Unauthorized") {
-                  document.getElementById("connectstatus").innerHTML = `Bad Authentication`;
-              }
-          } else {
-              document.getElementById("connectstatus").innerHTML = `Bad Authentication ${status.Status}`;
+          console.log("[DEBUG] Status inicial:", status);
+          
+          if (!status.success) {
+            console.error("[ERROR] Erro ao verificar status:", status.error);
+            document.getElementById("connectstatus").innerHTML = "Erro ao verificar status: " + status.error;
+            return;
           }
-          return;
+          
+          const isConnected = status.data.Connected;
+          const isLoggedIn = status.data.LoggedIn;
+          
+          console.log("[DEBUG] Status processado - Conectado:", isConnected, "Logado:", isLoggedIn);
+          
+          if (isLoggedIn) {
+            console.log("[DEBUG] Já logado");
+            updateButtons(true, true);
+            document.getElementById("connectstatus").innerHTML = "Conectado ao WhatsApp!";
+          } else if (isConnected) {
+            console.log("[DEBUG] Conectado mas não logado, iniciando QR");
+            showQr();
+          } else {
+            console.log("[DEBUG] Desconectado");
+            updateButtons(false, false);
+            document.getElementById("connectstatus").innerHTML = "Desconectado. Clique em Conectar para iniciar.";
+          }
         });
-    }  
-
+      }
     </script>
-  </body>
+</body>
 </html>

@@ -1,7 +1,7 @@
 openapi: 3.0.0
 info:
   title: WUZAPI
-  description: "WUZAPI implements a REST API for WhatsApp.\n\nFor authentication you must pass the 'token' header with a token that will be matched with the 'users' table on sqlite dbdata/users.db database).\n\nYou can insert a sample user with this command:\n\n<pre>sqlite3 settings.db \"insert into users ('name','token') values ('John','1234ABCD')\"</pre>\n\nYou will need to scan the QR code using your own front end or you could use the provided one [here](/login?token=1234ABCD).\n\nTo receive messages you will need to create your own server and set its URL as hook using the [webhook](#Webhook) API call.\n\n <b>PS:</b> Phone numbers should have country code with or without the <b>+</b> sign eg: <b>5491155553934</b> or <b>+5491155553934</b>, but natively whatsapp requires no plus sign prefix."
+  description: "WUZAPI implements a REST API for WhatsApp.\n\nHá dois métodos de autenticação:\n\n1. **Para usuários normais**: Use o cabeçalho 'token' que será correspondido com a tabela 'users' no banco de dados.\n\n2. **Para administradores**: Use o cabeçalho 'Authorization' com o token administrativo para acessar rotas protegidas de administração.\n\nA API cria automaticamente um usuário administrador com o nome 'admin' e o token definido na variável de ambiente WUZAPI_ADMIN_TOKEN.\n\nVocê também pode inserir um usuário adicional com este comando:\n\n<pre>psql -h '$DB_HOST' -p '$DB_PORT' -U '$DB_USER' -d '$DB_NAME' -c 'INSERT INTO users (name, token) VALUES ('usuario2','seu_token_aqui');\"</pre>\n\nVocê precisará escanear o código QR usando seu próprio front-end ou poderá usar o fornecido [aqui](/login?token=seu_token_aqui).\n\nPara receber mensagens, você precisará criar seu próprio servidor e definir sua URL como hook usando a chamada de API [webhook](#Webhook).\n\n <b>PS:</b> Números de telefone devem ter código de país com ou sem o sinal <b>+</b>, por exemplo: <b>5491155553934</b> ou <b>+5491155553934</b>, mas nativamente o WhatsApp requer prefixo sem sinal de adição."
   version: '3.0'
   termsOfService: ''
    
@@ -9,40 +9,187 @@ schemes:
   - http
 
 paths:
-  /webhook:
+  /admin/users:
     get:
       tags:
-        - Webhook
-      summary: Shows webhook 
-      description: Gets the configured webhook and subscribed events 
+        - Admin
+      summary: List users
+      description: Retrieve a list of users from the database.
+      security:
+        - AdminAuth: []
       responses:
         200:
-          description: Response
+          description: A JSON array of user objects
           content:
             application/json:
               schema:
-                example: { "code": 200, "data": { "subscribe": [ "Message" ], "webhook": "https://example.net/webhook" }, "success": true }
+                example: 
+                  code: 200
+                  data: 
+                    - id: 1
+                      name: John Doe
+                    - id: 2
+                      name: Jane Doe
+                  success: true
     post:
       tags:
-        - Webhook
-      summary: Sets webhook 
-      description: Sets the webhook that will be used to POST information when messages are received
-      consumes:
-        - application/json
+        - Admin
+      summary: Add a new user
+      description: Add a new user to the database.
+      security:
+        - AdminAuth: []
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#definitions/Webhook'
+              $ref: '#/definitions/CreateUser'
+      responses:
+        201:
+          description: User created
+          content:
+            application/json:
+              schema:
+                example: 
+                  code: 201
+                  data:
+                    id: 1
+                    name: John Doe
+                  success: true
 
+  /admin/users/{id}:
+    delete:
+      tags:
+        - Admin
+      summary: Delete a user
+      description: Deletes a user by their ID.
+      security:
+        - AdminAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ID of the user to delete
+          schema:
+            type: integer
+            example: 1
+      responses:
+        204:
+          description: User deleted
+          content:
+            application/json:
+              schema:
+                example: 
+                  code: 204
+                  success: true
+
+  /webhook:
+    get:
+      tags:
+        - Webhook
+      summary: Shows webhook 
+      description: |
+        Gets the configured webhook and subscribed events.
+
+        ## Webhook
+
+        The following _webhook_ endpoints are used to get or set the webhook that will be called whenever a message or event is received. Available event types are:
+
+        * Message
+        * ReadReceipt
+        * Presence
+        * HistorySync
+        * ChatPresence
+        * All (subscribes to all event types)
+      security:
+        - ApiKeyAuth: []
       responses:
         200:
           description: Response
           content:
             application/json:
               schema:
-                example: { "code": 200, "data": { "webhook": "https://example.net/webhook" }, "success": true }
+                example: { "code": 200, "data": { "subscribe": [ "Message", "ReadReceipt" ], "webhook": "https://example.net/webhook" }, "success": true }
+
+    post:
+      tags:
+        - Webhook
+      summary: Sets webhook 
+      description: |
+        Sets the webhook that will be used to POST information when messages are received and configures the events to subscribe to.
+
+        ## Webhook
+
+        The following _webhook_ endpoints are used to get or set the webhook that will be called whenever a message or event is received. Available event types are:
+
+        * Message
+        * ReadReceipt
+        * Presence
+        * HistorySync
+        * ChatPresence
+        * All (subscribes to all event types)
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/definitions/WebhookSet'
+      responses:
+        200:
+          description: Response
+          content:
+            application/json:
+              schema:
+                example: { "code": 200, "data": { "webhook": "https://example.net/webhook", "events": ["Message", "ReadReceipt"] }, "success": true }
+    delete:
+      tags:
+        - Webhook
+      summary: Deletes webhook 
+      description: Removes the configured webhook and clears events for the user
+      security:
+        - ApiKeyAuth: []
+      responses:
+        200:
+          description: Response
+          content:
+            application/json:
+              schema:
+                example: { "code": 200, "data": { "Details": "Webhook and events deleted successfully" }, "success": true }
+  /webhook/update:
+    put:
+      tags:
+        - Webhook
+      summary: Updates webhook
+      description: |
+        Updates the webhook URL, events, and activation status.
+
+        ## Webhook
+
+        The following _webhook_ endpoints are used to get or set the webhook that will be called whenever a message or event is received. Available event types are:
+
+        * Message
+        * ReadReceipt
+        * Presence
+        * HistorySync
+        * ChatPresence
+        * All (subscribes to all event types)
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/definitions/WebhookUpdate'
+      responses:
+        200:
+          description: Response
+          content:
+            application/json:
+              schema:
+                example: { "code": 200, "data": { "webhook": "https://example.net/webhook", "events": ["Message", "ReadReceipt"], "active": true }, "success": true }
 
   /session/connect:
     post:
@@ -50,7 +197,8 @@ paths:
         - Session 
       summary: connects to WhatsApp servers
       description: "Initiates connection to WhatsApp servers.\n\nIf there is no previous session created, it will generate a QR code that can be retrieved via the [qr](#/Session/get_session_qr) API call.\n\nIf the optional Subscribe is supplied it will limit webhooks to the specified event types: Message,ReadReceipt,Presence,HistorySync,ChatPresence.\n\nIf no Subscribe is supplied it will subscribe to All events.\n\nIf Immediate is set to false, the action will wait for 10 seconds to retrieve actual connection status from whatsapp, otherwise it will return immediatly.\n\nWhen setting Immediate to true you should check for actual connection status after a few seconds via the [status](#/Session/get_session_status) API call as your connection might fail if the session was closed from another device."
-
+      security:
+        - ApiKeyAuth: []
       requestBody:
         required: true
         content:
@@ -72,6 +220,8 @@ paths:
         - Session 
       summary: disconnects from WhatsApp servers
       description: Closes connection to WhatsApp servers. Session is not terminated, that means that calling connect again will reuse the previous session avoiding QR code scanning 
+      security:
+        - ApiKeyAuth: []
       responses:
         200:
           description: Response
@@ -85,6 +235,8 @@ paths:
         - Session 
       summary: Logs out from WhatsApp 
       description: Closes connection to WhatsApp servers and terminate session. That means that next time connect is issued, QR scan will be needed from phone to connect again
+      security:
+        - ApiKeyAuth: []
       responses:
         200:
           description: Response
@@ -98,6 +250,8 @@ paths:
         - Session 
       summary: Gets connection and session status
       description: Gets status from connection, including websocket connection and logged in status (session)
+      security:
+        - ApiKeyAuth: []
       responses:
         200:
           description: Response
@@ -111,6 +265,8 @@ paths:
         - Session
       summary: Gets pair by phone code
       description: Gets the code to enter into whatsapp client when pairing by phone number instead of QR code
+      security:
+        - ApiKeyAuth: []
       requestBody:
         required: true
         content:
@@ -130,6 +286,8 @@ paths:
         - Session 
       summary: Gets QR code for scanning
       description: Gets QR code if the user is connected but not logged in. If the user is already logged in, QRCode will be empty.
+      security:
+        - ApiKeyAuth: []
       responses:
         200:
           description: Response
@@ -137,12 +295,58 @@ paths:
             application/json:
               schema:
                 example: { "code": 200, "data": { "QRCode": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAQAAAAEAAQMAAABmvDolAAAABlBMVEX///8AAABVwtN+AAAEw0lEQVR42uyZPa7zqhaGX0ThLmsCkZlGCktMKaU76FxmSkgUmQZWJkA6CuT3avlLvrNvvRMX9x6KXWQ/UhCsn2cR/Lv+v5YhudQ6njEs1bBjqGYDwlJJpoOAArtUbK4Pi5jN3qPAlCkstcAeBazMUaoj78RpxGW4yWYzWVfmzwFLlLX4O+VkkucN5tFDOxiIAvfoA/X4uVQ4sgUcCBTYCG7AEGGKvbdrBabQ8OOyvg3ovm4ynqfLXJ9rvi+303ie5vm/gvZXgK6BLC7fo5hiG4KwW7b6I/2+DJi1+ybVFQyx6o6bbKPVDCyjTwcBZB9uevBtAEafhiosCFH/4kNA8i1gg02B3KxezGbzEjUCDgIwYppR3SNdgtY3H0M1j8xFzCscvg/8uQvZAB9piidv1RXfZhbHdAwAlzsCNCaJDdMF4WQeeSGACZ8BMNl4FZYJA7j2YalPPhhngetHAaZPcyBg2wyYdAk0fKQ5yPja5PcBzTZW4uxJ2bTGwmxnu/BH4vwSgEsYItcCH+VZJt/AYhmHatbXdX8d2JvaTVzxCVW2aVhqheXSqvnR9b4L6AoUx3zX+jZd5rDB5jbLuv0txd8GRs+liuv+TsKloQWujxxRYf5s8gOA7fMVK9PQuDtMNCx2ibIdCMCy1s0yQU6Od9bqim1BuzoOAgzTHOiKv0d5Mt+XClN8DBxN/wxg2G2DbDYNJExCqE+Ne8poXoLxdUA/w5VrnxBQ9fjlqaJMwWgPAzLjtfKRW4A21ojnStX0dX2d5PeB0fawu2pChcuM4bk+tLmbMn0GMJslb5ptDXySbb5W1+0SyVcJOgRIQxSc7X0RUSvGs2DSeaz4gwCMNi/7XNACZc0KbPBtruv2KQA+DVFladBvt4xywhmh1Xd2fx8wzGTUltqCWrHWgqL7Jg8E0hSiFJfbUJ/Fpx3L1OHsVR8+APgoZMclUKvcft2+zTBrwjHArosim4ZcfW4Y4lVWnYXg2A8C9C5aEFXDoEJzmXFyfZoH/p0Wvw7oXoZbNQ823ase1wk2DQ3u7XK/BkzOqovwpM68Ko+jUyPFu6F8H4DvqsAuaUMZJ6+azjTPdS32KMBkLnpQ3VPnbsZgiktALW91/wDQEV5V7gT4JT6L62GRzeV0EDDC7rVFax2ZW6Aa6V5h/FEAgBlSbLrMVScU1s09+jxwG/9q87cB/Yxw3acBsk2Yw+nPf9Y1p88ARlNPtvPkF3LlPQYp8MtSx/FtpF8H4DNrZd8fOtTOxJSzXdo/c/fXAbN2DLeKs1dxHeEZZVWaju/3h18CcDk3qePZpllglDZ89MCq8nIQoDPAVaPi3iAFFwS1xjjr+HcYwD+hri216vBZzQbbZsE44RhAp+sQxfTpApGCoV1NOfsl4pX+nwC65a1uLnkK9TSuVTOhaQ4cBOzvtDcZXU5Bdl28SrF9HqrZJhwD7O/VsZpi7xSz7pXW6ahQ1/dB/RrYf2QhLBmr1lNINVRZfw9BBwArc4SszGlWWd2fxB9cFvJQYKnUUWAgV22y5v1e/ffHpiOAqMLCiOpymwNGtxvk9s8mfwcU2CiydqvJbdKuSX0K8a/KHQDsMQkyeVbtISFif8mRcfwRtF8F/l3/O+s/AQAA///lM0dZSaTeTQAAAABJRU5ErkJggg==" }, "success": true }
+  /session/proxy:
+    post:
+      tags:
+        - Session
+      summary: Set Proxy Configuration
+      description: |
+        Sets or disables the proxy configuration for the user.
+        Provide a JSON payload with "proxy_url" (e.g. "http://host:port" or "socks5://user:pass@host:port") and "enable" (boolean).
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                proxy_url:
+                  type: string
+                  description: Proxy URL in format "http://host:port" or "socks5://user:pass@host:port"
+                enable:
+                  type: boolean
+                  description: Whether to enable or disable the proxy.
+              required:
+                - proxy_url
+                - enable
+      responses:
+        "200":
+          description: Proxy configured successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  Details:
+                    type: string
+                    example: Proxy configured successfully
+                  ProxyURL:
+                    type: string
+                    example: socks5://user:pass@host:port
+        "400":
+          description: Bad Request
+        "500":
+          description: Internal Server Error
   /user/info:
     post:
       tags:
         - User
       summary: Gets information about users on WhatsApp
       description: Gets extra information about users on WhatsApp
+      security:
+        - ApiKeyAuth: []
       requestBody:
         required: true
         content:
@@ -164,6 +368,8 @@ paths:
         - User
       summary: Checks if user has WhatsApp
       description: Checks if users have an account with WhatsApp
+      security:
+        - ApiKeyAuth: []
       requestBody:
         required: true
         content:
@@ -179,6 +385,34 @@ paths:
             application/json:
               schema:
                 example: { "code": 200, "data": { "Users": [ { "IsInWhatsapp": true, "JID": "5491155553934@s.whatsapp.net", "Query": "5491155553934", "VerifiedName": "Company Name" }, { "IsInWhatsapp": false, "JID": "5491155553935@s.whatsapp.net", "Query": "5491155553935", "VerifiedName": "" } ] }, "success": true }
+  /user/presence:
+    post:
+      tags:
+        - User
+      summary: Send user global presence
+      description: Sends user presence Available or Unavailable
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#definitions/UserPresence'
+
+      responses:
+        200:
+          description: Response
+          content:
+            application/json:
+              schema:
+                example: {"code": 200, "data": {"Details": "Presence set successfuly"}, "success": true}
+        400:
+          description: Response
+          content:
+            application/json:
+              schema:
+                example: {"code": 400,"error": "Invalid presence type. Allowed values: 'available', 'unavailable'","success": false}
 
   /user/avatar:
     post:
@@ -186,6 +420,8 @@ paths:
         - User
       summary: Gets profile picture information
       description: Gets information about users profile pictures on WhatsApp, either a thumbnail (Preview=true) or full picture.
+      security:
+        - ApiKeyAuth: []
       requestBody:
         required: true
         content:
@@ -207,7 +443,8 @@ paths:
         - User
       summary: Gets all contacts for the account
       description: Gets complete list of contacts for the connected account
-
+      security:
+        - ApiKeyAuth: []
       responses:
         200:
           description: Response
@@ -221,6 +458,8 @@ paths:
         - Chat 
       summary: Marks a message as read
       description: Marks one or more received messages as read
+      security:
+        - ApiKeyAuth: []
       requestBody:
         required: true
         content:
@@ -241,6 +480,8 @@ paths:
         - Chat 
       summary: Reacts to a message
       description: Sends a reaction to some message. Phone, Body and Id are mandatory. If reaction is for your own message, prefix Phone with 'me:'. Body should be the reaction emoji.
+      security:
+        - ApiKeyAuth: []
       requestBody:
         required: true
         content:
@@ -262,6 +503,8 @@ paths:
         - Chat 
       summary: Sends a text message
       description: Sends a text message. Phone and Body are mandatory. If no Id is supplied, a random one will be generated. ContextInfo is optional and used when repyling to some message. StanzaId is the message id we are replying to and participant who wrote that message. If sending a new message, ContextInfo can be ommited altogether.
+      security:
+        - ApiKeyAuth: []
       requestBody:
         required: true
         content:
@@ -282,6 +525,8 @@ paths:
         - Chat 
       summary: Sends an image/picture message
       description: Sends an image message (must be base64 encoded in image/png or image/jpeg formats)
+      security:
+        - ApiKeyAuth: []
       requestBody:
         required: true
         content:
@@ -302,6 +547,8 @@ paths:
         - Chat 
       summary: Sends an audio message
       description: Sends an audio message (must be base64 encoded in opus format, mime type audio/ogg)
+      security:
+        - ApiKeyAuth: []
       requestBody:
         required: true
         content:
@@ -322,6 +569,8 @@ paths:
         - Chat 
       summary: Sends a document message
       description: Sends any document (must be base64 encoded using application/octet-stream mime)
+      security:
+        - ApiKeyAuth: []
       requestBody:
         required: true
         content:
@@ -343,6 +592,8 @@ paths:
         - Chat 
       summary: Sends a template message 
       description: Sends a template message, that can contain quick reply buttons, url buttons and call buttons
+      security:
+        - ApiKeyAuth: []
       requestBody:
         required: true
         content:
@@ -363,6 +614,8 @@ paths:
         - Chat 
       summary: Sends a video message
       description: Sends a video message (must be base64 encoded in video/mp4 or video/3gpp format. Only H.264 video codec and AAC audio codec is supported.)
+      security:
+        - ApiKeyAuth: []
       requestBody:
         required: true
         content:
@@ -383,6 +636,8 @@ paths:
         - Chat 
       summary: Sends a sticker message
       description: Sends a sticker message (must be base64 encoded in image/webp format)
+      security:
+        - ApiKeyAuth: []
       requestBody:
         required: true
         content:
@@ -404,6 +659,8 @@ paths:
         - Chat 
       summary: Sends a location message
       description: Sends a location message
+      security:
+        - ApiKeyAuth: []
       requestBody:
         required: true
         content:
@@ -425,6 +682,8 @@ paths:
         - Chat 
       summary: Sends a contact message
       description: Sends a contact message in VCARD format
+      security:
+        - ApiKeyAuth: []
       requestBody:
         required: true
         content:
@@ -446,6 +705,8 @@ paths:
         - Chat 
       summary: Downloads Image from message
       description: Downloads an Image from a message and returns it Base64 media encoded
+      security:
+        - ApiKeyAuth: []
       requestBody:
         required: true
         content:
@@ -467,6 +728,8 @@ paths:
         - Chat 
       summary: Downloads Video from message
       description: Downloads a Video from a message and returns it Base64 media encoded
+      security:
+        - ApiKeyAuth: []
       requestBody:
         required: true
         content:
@@ -488,6 +751,8 @@ paths:
         - Chat 
       summary: Downloads Document from message
       description: Downloads a Document from a message and returns it Base64 media encoded
+      security:
+        - ApiKeyAuth: []
       requestBody:
         required: true
         content:
@@ -509,6 +774,8 @@ paths:
         - Chat 
       summary: Sets chat presence
       description: Sends indication if you are writing or not (state could be either "composing" or "paused"). Optional Media can be set to "audio" for indicating recording a message
+      security:
+        - ApiKeyAuth: []
       requestBody:
         required: true
         content:
@@ -530,7 +797,8 @@ paths:
         - Group 
       summary: List subscribed groups
       description: Returns complete list of subscribed groups
-
+      security:
+        - ApiKeyAuth: []
       responses:
         200:
           description: Response
@@ -591,6 +859,8 @@ paths:
         - Group 
       summary: Changes group name
       description: Allows you to change a group name
+      security:
+        - ApiKeyAuth: []
       requestBody:
         required: true
         content:
@@ -611,6 +881,8 @@ paths:
         - Group 
       summary: Changes group photo
       description: Allows you to change a group photo/image. Returns the Picture ID number
+      security:
+        - ApiKeyAuth: []
       requestBody:
         required: true
         content:
@@ -626,8 +898,52 @@ paths:
               schema:
                 example: { "code": 200, "data": { "Details": "Group Photo set successfully", "PictureID": "1222332123" }, "success": true }
 
+  /newsletter/list:
+    get:
+      tags:
+        - Newsletter
+      summary: List subscribed newsletters
+      description: Returns complete list of subscribed newsletters
+
+      responses:
+        200:
+          description: Response
+          content:
+            application/json:
+              schema:
+                example: {"code": 200, "data": {"Newsletter": [{"id": "120363144038483540@newsletter", "state": {"type": "active" }, "thread_metadata": {"creation_time": "1688746895", "description": {"id": "1689653839450668", "text": "WhatsApp’s official channel. Follow for our latest feature launches, updates, exclusive drops and more.", "update_time": "1689653839450668" }, "invite": "0029Va4K0PZ5a245NkngBA2M", "name": {"id": "1688746895480511", "text": "WhatsApp", "update_time": "1688746895480511" }, "picture": {"direct_path": "/v/t61.24694-24/416962407_970228831134395_8869146381947923973_n.jpg?ccb=11-4&oh=01_Q5AaIRyTfP806JEGJDm0XWU5E-D4LcA-Wj3csSwh1jJTVanC&oe=67D550F1&_nc_sid=5e03e0&_nc_cat=110", "id": "1707950960975554", "type": "IMAGE", "url": "" }, "preview": {"direct_path": "/v/t61.24694-24/416962407_970228831134395_8869146381947923973_n.jpg?stp=dst-jpg_s192x192_tt6&ccb=11-4&oh=01_Q5AaIawuPXJUw9grRFJZtAJEc6QNm0XpqJq4X1Ssi9xNI0Qf&oe=67D550F1&_nc_sid=5e03e0&_nc_cat=110", "id": "1707950960975554", "type": "PREVIEW", "url": "" }, "settings": {"reaction_codes": {"value": "ALL" } }, "subscribers_count": "0", "verification": "verified" }, "viewer_metadata": {"mute": "on", "role": "subscriber" } } ] }, "success": true }
+
 
 definitions:
+  User:
+    type: object
+    properties:
+      id:
+        type: integer
+        example: 1
+      name:
+        type: string
+        example: admin
+
+  CreateUser:
+    type: object
+    required:
+      - name
+      - token
+    properties:
+      name:
+        type: string
+        example: admin
+      token:
+        type: string
+        example: "seu_token_aqui"
+
+  DeleteUser:
+    type: object
+    properties:
+      id:
+        type: integer
+        example: 1
   GroupPhoto:
     type: object
     properties:
@@ -707,6 +1023,14 @@ definitions:
       Media: 
         type: string
         example: audio
+  UserPresence:
+    type: object
+    required:
+      - type
+    properties:
+      type:
+        type: string
+        example: avaliable
   MessageContact:
     type: object
     required: 
@@ -1061,18 +1385,41 @@ definitions:
       WebhookURL:
         type: string
         example: http://server/webhook
-  TextMessage:
-     type: object
-     required:
-       - sessionId
-       - text
-     properties:
-       sessionId:
-         type: string
-         format: uuid4
-       text:
-         type: string
- 
+
+  WebhookSet:
+    type: object
+    required:
+      - webhook
+      - events
+    properties:
+      webhook:
+        type: string
+        description: The URL of the webhook
+        example: "https://example.net/webhook"
+      events:
+        type: array
+        items:
+          type: string
+        description: List of events to subscribe to
+        example: ["Message", "ReadReceipt"]
+
+  WebhookUpdate:
+    type: object
+    properties:
+      webhook:
+        type: string
+        description: The URL of the webhook
+        example: "https://example.net/webhook"
+      events:
+        type: array
+        items:
+          type: string
+        description: List of events to subscribe to
+        example: ["Message", "ReadReceipt"]
+      Active:
+        type: boolean
+        description: Whether the webhook should be active or not
+        example: true
 
 components:
   securitySchemes:
@@ -1080,6 +1427,10 @@ components:
       type: apiKey
       in: header
       name: token
+    AdminAuth:
+      type: apiKey
+      in: header
+      name: Authorization
 
 security:
   - ApiKeyAuth: []

@@ -1,0 +1,289 @@
+/* Estilos específicos para dispositivos móveis */
+
+@media (max-width: 768px) {
+    /* Layout geral */
+    .container-fluid {
+        padding-left: 10px;
+        padding-right: 10px;
+    }
+    
+    /* Navbar e cabeçalho */
+    .navbar-brand {
+        font-size: 1rem;
+    }
+    
+    .navbar-brand i {
+        font-size: 1.2rem;
+    }
+    
+    /* Cards e containers */
+    .card {
+        margin-bottom: 15px;
+    }
+    
+    .card-body {
+        padding: 1rem;
+    }
+    
+    .card-header {
+        padding: 0.6rem 1rem;
+    }
+    
+    /* Status e QR Code */
+    .qr-container {
+        max-width: 220px;
+        padding: 15px;
+        margin: 15px auto;
+    }
+    
+    .qr-code-image {
+        max-width: 100%;
+    }
+    
+    .qr-loading {
+        padding: 1.5rem;
+    }
+    
+    /* Formulários */
+    .form-control, .btn {
+        font-size: 0.9rem;
+    }
+    
+    /* Navegação em abas */
+    .nav-pills .nav-link {
+        padding: 0.4rem 0.6rem;
+        font-size: 0.85rem;
+    }
+    
+    /* Lista de instâncias para mobile */
+    #mobileInstanceList .list-group-item {
+        padding: 0.6rem;
+    }
+    
+    /* Ajustes para a barra de ferramentas */
+    .btn-sm {
+        padding: 0.25rem 0.4rem;
+        font-size: 0.75rem;
+    }
+    
+    /* Logs */
+    .message-log {
+        max-height: 200px;
+        font-size: 0.8rem;
+    }
+    
+    .log-entry {
+        padding: 6px 8px;
+        margin-bottom: 5px;
+    }
+    
+    /* Modals */
+    .modal-body {
+        padding: 1rem;
+    }
+    
+    .modal-footer {
+        padding: 0.75rem;
+    }
+    
+    /* Espaçamento geral */
+    .mb-3 {
+        margin-bottom: 0.75rem !important;
+    }
+    
+    .mt-3 {
+        margin-top: 0.75rem !important;
+    }
+    
+    /* Ajustes para botões de grupos */
+    #groupCards .card-body {
+        padding: 0.75rem;
+    }
+    
+    #groupCards .card-footer {
+        padding: 0.5rem;
+    }
+    
+    /* Dashboard Admin - Responsividade */
+    .stat-card {
+        padding: 0.9rem;
+        margin-bottom: 10px;
+    }
+    
+    .stat-icon {
+        font-size: 2rem;
+        margin-right: 0.75rem;
+    }
+    
+    .stat-info h3 {
+        font-size: 1.5rem;
+    }
+    
+    .stat-info p {
+        font-size: 0.8rem;
+    }
+    
+    .admin-card {
+        padding: 1rem;
+        margin-bottom: 10px;
+    }
+    
+    .admin-card h5 {
+        font-size: 1rem;
+    }
+    
+    .chart-container {
+        height: 180px;
+    }
+    
+    .table-responsive {
+        font-size: 0.8rem;
+    }
+    
+    .table th, .table td {
+        padding: 0.5rem;
+    }
+    
+    /* Melhorar tooltips em mobile */
+    .tooltip {
+        font-size: 0.8rem;
+    }
+    
+    /* Botões mais fáceis de tocar */
+    .btn {
+        padding: 0.6rem 0.8rem;
+    }
+}
+
+/* Melhorias específicas para telas muito pequenas */
+@media (max-width: 576px) {
+    .navbar .nav-link {
+        padding: 0.4rem 0.5rem;
+        font-size: 0.85rem;
+    }
+    
+    .btn {
+        padding: 0.4rem 0.7rem;
+    }
+    
+    .status-indicator {
+        width: 10px;
+        height: 10px;
+    }
+    
+    #groupCards .btn-sm {
+        padding: 0.15rem 0.3rem;
+        font-size: 0.7rem;
+    }
+    
+    /* Simplificar ainda mais o layout */
+    .container-fluid {
+        padding-left: 8px;
+        padding-right: 8px;
+    }
+    
+    .row {
+        margin-left: -8px;
+        margin-right: -8px;
+    }
+    
+    .col, .col-sm, .col-md, .col-lg, .col-xl, 
+    [class*="col-"] {
+        padding-left: 8px;
+        padding-right: 8px;
+    }
+    
+    /* Dashboard Admin - Ajustes para telas muito pequenas */
+    .stat-card {
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        padding: 0.75rem;
+    }
+    
+    .stat-icon {
+        margin-right: 0;
+        margin-bottom: 0.5rem;
+        font-size: 1.75rem;
+    }
+    
+    .stat-info h3 {
+        font-size: 1.25rem;
+    }
+    
+    .admin-card h5 {
+        font-size: 0.9rem;
+    }
+    
+    .chart-container {
+        height: 150px;
+    }
+    
+    .card-admin .card-header {
+        padding: 0.5rem 0.75rem;
+        font-size: 0.9rem;
+    }
+    
+    /* Tabelas em telas pequenas */
+    .table-responsive {
+        font-size: 0.75rem;
+    }
+    
+    .table th, .table td {
+        padding: 0.4rem;
+    }
+    
+    .table th {
+        white-space: nowrap;
+    }
+    
+    /* Ajustar badges em tabelas */
+    .table .badge {
+        font-size: 0.65rem;
+        padding: 0.2rem 0.4rem;
+    }
+    
+    /* Esconder animações pesadas */
+    .qr-container::before {
+        animation: none;
+    }
+    
+    /* QR code otimizado */
+    .qr-container {
+        max-width: 180px;
+        padding: 10px;
+        margin: 10px auto;
+    }
+    
+    /* Status mais compacto */
+    .status-indicator {
+        width: 10px;
+        height: 10px;
+    }
+    
+    /* Lista de instâncias mais compacta */
+    .instance-item {
+        padding: 10px 12px;
+    }
+    
+    /* Remover transições complexas para melhorar performance em dispositivos de baixo desempenho */
+    .card:hover {
+        transform: none;
+        box-shadow: var(--box-shadow);
+    }
+    
+    .instance-item:hover {
+        transform: none;
+    }
+    
+    /* Botões mais fáceis de tocar no dashboard administrativo */
+    #adminInstancesList .btn-group-sm .btn {
+        padding: 0.4rem 0.6rem;
+    }
+    
+    /* Tabs mais fáceis de tocar */
+    .nav-pills .nav-link {
+        padding: 0.5rem;
+        font-size: 0.8rem;
+    }
+} 

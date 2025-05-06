@@ -34,27 +34,34 @@
         margin: 0;
         background: #fafafa;
       }
+      
+      .dashboard-button {
+        position: fixed;
+        top: 10px;
+        right: 10px;
+        z-index: 9999;
+        display: inline-block;
+        padding: 10px 15px;
+        background-color: #25d366;
+        color: white;
+        font-weight: bold;
+        text-decoration: none;
+        border-radius: 4px;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        transition: background-color 0.3s;
+      }
+      .dashboard-button:hover {
+        background-color: #128c7e;
+      }
     </style>
   </head>
 
   <body>
+    <a href="/dashboard" class="dashboard-button">Gerenciador de Instâncias</a>
     <div id="swagger-ui"></div>
 
     <script src="./swagger-ui-bundle.js"></script>
     <script src="./swagger-ui-standalone-preset.js"></script>
-    <script>
-      window.onload = function() {
-        // Begin Swagger UI call region
-        const ui = SwaggerUIBundle({
-          url: "./spec.yml",
-          dom_id: "#swagger-ui",
-          deepLinking: true,
-          presets: [SwaggerUIBundle.presets.apis],
-        });
-        // End Swagger UI call region
-
-        window.ui = ui;
-      };
-    </script>
+    <script src="./swagger-docs.js"></script>
   </body>
 </html>
