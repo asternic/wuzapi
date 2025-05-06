@@ -1,560 +1,1008 @@
-<!DOCTYPE html>
-<html lang="pt-BR">
+<!doctype html>
+<html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="WuzAPI - Gerenciador completo de instâncias WhatsApp">
-    <meta name="theme-color" content="#075e54">
-    <link rel="icon" href="/images/favicon.png" type="image/png">
-    <title>WuzAPI - Login Simples</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
-    <link href="styles.css" rel="stylesheet">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>WuzAPI</title>
+    <script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/fomantic-ui@2.9.4/dist/semantic.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/fomantic-ui@2.9.4/dist/semantic.min.js"></script>
+    <link rel="stylesheet" href="styles.css">
 </head>
-<body>
-    <div class="container">
-        <div class="border rounded-3">
-            <div class="row justify-content-md-center px-4 py-4">
-                <div class="col col-md-auto text-center">
-                    <i class="bi bi-whatsapp display-1 mb-4"></i>
-                    <h1 class="display-5 fw-bold">Bem-vindo ao WuzAPI</h1>
-                </div>
-            </div>
-            <div class="row justify-content-md-center">
-                <div class="col-md-8 text-center mb-4">
-                    <p class="lead">
-                        Para acessar esta página, inclua seu token na URL: <code>?token=seu_token_aqui</code>
-                    </p>
-                    <p class="text-muted mb-4">
-                        Por padrão, o sistema cria um usuário "admin" com o token definido na variável de ambiente <code>WUZAPI_ADMIN_TOKEN</code>.
-                    </p>
-                    <div class="d-flex flex-column align-items-center">
-                        <a href="/dashboard" class="dashboard-button">Acessar o Gerenciador de Instâncias</a>
-                        <a href="/api" class="dashboard-button">Acessar a API</a>
-                        <a href="/" class="dashboard-button">Voltar para a Home</a>
-                    </div>
-                </div>
-            </div>
-            <div class="row justify-content-md-center">
-                <div class="col col-md-auto" id="buttonContainer" style="display:none;">
-                    <button id="connectButton" class="dashboard-button mb-3" onclick="handleConnect()" style="display:none;">Conectar WhatsApp</button>
-                    <button id="disconnectButton" class="dashboard-button mb-3" onclick="handleDisconnect()" style="display:none;">Desconectar WhatsApp</button>
-                </div>
-            </div>
-            <div class="row justify-content-md-center">
-                <div class="col col-md-auto" id="qr" style="display:none;">
-                    <div><h4>Por favor, escaneie este código QR com o WhatsApp para habilitar a API</h4></div> 
-                    <div id="qrContainer" class="text-center" style="width:275px;height:275px; border: 10px solid green; margin:auto;"></div>
-                </div>
-            </div>
-            <div class="row justify-content-md-center">
-                <div class="col col-md-auto">
-                    <div id="connectstatus" class="lead py-5"></div>
-                </div>
-            </div>
-        </div>
+<body class="px-4 py-4">
+  <div class="ui container">
+
+    <div class="main-header">
+      <h1 class="ui header center aligned">
+        <span class="title-container">
+          <i class="whatsapp icon"></i> Welcome to Wuzapi
+        </span>
+      </h1>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <div class="ui segment hidden" id="connectstatus"></div>
 
-    <script type="text/javascript">
+    <div class="ui horizontal divider"> Session </div>
+    <div class="ui three column stackable grid cards">
+      <div class="green card" style="cursor: pointer;" id="authWidget">
+        <div class="content"><a class="ui teal right ribbon label">Session</a>
+          <div class="header">Authenticate</div>
+          <div class="description"> Enter or change authentication token. </div>
+        </div>
+      </div>
+ 
+      <div class="green card hidden" style="cursor: pointer;" id="loginQR">
+        <div class="content"><a class="ui teal right ribbon label">Session</a>
+          <div class="header">Login with QR</div>
+          <div class="description"> Scan your QR code to access all API capabilities.</div>
+        </div>
+      </div>
+      <div class="green card hidden" style="cursor: pointer;" id="loginCode">
+        <div class="content"><a class="ui teal right ribbon label">Session</a>
+          <div class="header">Login with Pairing Code</div>
+          <div class="description"> Enter your pairing code to log in and access your devices.</div>
+        </div>
+      </div>
+      <div class="green card hidden" style="cursor: pointer;" id="logoutWidget">
+        <div class="content"><a class="ui teal right ribbon label">Session</a>
+          <div class="header">Logout</div>
+          <div class="description">Closes connection to WhatsApp servers and terminate session.</div>
+        </div>
+      </div>
+    </div>
 
-      let baseUrl = window.location.origin;
-      let scanned = false;
-      let scanInterval;
-      let qrCheckInterval;
+    <div class="ui horizontal divider widget"> Webhook </div>
+    <div class="ui three column stackable grid cards">
+      <div class="green card hidden widget" style="cursor: pointer;" id="setWebhook">
+        <div class="content"><a class="ui green right ribbon label">Webhook</a>
+          <div class="header">Set Webhook</div>
+          <div class="description"> Sets the webhook to call when an event/message is received.</div>
+        </div>
+      </div>
+      <div class="green card hidden widget" style="cursor: pointer;" id="getWebhook">
+        <div class="content"><a class="ui green right ribbon label">Webhook</a>
+          <div class="header">Get Webhook</div>
+          <div class="description"> Gets the currently configured webhook.</div>
+        </div>
+      </div>
+      <div class="green card hidden widget" style="cursor: pointer;" id="deleteWebhook">
+        <div class="content"><a class="ui green right ribbon label">Webhook</a>
+          <div class="header">Delete Webhook</div>
+          <div class="description"> Deletes the current webhook.</div>
+        </div>
+      </div>
+    </div>
 
-      async function wait(time) {
-        return new Promise(resolve => {
-          setTimeout(() => {
-            resolve();
-          }, time);
-        });
-      }
+    <div class="ui horizontal divider widget"> Chat </div>
+    <div class="ui three column stackable grid cards">
+      <div class="blue card hidden widget" style="cursor: pointer;" id="sendTextMessage">
+        <div class="content"><a class="ui blue right ribbon label">Chat</a>
+          <div class="header">Send Text Message</div>
+          <div class="description"> Sends a text message.</div>
+        </div>
+      </div>
+      <div class="blue card hidden widget" style="cursor: pointer;" id="deleteMessage">
+        <div class="content"><a class="ui blue right ribbon label">Chat</a>
+          <div class="header">Delete Message</div>
+          <div class="description"> Deletes your sent message.</div>
+        </div>
+      </div>
+    </div>
 
-      function updateButtons(isConnected, isLoggedIn) {
-        const buttonContainer = document.getElementById("buttonContainer");
-        const connectButton = document.getElementById("connectButton");
-        const disconnectButton = document.getElementById("disconnectButton");
+    <div class="ui horizontal divider widget"> User </div>
+    <div class="ui three column stackable grid cards">
+      <div class="red card hidden widget" style="cursor: pointer;" id="userInfo">
+        <div class="content"><a class="ui red right ribbon label">User</a>
+          <div class="header">User Info</div>
+          <div class="description"> Search users by phone number.</div>
+        </div>
+      </div>
+      <div class="red card hidden widget" style="cursor: pointer;" id="userAvatar">
+        <div class="content"><a class="ui red right ribbon label">User</a>
+          <div class="header">User Avatar</div>
+          <div class="description"> Get user Avatar by phone number.</div>
+        </div>
+      </div>
+      <div class="red card hidden widget" style="cursor: pointer;" id="userContacts">
+        <div class="content"><a class="ui red right ribbon label">User</a>
+          <div class="header">Get Contacts</div>
+          <div class="description"> Get all contacts.</div>
+        </div>
+      </div>
+    </div>
 
-        buttonContainer.style.display = "block";
-        
-        if (isLoggedIn) {
-            connectButton.style.display = "none";
-            disconnectButton.style.display = "block";
-            document.getElementById("connectstatus").innerHTML = "Conectado ao WhatsApp!";
-        } else if (isConnected) {
-            connectButton.style.display = "none";
-            disconnectButton.style.display = "block";
-            document.getElementById("connectstatus").innerHTML = "Conectado ao servidor. Aguardando escaneamento do QR code.";
-        } else {
-            connectButton.style.display = "block";
-            disconnectButton.style.display = "none";
-            document.getElementById("connectstatus").innerHTML = "Desconectado. Clique em Conectar para iniciar.";
+    <!-- Session Modals -->
+    <div class="ui modal" id="modalAuthenticate"><i class="close icon"></i>
+      <div class="header"> Enter Authentication Token </div>
+      <div class="content">
+        <div class="ui info danger hidden" id="invalidCredentials">
+          <div class="ui icon message">
+            <i class="exclamation triangle icon"></i>
+            <div class="content">
+              <div class="header" id="incorrectstatus">
+                Invalid Token
+              </div>
+            </div>
+          </div>
+        <hr>
+        </div>
+        <div class="ui form">
+          <div class="field"><label>Token</label><input id='authtoken' type="text" placeholder="Authentication Token"><small>Press Enter to submit</small></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="ui modal" id="modalLoginQR">
+      <i class="close icon"></i>
+      <div class="header">
+        Login to Whatsapp with QR Code
+      </div>
+      <div class="image content">
+        <div class="ui medium image">
+          <div id="qrContainer" class="text-center" style="width:275px;height:275px; border: 10px solid green; margin:auto;"></div>
+        </div>
+        <div class="description">
+          <div class="ui header">Please scan to connect</div>
+          <p>Open Setting > Linked Devices > Link Device</p>
+        </div>
+      </div>
+    </div>
+    
+    <div class="ui modal" id="modalLoginWithCode"><i class="close icon"></i>
+      <div class="header"> Getting Pair Code </div>
+      <div class="content">
+        <div class="ui message info">
+          <div class="header" id="pairInfo">How to pair?</div>
+          <ol id="pairHelp">
+            <li>Open your Whatsapp</li>
+            <li>Link a device</li>
+            <li>Link with pair code</li>
+          </ol>
+        </div>
+        <div class="ui form">
+          <div class="field"><label>Phone</label><input id="pairphoneinput" type="text" placeholder="Type your phone number"><small>Press Enter to submit</small></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Webhook Modals -->
+    <div class="ui modal" id="modalGetWebhook"><i class="close icon"></i>
+      <div class="header"> Webhook </div>
+      <div class="content">
+        <div class="ui message info hidden"></div>
+        URL:
+        <div class="ui message info" id="getWebhookContainer"></div>
+        Events:
+        <div class="ui message info" id="getWebhookContainerEvents"></div>
+      </div>
+      <div class="actions">
+        <div class="ui cancel button">Close</div>
+      </div>
+    </div>
+
+    <div class="ui modal" id="modalSetWebhook"><i class="close icon"></i>
+      <div class="header"> Webhook </div>
+      <div class="content">
+        <div class="ui form">
+          <div class="field">
+            <label>Webhook Events</label>
+            <select id="webhookEvents" class="ui fluid dropdown" multiple="">
+              <option value="">Select Events</option>
+              <option value="Message">Message</option>
+              <option value="ReadReceipt">Read Receipt</option>
+              <option value="Presence">Presence</option>
+              <option value="HistorySync">History Sync</option>
+              <option value="ChatPresence">Chat Presence</option>
+              <option value="All">All</option>
+            </select>
+          </div>
+          <div class="field"><label>Webhook URL</label><input id="webhookinput" type="text" placeholder="Type webhook URL"></div>
+        </div>
+      <br>
+      <br>
+      <br>
+      <br>
+      <br>
+      </div>
+      <div class="actions">
+        <div class="ui cancel button">Close</div>
+        <div class="ui positive right labeled icon button">Set<i class="checkmark icon"></i></div>
+      </div>
+    </div>
+
+    <div class="ui modal" id="modalDeleteWebhook"><i class="close icon"></i>
+      <div class="header"> Delete Webhook </div>
+      <div class="content">
+          Are you sure?
+      </div>
+      <div class="actions">
+        <div class="ui negative button">No</div>
+        <div class="ui positive right labeled icon button">Yes</div>
+      </div>
+    </div>
+
+
+    <!-- User Modals -->
+
+    <div class="ui modal" id="modalUserInfo"><i class="close icon"></i>
+      <div class="header"> User Info </div>
+      <div class="content">
+        <div class="ui message info hidden" id="userInfoContainer"></div>
+        <div class="ui form">
+          <div class="field"><label>Phone</label><input id="userinfoinput" type="text" placeholder="Type phone number"></div>
+        </div>
+      </div>
+      <div class="actions">
+        <div class="ui cancel button">Close</div>
+        <div class="ui positive right labeled icon button">Get Info<i class="checkmark icon"></i></div>
+      </div>
+    </div>
+
+    <div class="ui modal" id="modalUserAvatar"><i class="close icon"></i>
+      <div class="header"> User Avatar </div>
+      <div class="content">
+        <div class="ui message info hidden" id="userAvatarContainer"></div>
+        <div class="ui form">
+          <div class="field"><label>Phone</label><input id="useravatarinput" type="text" placeholder="Type phone number"></div>
+        </div>
+      </div>
+      <div class="actions">
+        <div class="ui cancel button">Close</div>
+        <div class="ui positive right labeled icon button">Get Info<i class="checkmark icon"></i></div>
+      </div>
+    </div>
+
+    <!-- Message Modals -->
+
+    <div class="ui modal" id="modalSendTextMessage"><i class="close icon"></i>
+      <div class="header"> Send Text Message </div>
+      <div class="content">
+        <div class="ui message info hidden" id="sendMessageContainer"></div>
+        <div class="ui form">
+          <div class="field"><label>Phone</label><input id="messagesendphone" type="text" placeholder="Type phone number"></div>
+          <div class="field"><label>Message</label><textarea id="messagesendtext"></textarea></div>
+        </div>
+      </div>
+      <div class="actions">
+        <div class="ui cancel button">Close</div>
+        <div class="ui positive right labeled icon button">Send<i class="checkmark icon"></i></div>
+      </div>
+    </div>
+
+     <div class="ui modal" id="modalDeleteMessage"><i class="close icon"></i>
+      <div class="header"> Delete Message </div>
+      <div class="content">
+        <div class="ui message info hidden" id="deleteMessageContainer"></div>
+        <div class="ui form">
+          <div class="field"><label>Phone</label><input id="messagedeletephone" type="text" placeholder="Type phone number"></div>
+          <div class="field"><label>Message ID</label><input id="messagedeleteid" type="text" placeholder="Type the message id"></div>
+        </div>
+      </div>
+      <div class="actions">
+        <div class="ui cancel button">Close</div>
+        <div class="ui positive right labeled icon button">Delete<i class="trash icon"></i></div>
+      </div>
+    </div>
+
+   
+  </div>
+<script>
+
+  let baseUrl = window.location.origin;
+  let scanned = false;
+
+  async function wait(time) {
+    return new Promise(resolve => {
+      setTimeout(() => {
+        resolve();
+      }, time);
+    });
+  }
+
+  document.addEventListener('DOMContentLoaded', function() {
+
+    hideWidgets();
+
+    const authTokenInput = document.getElementById('authtoken');
+    authTokenInput.addEventListener('keypress', function(e) {
+      if (e.key === 'Enter') {
+        const token = authTokenInput.value.trim();
+        if (token) {
+          const url = new URL(window.location.href);
+          url.searchParams.set('token', token);
+          window.location.href = url.toString();
         }
       }
+    });
 
-      async function resetSession() {
-        console.log("[DEBUG] Iniciando reset da sessão");
-        try {
-          // Verificar status atual
-          const statusResult = await statusRequest();
-          console.log("[DEBUG] Status antes do reset:", statusResult);
-          
-          // 1. Logout (apenas se estiver logado)
-          if (statusResult.data && statusResult.data.LoggedIn) {
-            console.log("[DEBUG] Fazendo logout...");
-            try {
-              const logoutRes = await fetch(baseUrl + "/session/logout", {
-                method: "POST",
-                headers: { token }
-              });
-              const logoutData = await logoutRes.json();
-              console.log("[DEBUG] Resposta do logout:", logoutData);
-            } catch (logoutErr) {
-              console.warn("[WARN] Erro no logout (continuando):", logoutErr);
+    const pairPhoneInput = document.getElementById('pairphoneinput');
+    pairPhoneInput.addEventListener('keypress', function(e) {
+      if (e.key === 'Enter') {
+        const phone = pairPhoneInput.value.trim();
+        if (phone) {
+          connect().then((data) => {
+            if(data.success==true) {
+              pairPhone(phone)
+                .then((data) => {
+                  document.getElementById('pairHelp').classList.add('hidden');;
+                  // Success case
+                  if (data.success && data.data && data.data.LinkingCode) {
+                    document.getElementById('pairInfo').innerHTML = `Your link code is: ${data.data.LinkingCode}`;
+                    scanInterval = setInterval(checkStatus, 1000);
+                  } else {
+                    document.getElementById('pairInfo').innerHTML = "Problem getting pairing code";
+                  }
+                })
+                .catch((error) => {
+                  // Error case
+                  document.getElementById('pairInfo').innerHTML = "Problem getting pairing code";
+                  console.error('Pairing error:', error);
+                });
             }
-            await wait(1000);
+          });
+        }
+      }
+    });
+
+    const userInfoInput = document.getElementById('userinfoinput');
+    userInfoInput.addEventListener('keypress', function(e) {
+      if (e.key === 'Enter') {
+        doUserInfo();
+      }
+    });
+ 
+    const userAvatarInput = document.getElementById('useravatarinput');
+    userAvatarInput.addEventListener('keypress', function(e) {
+      if (e.key === 'Enter') {
+        doUserAvatar();
+      }
+    });
+ 
+    document.getElementById('logoutWidget').addEventListener('click', function() {
+      logout().then(function() { window.location.reload();});
+    });
+
+    document.getElementById('loginQR').addEventListener('click', function() {
+      QRLogin();
+    });
+
+    document.getElementById('authWidget').addEventListener('click', function() {
+      $('#modalAuthenticate').modal({closable:false}).modal('show');
+    });
+
+    document.getElementById('loginCode').addEventListener('click', function() {
+      $('#modalLoginWithCode').modal({
+        onVisible: function() {
+          document.getElementById('pairInfo').classList.remove('hidden');;
+          document.getElementById('pairHelp').classList.remove('hidden');;
+        },
+        onHidden: function() {
+          if(scanned==true) {
+              document.getElementById('loginQR').classList.add('hidden');
+              document.getElementById('loginCode').classList.add('hidden');
+              document.getElementById('logoutWidget').classList.remove('hidden');
+          }
+        }
+      })
+      .modal('show');
+    });
+  
+    document.getElementById('userInfo').addEventListener('click', function() {
+      document.getElementById('userInfoContainer').innerHTML='';
+      document.getElementById("userInfoContainer").classList.add('hidden');
+      $('#modalUserInfo').modal({onApprove: function() {
+        doUserInfo();
+        return false;
+      }}).modal('show');
+    });
+  
+    document.getElementById('userAvatar').addEventListener('click', function() {
+      document.getElementById('userAvatarContainer').innerHTML='';
+      document.getElementById("userAvatarContainer").classList.add('hidden');
+      $('#modalUserAvatar').modal({onApprove: function() {
+        doUserAvatar();
+        return false;
+      }}).modal('show');
+    });
+ 
+    document.getElementById('sendTextMessage').addEventListener('click', function() {
+      document.getElementById('sendMessageContainer').innerHTML='';
+      document.getElementById("sendMessageContainer").classList.add('hidden');
+      $('#modalSendTextMessage').modal({onApprove: function() {
+        sendTextMessage().then((result)=>{
+          document.getElementById("sendMessageContainer").classList.remove('hidden');
+          if(result.success===true) {
+             document.getElementById('sendMessageContainer').innerHTML=`Message sent successfully. Id: ${result.data.Id}`
           } else {
-            console.log("[DEBUG] Pulando logout - não está logado");
+             document.getElementById('sendMessageContainer').innerHTML=`Problem sending message: ${result.error}`
           }
-      
-          // 2. Disconnect (apenas se estiver conectado)
-          if (statusResult.data && statusResult.data.Connected) {
-            console.log("[DEBUG] Desconectando...");
-            try {
-              const disconnectRes = await fetch(baseUrl + "/session/disconnect", {
-                method: "POST",
-                headers: { token }
-              });
-              const disconnectData = await disconnectRes.json();
-              console.log("[DEBUG] Resposta da desconexão:", disconnectData);
-            } catch (disconnectErr) {
-              console.warn("[WARN] Erro na desconexão (continuando):", disconnectErr);
-            }
-            await wait(1000);
+        });
+        return false;
+      }}).modal('show');
+    });
+ 
+    document.getElementById('deleteMessage').addEventListener('click', function() {
+      document.getElementById('deleteMessageContainer').innerHTML='';
+      document.getElementById("deleteMessageContainer").classList.add('hidden');
+      $('#modalDeleteMessage').modal({onApprove: function() {
+        deleteMessage().then((result)=>{
+          console.log(result);
+          document.getElementById("deleteMessageContainer").classList.remove('hidden');
+          if(result.success===true) {
+             document.getElementById('deleteMessageContainer').innerHTML=`Message deleted successfully.`
           } else {
-            console.log("[DEBUG] Pulando disconnect - não está conectado");
+             document.getElementById('deleteMessageContainer').innerHTML=`Problem deleting message: ${result.error}`
           }
-      
-          // 3. Connect (sempre tentamos conectar)
-          console.log("[DEBUG] Conectando...");
-          try {
-            const connectRes = await fetch(baseUrl + "/session/connect", {
-              method: "POST",
-              headers: {
-                token,
-                'Content-Type': 'application/json'
-              },
-              body: JSON.stringify({
-                Subscribe: ["All"],
-                Immediate: true
-              })
-            });
-            const connectData = await connectRes.json();
-            console.log("[DEBUG] Resposta da conexão:", connectData);
-          } catch (connectErr) {
-            console.warn("[WARN] Erro na conexão:", connectErr);
-            // Se falhar a conexão, podemos tentar continuar
-          }
-          await wait(2000);
-      
+        });
+        return false;
+      }}).modal('show');
+    });
+  
+    document.getElementById('userContacts').addEventListener('click', function() {
+      getContacts();
+    });
+
+    document.getElementById('getWebhook').addEventListener('click', function() {
+      getWebhook();
+    });
+
+    document.getElementById('deleteWebhook').addEventListener('click', function() {
+    $('#modalDeleteWebhook')
+      .modal({
+        closable: true,
+        onDeny: function(){
           return true;
-        } catch (error) {
-          console.error("[ERROR] Erro ao resetar sessão:", error);
-          return false;
-        }
-      }
-
-      async function refreshQrCode() {
-        console.log("[DEBUG] Atualizando QR code");
-        
-        try {
-          // 1. Garantir uma conexão ativa
-          console.log("[DEBUG] Garantindo conexão antes de solicitar QR code...");
-          try {
-            const connectRes = await fetch(baseUrl + "/session/connect", {
-              method: "POST",
-              headers: {
-                token,
-                'Content-Type': 'application/json'
-              },
-              body: JSON.stringify({
-                Subscribe: ["All"],
-                Immediate: true
-              })
-            });
-            const connectData = await connectRes.json();
-            console.log("[DEBUG] Resposta da conexão:", connectData);
-            
-            // Mesmo com erro, continuamos para tentar obter o QR
-            if (connectData.error) {
-              console.warn("[WARN] Aviso na conexão (continuando):", connectData.error);
+        },
+        onApprove: function() {
+          deleteWebhook().then((response)=>{
+            if(response.success==true) {
+              $.toast({ class: 'success', message: `Webhook deleted successfully !` });
+            } else {
+              $.toast({ class: 'error', message: `could not delete webhook! ${response.error}` });
             }
-          } catch (connectErr) {
-            console.warn("[WARN] Erro ao conectar (continuando):", connectErr);
-          }
-          
-          // Aguardar um pouco para garantir que a conexão esteja estabelecida
-          await wait(1000);
-          
-          // 2. Solicitar QR code
-          console.log("[DEBUG] Solicitando novo QR code");
-          const qrRes = await fetch(baseUrl + "/session/qr", {
-            method: "GET",
-            headers: { token }
           });
-          const qrData = await qrRes.json();
-          console.log("[DEBUG] Resposta do QR code:", qrData);
-          
-          // Verificar se o QR code está na raiz ou dentro de data
-          const qrCode = qrData.QRCode || (qrData.data && qrData.data.QRCode);
-          
-          if (qrCode) {
-            console.log("[DEBUG] QR code recebido com sucesso");
-            var image = document.createElement("img");
-            var imageParent = document.getElementById("qr");
-            var imageContainer = document.getElementById("qrContainer");
-            imageParent.style.display = "block";
-            image.id = "qrcode";
-            image.src = qrCode;
-            imageContainer.innerHTML = "";
-            imageContainer.appendChild(image);
-            document.getElementById("connectstatus").innerHTML = "Novo QR code gerado. Por favor, escaneie.";
-            return true;
+        }
+      })
+      .modal('show');
+    });
+    document.getElementById('setWebhook').addEventListener('click', function() {
+      $('#modalSetWebhook').modal({onApprove: function() {
+        setWebhook().then((result)=>{
+          if(result.success===true) {
+             $.toast({ class: 'success', message: `Webhook set successfully !`});
           } else {
-            console.log("[DEBUG] QR code vazio ou inválido, tentando reset completo");
-            
-            // Se o QR code estiver vazio, tente um reset completo
-            const resetSuccess = await resetSession();
-            if (resetSuccess) {
-              // Tentar obter QR code novamente após reset
-              await wait(1000);
-              const retryQrRes = await fetch(baseUrl + "/session/qr", {
-                method: "GET",
-                headers: { token }
-              });
-              const retryQrData = await retryQrRes.json();
-              console.log("[DEBUG] Resposta do QR code após reset:", retryQrData);
-              
-              const retryQrCode = retryQrData.QRCode || (retryQrData.data && retryQrData.data.QRCode);
-              if (retryQrCode) {
-                console.log("[DEBUG] QR code recebido com sucesso após reset");
-                var image = document.createElement("img");
-                var imageParent = document.getElementById("qr");
-                var imageContainer = document.getElementById("qrContainer");
-                imageParent.style.display = "block";
-                image.id = "qrcode";
-                image.src = retryQrCode;
-                imageContainer.innerHTML = "";
-                imageContainer.appendChild(image);
-                document.getElementById("connectstatus").innerHTML = "Novo QR code gerado. Por favor, escaneie.";
-                return true;
-              }
-            }
-            
-            document.getElementById("connectstatus").innerHTML = "Erro ao gerar QR code. Tentando novamente em breve...";
-            return false;
-          }
-        } catch (error) {
-          console.error("[ERROR] Erro ao obter QR code:", error);
-          document.getElementById("connectstatus").innerHTML = "Erro ao obter QR code: " + error.message;
-          return false;
-        }
-      }
-
-      async function showQr() {
-        console.log("[DEBUG] Iniciando exibição do QR code");
-        document.getElementById("connectstatus").innerHTML = "Aguardando QR code...";
-        
-        // Limpar intervalos existentes
-        if (scanInterval) {
-          console.log("[DEBUG] Limpando intervalo de verificação anterior");
-          clearInterval(scanInterval);
-        }
-        if (qrCheckInterval) {
-          console.log("[DEBUG] Limpando intervalo de QR anterior");
-          clearInterval(qrCheckInterval);
-        }
-        
-        // Verificar status periodicamente
-        console.log("[DEBUG] Configurando verificação periódica de status");
-        scanInterval = setInterval(checkStatus, 3000);
-        
-        // Atualizar QR code a cada 40 segundos
-        console.log("[DEBUG] Configurando atualização periódica do QR code (40s)");
-        qrCheckInterval = setInterval(refreshQrCode, 40000);
-        
-        // Primeira verificação imediata
-        console.log("[DEBUG] Realizando primeira verificação do QR code");
-        await refreshQrCode();
-      }
-
-      function checkStatus() {
-        console.log("[DEBUG] Verificando status...");
-        statusRequest().then((status) => {
-          console.log("[DEBUG] Status recebido:", status);
-          
-          if (!status.success) {
-            console.error("[ERROR] Erro ao verificar status:", status.error);
-            return;
-          }
-          
-          const isConnected = status.data.Connected;
-          const isLoggedIn = status.data.LoggedIn;
-          
-          console.log("[DEBUG] Status processado - Conectado:", isConnected, "Logado:", isLoggedIn);
-          updateButtons(isConnected, isLoggedIn);
-          
-          if (isLoggedIn) {
-            scanned = true;
-            document.getElementById("connectstatus").innerHTML = "Conectado ao WhatsApp!";
-            clearInterval(scanInterval);
-            if (qrCheckInterval) clearInterval(qrCheckInterval);
-            var imageParent = document.getElementById("qr");
-            imageParent.style.display = "none";
-          } else if (isConnected && !scanned) {
-            console.log("[DEBUG] Conectado mas não logado, mantendo QR code");
-          } else if (!isConnected) {
-            console.log("[DEBUG] Não conectado, tentando reconectar");
-            // Tentar reconectar automaticamente
-            connect().then(connectResult => {
-              console.log("[DEBUG] Tentativa de reconexão:", connectResult);
-              if (connectResult.success || connectResult.code == 500) {
-                // Mesmo com erro 500 (Already Connected), tentamos atualizar o QR
-                refreshQrCode();
-              }
-            });
+             $.toast({ class: 'error', message: `Problem setting webhook: ${result.error}`});
           }
         });
-      }
+        return true;
+      }}).modal('show');
+    });
 
-      async function handleConnect() {
-        console.log("[DEBUG] Botão de conectar clicado");
-        document.getElementById("connectstatus").innerHTML = "Iniciando conexão...";
-        
-        try {
-          // Sempre tentar conectar primeiro
-          console.log("[DEBUG] Tentando conectar...");
-          const connectRes = await fetch(baseUrl + "/session/connect", {
-            method: "POST",
-            headers: {
-              token,
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-              Subscribe: ["All"],
-              Immediate: true
-            })
-          });
-          const connectData = await connectRes.json();
-          console.log("[DEBUG] Resposta da conexão:", connectData);
-          
-          // Mesmo com erro (pode ser "Already Connected"), continuamos
-          
-          // Aguardar um pouco e mostrar QR
-          await wait(1000);
+ 
+  });
+
+  async function sendTextMessage() {
+    const sendPhone = document.getElementById('messagesendphone').value.trim();
+    const sendBody = document.getElementById('messagesendtext').value;
+    const myHeaders = new Headers();
+    const uuid = generateMessageUUID();
+    myHeaders.append('token', token);
+    myHeaders.append('Content-Type', 'application/json');
+    res = await fetch(baseUrl + "/chat/send/text", {
+      method: "POST",
+      headers: myHeaders,
+      body: JSON.stringify({Phone: sendPhone, Body: sendBody, Id: uuid})
+    });
+    data = await res.json();
+    return data;
+  }
+ 
+  async function deleteMessage() {
+    const deletePhone = document.getElementById('messagedeletephone').value.trim();
+    const deleteId = document.getElementById('messagedeleteid').value;
+    const myHeaders = new Headers();
+    myHeaders.append('token', token);
+    myHeaders.append('Content-Type', 'application/json');
+    res = await fetch(baseUrl + "/chat/delete", {
+      method: "POST",
+      headers: myHeaders,
+      body: JSON.stringify({Phone: deletePhone, Id: deleteId})
+    });
+    data = await res.json();
+    return data;
+  }
+ 
+  async function setWebhook() {
+    const webhook = document.getElementById('webhookinput').value.trim();
+    const events = $('#webhookEvents').dropdown('get value')
+    if (events.includes("All")) {
+      events.length = 0;
+      events.push("All");
+    }
+    const myHeaders = new Headers();
+    myHeaders.append('token', token);
+    myHeaders.append('Content-Type', 'application/json');
+    res = await fetch(baseUrl + "/webhook", {
+      method: "POST",
+      headers: myHeaders,
+      body: JSON.stringify({WebhookURL: webhook, events: events})
+    });
+    data = await res.json();
+    return data;
+  }
+ 
+  async function deleteWebhook() {
+    const myHeaders = new Headers();
+    myHeaders.append('token', token);
+    myHeaders.append('Content-Type', 'application/json');
+    res = await fetch(baseUrl + "/webhook", {
+      method: "DELETE",
+      headers: myHeaders
+    });
+    data = await res.json();
+    return data;
+  }
+ 
+  function doUserAvatar() {
+    const userAvatarInput = document.getElementById('useravatarinput');
+    let phone = userAvatarInput.value.trim();
+    if (phone) {
+      if (!phone.endsWith('@s.whatsapp.net')) {
+        phone = phone.includes('@') ? phone.split('@')[0] + '@s.whatsapp.net' : phone + '@s.whatsapp.net';
+      }
+      userAvatar(phone).then((data) => {
+        document.getElementById("userAvatarContainer").classList.remove('hidden');
+        if (data.success && data.data && data.data.url) {
+          const userAvatarDiv = document.getElementById('userAvatarContainer');
+          userAvatarDiv.innerHTML=`<img src="${data.data.url}" alt="Profile Picture" class="user-avatar">`;
+        } else {
+            document.getElementById('userAvatarContainer').innerHTML = 'No user avatar found';
+        }
+      }).catch(error => {
+        document.getElementById('userAvatarContainer').innerHTML = 'Error fetching user avatar';
+        console.error('Error:', error);
+      });
+    }
+  } 
+
+  function doUserInfo() {
+    const userInfoInput = document.getElementById('userinfoinput');
+    let phone = userInfoInput.value.trim();
+    if (phone) {
+      if (!phone.endsWith('@s.whatsapp.net')) {
+        phone = phone.includes('@') ? phone.split('@')[0] + '@s.whatsapp.net' : phone + '@s.whatsapp.net';
+      }
+      userInfo(phone).then((data) => {
+        document.getElementById("userInfoContainer").classList.remove('hidden');
+        if (data.success && data.data && data.data.Users) {
+            // Clear previous results
+            const userInfoDiv = document.getElementById('userInfoContainer');
+            userInfoDiv.innerHTML = '';
+            
+            // Loop through each user
+            for (const [userJid, userData] of Object.entries(data.data.Users)) {
+                const userElement = document.createElement('div');
+                userElement.className = 'user-entry';
+                
+                // Display phone number (extracted from JID)
+                const phoneNumber = userJid.split('@')[0];
+                userElement.innerHTML += `<strong>Phone: ${phoneNumber}</strong><br>`;
+                
+                // Display Status if available
+                userElement.innerHTML += `Status: ${userData.Status || 'Not available'}<br>`;
+                
+                // Display VerifiedName if available
+                userElement.innerHTML += `Verified Name: ${userData.VerifiedName || 'Not verified'}<br>`;
+                
+                // Add device count if available
+              if (userData.Devices && userData.Devices.length > 0) {
+                    userElement.innerHTML += `Devices: ${userData.Devices.length}<br>`;
+                }
+                
+                userInfoDiv.appendChild(userElement);
+            }
+        } else {
+            document.getElementById('userInfoContainer').innerHTML = 'No user data found';
+        }
+      }).catch(error => {
+        document.getElementById('userInfoContainer').innerHTML = 'Error fetching user info';
+        console.error('Error:', error);
+      });
+    }
+  }
+
+  function QRLogin() {
+    $('#modalLoginQR').modal({
+    onVisible: function () {
+      connect().then((data) => {
+        if(data.success==true) {
           showQr();
-        } catch (error) {
-          console.error("[ERROR] Erro ao conectar:", error);
-          document.getElementById("connectstatus").innerHTML = "Erro ao conectar: " + error.message;
+        } else {
+          document.getElementById("incorrectstatus").innerHTML = "Could not connect";
+          document.getElementById('loginQR').classList.remove('hidden');
+          document.getElementById('loginCode').classList.remove('hidden');
         }
+      }); 
+    },
+    onHidden: function() {
+      console.log("QR modal hidden");
+      if(scanned==true) {
+          document.getElementById('loginQR').classList.add('hidden');
+          document.getElementById('loginCode').classList.add('hidden');
+          document.getElementById('logoutWidget').classList.remove('hidden');
+      } else {
+          clearInterval(scanInterval);
       }
+    }
+    }).modal('show');
+  }
 
-      async function handleDisconnect() {
-        console.log("[DEBUG] Botão de desconectar clicado");
-        document.getElementById("connectstatus").innerHTML = "Desconectando...";
-        
-        try {
-          // 1. Logout primeiro
-          console.log("[DEBUG] Fazendo logout...");
-          try {
-            const logoutRes = await fetch(baseUrl + "/session/logout", {
-              method: "POST",
-              headers: { token }
-            });
-            const logoutData = await logoutRes.json();
-            console.log("[DEBUG] Resposta do logout:", logoutData);
-          } catch (logoutErr) {
-            console.warn("[WARN] Erro no logout (continuando):", logoutErr);
-          }
-          
-          // 2. Disconnect
-          console.log("[DEBUG] Desconectando...");
-          const disconnectRes = await fetch(baseUrl + "/session/disconnect", {
-            method: "POST",
-            headers: { token }
-          });
-          const disconnectData = await disconnectRes.json();
-          console.log("[DEBUG] Resposta do disconnect:", disconnectData);
-          
-          document.getElementById("connectstatus").innerHTML = "Desconectado com sucesso";
-          scanned = false;
-          var imageParent = document.getElementById("qr");
-          imageParent.style.display = "none";
-          
-          // Atualizar botões
-          updateButtons(false, false);
-          
-          // Limpar intervalos
-          if (scanInterval) clearInterval(scanInterval);
-          if (qrCheckInterval) clearInterval(qrCheckInterval);
-        } catch (error) {
-          console.error("[ERROR] Erro ao desconectar:", error);
-          document.getElementById("connectstatus").innerHTML = "Erro ao desconectar: " + error.message;
-        }
-      }
+  function showWidgets() {
+    document.querySelectorAll('.widget').forEach(widget => {
+      widget.classList.remove('hidden');
+    });
+  }
 
-      async function connect() {
-        console.log("[DEBUG] Iniciando conexão com token:", token);
-        try {
-          console.log("[DEBUG] Enviando requisição de conexão...");
-          const res = await fetch(baseUrl + "/session/connect", {
-            method: "POST",
-            headers: {
-              token,
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-              Subscribe: ["All"],
-              Immediate: true
-            })
-          });
-          const data = await res.json();
-          console.log("[DEBUG] Resposta da conexão (raw):", data);
-          
-          // Formatar resposta
-          if (data.code === 500 && data.error === "Already Connected") {
-            // Se já estiver conectado, considerar sucesso
-            return { success: true, alreadyConnected: true };
-          }
-          
-          return data;
-        } catch (error) {
-          console.error("[ERROR] Erro ao conectar:", error);
-          return { success: false, error: error.message };
-        }
-      }
+  function hideWidgets() {
+    document.querySelectorAll('.widget').forEach(widget => {
+      widget.classList.add('hidden');
+    });
+  }
 
-      async function getQr() {
-        console.log("[DEBUG] Solicitando QR code para token:", token);
-        const myHeaders = new Headers();
-        myHeaders.append('token', token);
-        try {
-          const res = await fetch(baseUrl + "/session/qr", {
-            method: "GET",
-            headers: myHeaders,
-          });
-          const data = await res.json();
-          console.log("[DEBUG] Resposta do QR code (raw):", data);
-          
-          // Formatar a resposta para o formato esperado
-          return {
-            success: true,
-            data: {
-              QRCode: data.QRCode || null
-            }
-          };
-        } catch (error) {
-          console.error("[ERROR] Erro ao obter QR code:", error);
-          return { success: false, error: error.message };
-        }
-      }
+  function checkStatus() {
+    console.log("checkStatus");
+    statusRequest().then((status) => {
+      if(status.success==true) {
+        if(status.data.LoggedIn === true) {
+          scanned = true;
+          document.getElementById("connectstatus").innerHTML = "Connected!";
+          document.getElementById("connectstatus").classList.remove('red');
+          document.getElementById("connectstatus").classList.add('green');
+          document.getElementById("connectstatus").classList.remove('hidden');
+          clearInterval(scanInterval);
+          showWidgets();
 
-      async function statusRequest() {
-        console.log("[DEBUG] Verificando status para token:", token);
-        const myHeaders = new Headers();
-        myHeaders.append('token', token);
-        try {
-          const res = await fetch(baseUrl + "/session/status", {
-            method: "GET",
-            headers: myHeaders,
-          });
-          const data = await res.json();
-          console.log("[DEBUG] Resposta do status (raw):", data);
-          
-          // Formatar a resposta para o formato esperado
-          return {
-            success: true,
-            data: {
-              Connected: data.Connected || false,
-              LoggedIn: data.LoggedIn || false
-            }
-          };
-        } catch (error) {
-          console.error("[ERROR] Erro ao verificar status:", error);
-          return { success: false, error: error.message };
-        }
-      }
+          $('#modalLoginQR').modal('hide');
+          $('#modalLoginWithCode').modal('hide');
 
-      function parseURLParams(url) {
-        var queryStart = url.indexOf("?") + 1,
-            queryEnd   = url.indexOf("#") + 1 || url.length + 1,
-            query = url.slice(queryStart, queryEnd - 1),
-            pairs = query.replace(/\+/g, " ").split("&"),
-            parms = {}, i, n, v, nv;
-
-        if (query === url || query === "") return;
-          for (i = 0; i < pairs.length; i++) {
-            nv = pairs[i].split("=", 2);
-            n = decodeURIComponent(nv[0]);
-            v = decodeURIComponent(nv[1]);
-            if (!parms.hasOwnProperty(n)) parms[n] = [];
-            parms[n].push(nv.length === 2 ? v : null);
-        }
-        return parms;
-      }
-
-      // Inicialização
-      console.log("[DEBUG] Página de login inicializada");
-      let notoken=0;
-      let token="";
-      let param = parseURLParams(window.location.href);
-
-      if(param!=undefined) {
-        if(param["token"]===undefined) {
-          notoken=1;
         }
       } else {
-        notoken=1;
+        clearInterval(scanInterval);
       }
+    });
+  }
 
-      if(notoken==1) {
-        console.log("[DEBUG] Token não especificado");
-        document.getElementById("connectstatus").innerHTML = "Token de autenticação não especificado";
+  async function showQr() {
+    console.log('showqr');
+    QRLogin();
+    clearInterval(scanInterval);
+    scanInterval = setInterval(checkStatus, 1000);
+    console.log("showQr");
+    while (!scanned) {
+      console.log("not scanned");
+      if (!$('#modalLoginQR').is(':visible')) { console.log("qr modal closed, do nothing"); return; }
+      var qrData = await getQr();
+      if(qrData.success==true) {
+        var qrString = qrData.data.QRCode;
+        var image = document.createElement("img");
+        var imageContainer = document.getElementById("qrContainer");
+    
+        image.id = "qrcode";
+        image.src = qrString;
+        imageContainer.innerHTML = "";
+        imageContainer.appendChild(image);
+			if(qrData.data.QRCode != "") {
+              console.log('wait 15 seconds to scan');
+              await wait(15 * 1000);
+            }
       } else {
-        token = param["token"][0];
-        console.log("[DEBUG] Token encontrado:", token);
-        document.getElementById("connectstatus").innerHTML = "Verificando status...";
-        
-        statusRequest().then((status) => {
-          console.log("[DEBUG] Status inicial:", status);
-          
-          if (!status.success) {
-            console.error("[ERROR] Erro ao verificar status:", status.error);
-            document.getElementById("connectstatus").innerHTML = "Erro ao verificar status: " + status.error;
-            return;
-          }
-          
-          const isConnected = status.data.Connected;
-          const isLoggedIn = status.data.LoggedIn;
-          
-          console.log("[DEBUG] Status processado - Conectado:", isConnected, "Logado:", isLoggedIn);
-          
-          if (isLoggedIn) {
-            console.log("[DEBUG] Já logado");
-            updateButtons(true, true);
-            document.getElementById("connectstatus").innerHTML = "Conectado ao WhatsApp!";
-          } else if (isConnected) {
-            console.log("[DEBUG] Conectado mas não logado, iniciando QR");
-            showQr();
+        scanned = true;
+        clearInterval(scanInterval);
+        document.getElementById("connectstatus").innerHTML = "Timeout! Please try again when you are ready to scan the QR code";
+        $('#modalLoginQR').modal('hide');
+      }
+    }
+  }
+
+  async function connect() {
+    console.log("Connecting...");
+    const myHeaders = new Headers();
+    myHeaders.append('token', token);
+    myHeaders.append('Content-Type', 'application/json');
+    res = await fetch(baseUrl + "/session/connect", {
+      method: "POST",
+      headers: myHeaders,
+      body: JSON.stringify({Events: 'All', Immediate: true})
+    });
+    data = await res.json();
+    return data;
+  }
+
+  async function disconnect() {
+    console.log("Disconnecting...");
+    const myHeaders = new Headers();
+    myHeaders.append('token', token);
+    myHeaders.append('Content-Type', 'application/json');
+    res = await fetch(baseUrl + "/session/disconnect", {
+      method: "POST",
+      headers: myHeaders,
+    });
+    data = await res.json();
+    return data;
+  }
+
+  async function status() {
+    console.log("Get status...");
+    const myHeaders = new Headers();
+    myHeaders.append('token', token);
+    myHeaders.append('Content-Type', 'application/json');
+    res = await fetch(baseUrl + "/session/status", {
+      method: "GET",
+      headers: myHeaders
+    });
+    data = await res.json();
+    return data;
+  }
+
+  async function getWebhook() {
+    console.log("Getting webhook...");
+    const myHeaders = new Headers();
+    myHeaders.append('token', token);
+    myHeaders.append('Content-Type', 'application/json');
+    try {
+      const res = await fetch(baseUrl + "/webhook", {
+        method: "GET",
+        headers: myHeaders,
+      });
+      data = await res.json();
+      let webhook = '';
+      let events = '';
+      if (data.code === 200) {
+         webhook = data.data.webhook
+         events = data.data.subscribe.join(",")
+      } else {
+         webhook = `Problem getting webhook: ${error}`
+      }
+      $('#modalGetWebhook').modal('show');
+      document.getElementById('getWebhookContainer').innerHTML=webhook;
+      document.getElementById('getWebhookContainerEvents').innerHTML=events;
+    } catch (error) {
+      console.error("Error fetching webhook:", error);
+      throw error;
+    }
+  }
+
+  async function getContacts() {
+    console.log("Getting contacts...");
+    const myHeaders = new Headers();
+    myHeaders.append('token', token);
+    myHeaders.append('Content-Type', 'application/json');
+    try {
+      const res = await fetch(baseUrl + "/user/contacts", {
+        method: "GET",
+        headers: myHeaders,
+      });
+      data = await res.json();
+      if (data.code === 200) {
+        const transformedContacts = Object.entries(data.data).map(([phone, contact]) => ({
+            FullName: contact.FullName || "",
+            PushName: contact.PushName || "",
+            Phone: phone.split('@')[0] // Remove the @s.whatsapp.net part
+        }));
+        downloadJson(transformedContacts, 'contacts.json');
+        return transformedContacts;
+      } else {
+        throw new Error(`API returned code ${data.code}`);
+      }
+    } catch (error) {
+      console.error("Error fetching contacts:", error);
+      throw error;
+    }
+  }
+
+  async function userAvatar(phone) {
+    console.log("Requesting user avatar...");
+    const myHeaders = new Headers();
+    myHeaders.append('token', token);
+    myHeaders.append('Content-Type', 'application/json');
+    res = await fetch(baseUrl + "/user/avatar", {
+      method: "POST",
+      headers: myHeaders,
+      body: JSON.stringify({Phone: phone, Preview: false})
+    });
+    data = await res.json();
+    return data;
+  }
+ 
+  async function userInfo(phone) {
+    console.log("Requesting user info...");
+    const myHeaders = new Headers();
+    myHeaders.append('token', token);
+    myHeaders.append('Content-Type', 'application/json');
+    res = await fetch(baseUrl + "/user/info", {
+      method: "POST",
+      headers: myHeaders,
+      body: JSON.stringify({Phone: [phone]})
+    });
+    data = await res.json();
+    return data;
+  }
+
+  async function pairPhone(phone) {
+    console.log("Requesting pairing code...");
+    const myHeaders = new Headers();
+    myHeaders.append('token', token);
+    myHeaders.append('Content-Type', 'application/json');
+    res = await fetch(baseUrl + "/session/pairphone", {
+      method: "POST",
+      headers: myHeaders,
+      body: JSON.stringify({Phone: phone})
+    });
+    data = await res.json();
+    return data;
+  }
+
+  async function logout() {
+    console.log("Login out...");
+    const myHeaders = new Headers();
+    myHeaders.append('token', token);
+    myHeaders.append('Content-Type', 'application/json');
+    res = await fetch(baseUrl + "/session/logout", {
+      method: "POST",
+      headers: myHeaders,
+    });
+    data = await res.json();
+    return data;
+  }
+
+  async function getQr() {
+    const myHeaders = new Headers();
+    myHeaders.append('token', token);
+    res = await fetch(baseUrl + "/session/qr", {
+      method: "GET",
+      headers: myHeaders,
+    });
+    data = await res.json();
+    return data;
+  }
+
+  async function statusRequest() {
+    const myHeaders = new Headers();
+    myHeaders.append('token', token);
+    res = await fetch(baseUrl + "/session/status", {
+      method: "GET",
+      headers: myHeaders,
+    });
+    data = await res.json();
+    return data;
+  }
+
+  function parseURLParams(url) {
+    var queryStart = url.indexOf("?") + 1,
+        queryEnd   = url.indexOf("#") + 1 || url.length + 1,
+        query = url.slice(queryStart, queryEnd - 1),
+        pairs = query.replace(/\+/g, " ").split("&"),
+        parms = {}, i, n, v, nv;
+
+    if (query === url || query === "") return;
+      for (i = 0; i < pairs.length; i++) {
+        nv = pairs[i].split("=", 2);
+        n = decodeURIComponent(nv[0]);
+        v = decodeURIComponent(nv[1]);
+        if (!parms.hasOwnProperty(n)) parms[n] = [];
+        parms[n].push(nv.length === 2 ? v : null);
+    }
+    return parms;
+  }
+
+  function downloadJson(data, filename) {
+    const jsonStr = JSON.stringify(data, null, 2);
+    const blob = new Blob([jsonStr], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    
+    // Cleanup
+    setTimeout(() => {
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    }, 100);
+  }
+ 
+  function generateMessageUUID() {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+      const r = Math.random() * 16 | 0;
+      const v = c === 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    });
+  }
+ 
+  // Starting
+  let notoken=0;
+  let token="";
+  let scanInterval;
+  let param = parseURLParams(window.location.href);
+
+  if(param!=undefined) {
+    if(param["token"]===undefined) {
+      notoken=1;
+    }
+  } else {
+    notoken=1;
+  }
+
+  if(notoken==1) {
+    document.getElementById("connectstatus").innerHTML = "No auth token specified";
+    $('#modalAuthenticate').modal({closable:false}).modal('show');
+  } else {
+
+    token = param["token"][0];
+
+    statusRequest().then((status) => {
+      if(status.success==true) {
+          if(status.data.LoggedIn === false) {
+              if(status.data.Connected === true) {
+                  showQr();
+              } else {
+                  console.log("Not connected, attempting to connect.");
+                  connect().then((data) => {console.log("promise connect 1"); console.log(data);});
+              }
           } else {
-            console.log("[DEBUG] Desconectado");
-            updateButtons(false, false);
-            document.getElementById("connectstatus").innerHTML = "Desconectado. Clique em Conectar para iniciar.";
+              if(status.data.Connected === false) {
+                  connect().then((data) => {console.log("promise connect 2"); console.log(data);});
+              }
+              document.getElementById("connectstatus").innerHTML = "Connected!";
+              document.getElementById("connectstatus").classList.remove('red');
+              document.getElementById("connectstatus").classList.add('green');
+              document.getElementById("connectstatus").classList.remove('hidden');
+              document.getElementById('logoutWidget').classList.remove('hidden');
+              document.getElementById('loginQR').classList.add('hidden');
+              document.getElementById('loginCode').classList.add('hidden');
+              scanned = true;
+              showWidgets();
           }
-        });
+      } else if(status.success==false) {
+          if(status.error=="No session") {
+              document.getElementById('loginQR').classList.remove('hidden');
+              document.getElementById('loginCode').classList.remove('hidden');
+              document.getElementById('connectstatus').classList.add('hidden');
+          } else if(status.error=="Unauthorized") {
+              document.getElementById("incorrectstatus").innerHTML = `Bad Authentication`;
+              document.getElementById("connectstatus").innerHTML = "Invalid Token";
+              document.getElementById('connectstatus').classList.remove('hidden');
+              document.getElementById('invalidCredentials').classList.remove('hidden');
+              $('#modalAuthenticate').modal({closable:false}).modal('show');
+          }
+      } else {
+          document.getElementById("connectstatus").innerHTML = `Bad Authentication ${status.Status}`;
+          document.getElementById('connectstatus').classList.remove('hidden');
       }
-    </script>
+      return;
+    });
+}
+
+$(document).ready(function() {
+  $('#webhookEvents').dropdown({
+    onChange: function(value, text, $selectedItem) {
+      if (value.includes('All')) {
+        // If "All" is selected, select all other options
+        $('#webhookEvents').dropdown('set selected', [
+          'Message', 
+          'ReadReceipt', 
+          'Presence', 
+          'HistorySync', 
+          'ChatPresence', 
+          'All'
+        ]);
+      }
+    }
+  });
+});
+
+</script>
 </body>
 </html>

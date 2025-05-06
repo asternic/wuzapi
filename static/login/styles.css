@@ -1,197 +1,311 @@
 :root {
-    --primary-color: #25d366;
-    --primary-hover: #1da856;
-    --secondary-color: #128c7e;
-    --dark-color: #075e54;
-    --light-color: #dcf8c6;
-    --gradient-primary: linear-gradient(135deg, #25d366 0%, #128c7e 100%);
-    --gradient-secondary: linear-gradient(135deg, #128c7e 0%, #075e54 100%);
-    --box-shadow: 0 6px 15px rgba(0, 0, 0, 0.08);
-    --box-shadow-hover: 0 10px 25px rgba(0, 0, 0, 0.12);
-    --border-radius: 14px;
+    --primary-color: #00A884; /* WhatsApp's new brand green */
+    --secondary-color: #008069; /* WhatsApp's darker green */
+    --tertiary-color: #075E54; /* WhatsApp's darkest green */
+    --background-color: #FCF5EB; /* WhatsApp's authentic background */
+    --card-hover-color: #ffffff;
+    --text-color: #111B21; /* WhatsApp's text color */
+    --gradient-start: #00A884;
+    --gradient-end: #008069;
+    --message-background: #FFFFFF;
+    --success-green: #00A884;
 }
 
 body {
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
-    background: linear-gradient(135deg, rgba(7, 94, 84, 0.05) 0%, rgba(37, 211, 102, 0.05) 100%);
-    font-family: 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
-    padding: 0 !important;
-    margin: 0;
+    background-color: var(--background-color) !important;
+    color: var(--text-color) !important;
+    font-family: "Helvetica Neue", "Helvetica Neue", Helvetica, Arial, sans-serif !important;
 }
 
 .container {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    max-width: 800px !important;
-    padding: 2rem !important;
+    padding: 2em 1em !important;
+    max-width: 1400px !important;
+    margin: 0 auto !important;
 }
 
-.border.rounded-3 {
-    background: rgba(255, 255, 255, 0.98);
-    border: none !important;
-    border-radius: var(--border-radius) !important;
-    box-shadow: var(--box-shadow);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
-    transition: transform 0.3s ease, box-shadow 0.3s ease;
-    padding: 2.5rem !important;
-}
-
-.border.rounded-3:hover {
-    transform: translateY(-5px);
-    box-shadow: var(--box-shadow-hover);
-}
-
-.display-5 {
-    color: var(--dark-color);
-    font-weight: 700 !important;
-    margin-bottom: 1.5rem !important;
-    font-size: 2.5rem !important;
-    background: var(--gradient-primary);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
-}
-
-.lead {
-    color: var(--secondary-color);
-    font-size: 1.2rem !important;
-    margin-bottom: 2rem !important;
-}
-
-code {
-    background: rgba(37, 211, 102, 0.1);
-    color: var(--primary-color);
-    padding: 0.2rem 0.5rem;
-    border-radius: 4px;
-    font-size: 0.9rem;
-}
-
-.dashboard-button {
-    background: var(--gradient-primary) !important;
-    border: none !important;
-    padding: 1rem 2rem !important;
-    font-size: 1.1rem !important;
-    font-weight: 600 !important;
-    border-radius: var(--border-radius) !important;
-    box-shadow: 0 4px 15px rgba(37, 211, 102, 0.2) !important;
-    transition: all 0.3s ease !important;
-    text-decoration: none !important;
-    margin: 0.5rem auto !important;
-    width: 100%;
-    max-width: 400px;
-    text-align: center;
-    display: block !important;
+.main-header {
+    background: var(--primary-color) !important;
     color: white !important;
+    padding: 1.5em 2em !important;
+    border-radius: 24px !important;
+    margin-bottom: 2em !important;
+    box-shadow: 
+        0 20px 40px rgba(0, 168, 132, 0.2),
+        inset 0 0 80px rgba(255, 255, 255, 0.15) !important;
     position: relative;
     overflow: hidden;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    transition: all 0.3s ease-in-out;
 }
 
-.dashboard-button:hover {
-    transform: translateY(-3px) !important;
-    box-shadow: 0 8px 25px rgba(37, 211, 102, 0.3) !important;
-    background: var(--gradient-secondary) !important;
+.hidden {
+   display:none !important;
 }
 
-.dashboard-button::after {
+.ui.stackable.cards > .card.hidden {
+    display: none !important;
+}
+
+.main-header::before {
     content: '';
     position: absolute;
     top: 0;
     left: 0;
-    width: 100%;
-    height: 100%;
-    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
-    transform: translateX(-100%);
+    right: 0;
+    bottom: 0;
+    background: 
+        radial-gradient(
+            circle at top right,
+            rgba(255,255,255,0.2) 0%,
+            rgba(255,255,255,0) 60%
+        ),
+        linear-gradient(
+            45deg,
+            rgba(255,255,255,0.1) 0%,
+            rgba(255,255,255,0) 70%
+        );
+    opacity: 0.8;
+    z-index: 1;
 }
 
-.dashboard-button:hover::after {
-    animation: shine 1s ease-in-out;
+.rotate-main-header::after {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    right: -50%;
+    bottom: -50%;
+    background: 
+        radial-gradient(
+            circle,
+            rgba(255,255,255,0.1) 0%,
+            transparent 70%
+        );
+    animation: rotate 20s linear infinite;
+    z-index: 0;
 }
 
-/* Estilo específico para o botão de desconectar */
-#disconnectButton {
-    background: var(--gradient-secondary) !important;
-    box-shadow: 0 4px 15px rgba(7, 94, 84, 0.2) !important;
+@keyframes rotate {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
 }
 
-#disconnectButton:hover {
-    background: linear-gradient(135deg, #075e54 0%, #128c7e 100%) !important;
-    box-shadow: 0 8px 25px rgba(7, 94, 84, 0.3) !important;
+.main-header::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: 
+        radial-gradient(
+            circle,
+            rgba(255,5,255,0.5) 0%,
+            transparent 70%
+        );
+    animation: pulse 3s ease-in-out infinite;
+    z-index: 0;
 }
 
-/* Status de conexão */
-#connectstatus {
-    color: var(--secondary-color);
-    font-weight: 500;
-    transition: all 0.3s ease;
-    padding: 10px 20px;
-    border-radius: 8px;
-    background-color: rgba(220, 248, 198, 0.2);
-    margin-top: 20px;
+@keyframes pulse {
+    0%, 100% { transform: scale(1); opacity: 0.8; }
+    50% { transform: scale(1.2); opacity: 0.4; }
 }
 
-/* Container de QR code */
-#qrContainer {
-    transition: all 0.3s ease;
-    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
-    border-radius: 12px !important;
-    border: 10px solid var(--primary-color) !important;
-    background-color: white;
-    overflow: hidden;
+.main-header .ui.header {
+    position: relative;
+    z-index: 2;
+    margin: 0 !important;
+    font-weight: 700 !important;
+    font-size: clamp(1.5em, 3vw, 1.8em) !important;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2) !important;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    letter-spacing: 0.5px;
 }
 
-#qrContainer img {
-    max-width: 100%;
-    height: auto;
-    display: block;
+.main-header .title-container {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: white;
 }
 
-@keyframes shine {
-    100% {
-        transform: translateX(100%);
+.main-header .whatsapp.icon {
+    font-size: 1em !important;
+}
+
+.main-header .whatsapp.icon:hover {
+    transform: scale(1.1);
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.main-header .version-label {
+    margin-top: 4px !important;
+    background: rgba(255,255,255,0.12);
+    color: white;
+    font-size: 0.5em;
+    padding: 4px 10px;
+    border-radius: 12px;
+    backdrop-filter: blur(4px);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    transition: all 0.25s ease;
+    letter-spacing: 0.5px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.main-header .version-label:hover {
+    background: rgba(255,255,255,0.2);
+    transform: translateY(-2px);
+}
+
+@media (min-width: 768px) {
+    .main-header {
+        padding: 2em !important;
     }
+
+    .main-header .ui.header {
+        flex-direction: column;
+    }
+
+    .main-header .version-label {
+        margin-top: 4px !important;
+    }
+}
+
+@keyframes float {
+    0% { transform: translateY(0px) rotate(0deg); }
+    50% { transform: translateY(-8px) rotate(5deg); }
+    100% { transform: translateY(0px) rotate(0deg); }
+}
+
+.ui.header {
+    font-weight: 600 !important;
+    color: var(--text-color) !important;
+}
+
+.ui.cards > .card {
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05) !important;
+    transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) !important;
+    border-radius: 16px !important;
+    margin: 0.7em !important;
+    background-color: var(--message-background) !important;
+    border: 1px solid rgba(18, 140, 126, 0.1);
+}
+
+.ui.cards > .card:hover {
+    transform: translateY(-8px) !important;
+    box-shadow: 0 12px 24px rgba(18, 140, 126, 0.15) !important;
+    background-color: var(--card-hover-color) !important;
+}
+
+.ui.horizontal.divider {
+    font-size: 1.3em !important;
+    color: var(--secondary-color) !important;
+    margin: 2.5em 0 !important;
+    font-weight: 700 !important;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.ui.success.message {
+    border-radius: 16px !important;
+    box-shadow: 0 4px 8px rgba(37, 211, 102, 0.1) !important;
+    border: 1px solid rgba(37, 211, 102, 0.2) !important;
+    background-color: rgba(231, 247, 232, 0.8) !important;
+    color: var(--success-green) !important;
+    animation: slideIn 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    backdrop-filter: blur(10px);
+}
+
+@keyframes slideIn {
+    from { transform: translateX(-30px); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+}
+
+.ui.button {
+    border-radius: 12px !important;
+    transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) !important;
+    /* background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%) !important; */
+    /* background: var(--primary-color) !important; */
+    color: white !important;
+    font-weight: 600 !important;
+    letter-spacing: 0.5px;
+}
+
+.ui.button:hover {
+    transform: translateY(-3px) !important;
+    box-shadow: 0 8px 16px rgba(0, 168, 132, 0.2) !important;
+    filter: brightness(0.95);
+}
+
+.ui.form input, .ui.form textarea {
+    border-radius: 12px !important;
+    border: 2px solid rgba(18, 140, 126, 0.1) !important;
+    transition: all 0.3s ease;
+}
+
+.ui.form input:focus, .ui.form textarea:focus {
+    border-color: var(--primary-color) !important;
+    box-shadow: 0 0 0 3px rgba(0, 168, 132, 0.1) !important;
+}
+
+/*
+.ui.toast-container {
+    padding: 1.5em !important;
+}
+
+.ui.toast {
+    border-radius: 16px !important;
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1) !important;
+    background-color: var(--message-background) !important;
+    border: 1px solid rgba(18, 140, 126, 0.1);
+}
+*/
+
+.ui.grid {
+    margin: -0.7em !important;
+}
+
+.ui.grid > .column {
+    padding: 0.7em !important;
 }
 
 @keyframes fadeIn {
-    from {
-        opacity: 0;
-        transform: translateY(20px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
+    from { opacity: 0; transform: translateY(30px); }
+    to { opacity: 1; transform: translateY(0); }
 }
 
-.container {
-    animation: fadeIn 0.5s ease-out forwards;
+.ui.cards {
+    animation: fadeIn 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
-/* Responsividade */
-@media (max-width: 768px) {
-    .container {
-        padding: 1rem !important;
-    }
+.ui.modal {
+    border-radius: 20px !important;
+    background-color: var(--message-background) !important;
+    overflow: hidden;
+}
 
-    .border.rounded-3 {
-        padding: 1.5rem !important;
-    }
+.ui.modal > .header {
+    border-radius: 20px 20px 0 0 !important;
+    background: var(--gradient-start) !important;
+    color: white !important;
+    padding: 1.5em !important;
+}
 
-    .display-5 {
-        font-size: 2rem !important;
-    }
+.ui.modal > .actions {
+    border-radius: 0 0 20px 20px !important;
+    background-color: rgba(248, 248, 248, 0.8) !important;
+    backdrop-filter: blur(10px);
+}
 
-    .lead {
-        font-size: 1rem !important;
-    }
-
-    .dashboard-button {
-        padding: 0.85rem 1.5rem !important;
-        font-size: 1rem !important;
-        margin: 0.35rem auto !important;
-    }
-} 
+.ui.modal > .actions > .ui.button {
+    _background: var(--primary-color) !important;
+    _color: white !important;
+    font-weight: 600 !important;
+    letter-spacing: 0.5px;
+}

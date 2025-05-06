@@ -43,9 +43,9 @@ Optional:
 
 * Docker (Containerization)
 
-## Atualização de dependências
+## Updating dependencies
 
-Este projeto utiliza a biblioteca whatsmeow para comunicação com o WhatsApp. Para atualizar a biblioteca para a versão mais recente, execute:
+This project uses the whatsmeow library to communicate with WhatsApp. To update the library to the latest version, run:
 
 ```bash
 go get -u go.mau.fi/whatsmeow@latest
@@ -63,72 +63,91 @@ go build .
 By default it will start a REST service in port 8080. These are the parameters
 you can use to alter behaviour
 
+* -admintoken  : sets authentication token for admin endpoints. If not specified it will be read from .env
 * -address  : sets the IP address to bind the server to (default 0.0.0.0)
 * -port  : sets the port number (default 8080)
 * -logtype : format for logs, either console (default) or json
+* -color : enable colored output for console logs
+* -osname : Connection OS Name in Whatsapp
+* -skipmedia : Skip downloading media from messages
 * -wadebug : enable whatsmeow debug, either INFO or DEBUG levels are suported
 * -sslcertificate : SSL Certificate File
 * -sslprivatekey : SSL Private Key File
-* -admintoken : your admin token to create, get, or delete users from database
-* --logtype=console --color=true
-* --logtype json
 
 Example:
 
-Para ter logs coloridos:
-```
-Depois:
-```
-./wuzapi --logtype=console --color=true
-```
- (ou -color no Docker, etc.)
+To have colored logs:
 
-Para logs em JSON:
-Rode:
 ```
-./wuzapi --logtype json Nesse caso, color é irrelevante.
+./wuzapi -logtype=console -color=true
 ```
 
-Com fuso horário:
-Defina TZ=America/Sao_Paulo ./wuzapi ... no seu shell, ou no Docker Compose environment: TZ=America/Sao_Paulo.
+For JSON logs:
+
+```
+./wuzapi -logtype json 
+```
+
+With time zone: 
+
+Set `TZ=America/New_York ./wuzapi ...` in your shell or in your .env file or Docker Compose environment: `TZ=America/New_York`.  
+
+## Configuration
+
+WuzAPI uses a <code>.env</code> file for configuration. Here are the required settings:
+
+### For PostgreSQL
+```
+WUZAPI_ADMIN_TOKEN=your_admin_token_here
+DB_USER=wuzapi
+DB_PASSWORD=wuzapi
+DB_NAME=wuzapi
+DB_HOST=localhost
+DB_PORT=5432
+TZ=America/New_York
+```
+
+### For SQLite
+```
+WUZAPI_ADMIN_TOKEN=your_admin_token_here
+TZ=America/New_York
+```
+
+Key configuration options:
+
+* WUZAPI_ADMIN_TOKEN: Required - Authentication token for admin endpoints
+* TZ: Optional - Timezone for server operations (default: UTC)
+* PostgreSQL-specific options: Only required when using PostgreSQL backend
+
 
 ## Usage
 
-Na primeira execução, o sistema cria automaticamente um usuário "admin" com o token administrativo definido na variável de ambiente `WUZAPI_ADMIN_TOKEN` ou no parâmetro `-admintoken`. Este usuário pode ser usado para autenticação e para gerenciar outros usuários.
-
-Para interagir com a API, você deve incluir o cabeçalho `Token` nas requisições HTTP, contendo o token de autenticação do usuário. Você pode ter vários usuários (diferentes números de WhatsApp) no mesmo servidor.
-
-O daemon também serve alguns arquivos web estáticos, úteis para desenvolvimento/teste, que você pode acessar com seu navegador:
+To interact with the API, you must include the `Authorization` header in HTTP requests, containing the user's authentication token. You can have multiple users (different WhatsApp numbers) on the same server.  
 
 * Uma referência da API Swagger em [/api](/api)
 * Uma página web de exemplo para conectar e escanear códigos QR em [/login](/login) (onde você precisará passar ?token=seu_token_aqui)
 
+A Swagger API reference at [/api](/api)
+
+A sample web page to connect and scan QR codes at [/login](/login)
+
 ## ADMIN Actions
 
-Você pode listar, adicionar e excluir usuários usando os endpoints de administração. Para usar essa funcionalidade, você deve configurar o token de administrador de uma das seguintes formas:
+You can list, add and remove users using the admin endpoints. For that you must use the WUZAPI_ADMIN_TOKEN in the Authorization header
 
-1. Definir a variável de ambiente `WUZAPI_ADMIN_TOKEN` antes de iniciar o aplicativo
-   ```shell
-   export WUZAPI_ADMIN_TOKEN=seu_token_seguro
-   ```
+Then you can use the /admin/users endpoint with the Authorization header containing the token to:
 
-2. Ou passar o parâmetro `-admintoken` na linha de comando
-   ```shell
-   ./wuzapi -admintoken=seu_token_seguro
-   ```
+- `GET /admin/users` - List all users
+- `POST /admin/users` - Create a new user
+- `DELETE /admin/users/{id}` - Remove a user
 
-Então você pode usar o endpoint `/admin/users` com o cabeçalho `Authorization` contendo o token para:
-- `GET /admin/users` - Listar todos os usuários
-- `POST /admin/users` - Criar um novo usuário
-- `DELETE /admin/users/{id}` - Remover um usuário
+The JSON body for creating a new user must contain:
 
-O corpo JSON para criar um novo usuário deve conter:
-
-- `name` [string] : Nome do usuário
-- `token` [string] : Token de segurança para autorizar/autenticar este usuário
-- `webhook` [string] : URL para enviar eventos via POST (opcional)
-- `events` [string] : Lista de eventos separados por vírgula a serem recebidos (opcional) - Eventos válidos são: "Message", "ReadReceipt", "Presence", "HistorySync", "ChatPresence", "All"
-- `expiration` [int] : Timestamp de expiração (opcional, não é aplicado pelo sistema)
+- `name` [string] : User's name 
+- `token` [string] : Security token to authorize/authenticate this user
+- `webhook` [string] : URL to send events via POST (optional)
+- `events` [string] : Comma-separated list of events to receive (required) - Valid events are: "Message", "ReadReceipt", "Presence", "HistorySync", "ChatPresence", "All"
+- `expiration` [int] : Expiration timestamp (optional, not enforced by the system)
 
 ## API reference 
 
@@ -137,9 +156,14 @@ request body, always passing the Token header for authenticating the request.
 
 Check the [API Reference](https://github.com/asternic/wuzapi/blob/main/API.md)
 
+## Contributors
+Thanks to these amazing people:
+<!-- ALL-CONTRIBUTORS-LIST:START - Do not remove -->
+<!-- ALL-CONTRIBUTORS-LIST:END -->
+
 ## License
 
-Copyright &copy; 2022 Nicolás Gudiño
+Copyright &copy; 2025 Nicolás Gudiño
 
 [MIT](https://choosealicense.com/licenses/mit/)
 

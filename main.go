@@ -4,7 +4,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"os/signal"
@@ -31,17 +30,21 @@ type server struct {
 	exPath string
 }
 
+// Replace the global variables
 var (
 	address     = flag.String("address", "0.0.0.0", "Bind IP Address")
-	port        = flag.String("port", "3000", "Listen Port")
+	port        = flag.String("port", "8080", "Listen Port")
 	waDebug     = flag.String("wadebug", "", "Enable whatsmeow debug (INFO or DEBUG)")
 	logType     = flag.String("logtype", "console", "Type of log output (console or json)")
+	skipMedia   = flag.Bool("skipmedia", false, "Do not attempt to download media in messages)")
+	osName      = flag.String("osname", "Mac OS 10", "Connection OSName in Whatsapp")
 	colorOutput = flag.Bool("color", false, "Enable colored output for console logs")
 	sslcert     = flag.String("sslcertificate", "", "SSL Certificate File")
 	sslprivkey  = flag.String("sslprivatekey", "", "SSL Certificate Private Key File")
 	adminToken  = flag.String("admintoken", "", "Security Token to authorize admin actions (list/create/remove users)")
 
 	container     *sqlstore.Container
+	clientManager = NewClientManager()
 	killchannel   = make(map[int](chan bool))
 	userinfocache = cache.New(5*time.Minute, 10*time.Minute)
 )
@@ -49,7 +52,7 @@ var (
 func init() {
 	err := godotenv.Load()
 	if err != nil {
-		log.Warn().Err(err).Msg("Não foi possível carregar o arquivo .env (pode ser que não exista).")
+		log.Warn().Err(err).Msg("It was not possible to load the .env file (it may not exist).")
 	}
 
 	flag.Parse()
@@ -58,10 +61,10 @@ func init() {
 	if tz != "" {
 		loc, err := time.LoadLocation(tz)
 		if err != nil {
-			log.Warn().Err(err).Msgf("Não foi possível definir TZ=%q, usando UTC", tz)
+			log.Warn().Err(err).Msgf("It was not possible to define TZ=%q, using UTC", tz)
 		} else {
 			time.Local = loc
-			log.Info().Str("TZ", tz).Msg("Timezone definido pelo ambiente")
+			log.Info().Str("TZ", tz).Msg("Timezone defined")
 		}
 	}
 
@@ -118,39 +121,16 @@ func main() {
 	}
 	exPath := filepath.Dir(ex)
 
-	dbUser := os.Getenv("DB_USER")
-	dbPassword := os.Getenv("DB_PASSWORD")
-	dbName := os.Getenv("DB_NAME")
-	dbHost := os.Getenv("DB_HOST")
-	dbPort := os.Getenv("DB_PORT")
-
-	dsn := fmt.Sprintf(
-		"user=%s password=%s dbname=%s host=%s port=%s sslmode=disable",
-		dbUser, dbPassword, dbName, dbHost, dbPort,
-	)
-
-	var db *sqlx.DB
-	const maxAttempts = 10
-	for i := 1; i <= maxAttempts; i++ {
-		db, err = sqlx.Open("postgres", dsn)
-		if err == nil {
-			errPing := db.Ping()
-			if errPing == nil {
-				log.Info().Msgf("[DB] Conexão PostgreSQL estabelecida na tentativa %d", i)
-				break
-			}
-			err = errPing
-		}
-		log.Warn().Msgf("[DB] Falha ao conectar (%d/%d): %v", i, maxAttempts, err)
-		time.Sleep(2 * time.Second)
-	}
+	db, err := InitializeDatabase(exPath)
 	if err != nil {
-		log.Fatal().Err(err).Msgf("[DB] Não foi possível conectar ao PostgreSQL após %d tentativas", maxAttempts)
+		log.Fatal().Err(err).Msg("Failed to initialize database")
 		os.Exit(1)
 	}
+	defer db.Close()
 
-	if err := runMigrations(db, exPath); err != nil {
-		log.Fatal().Err(err).Msg("Falha ao executar migrações")
+	// Initialize the schema
+	if err = initializeSchema(db); err != nil {
+		log.Fatal().Err(err).Msg("Failed to initialize schema")
 		os.Exit(1)
 	}
 
@@ -158,9 +138,23 @@ func main() {
 	if *waDebug != "" {
 		dbLog = waLog.Stdout("Database", *waDebug, *colorOutput)
 	}
-	container, err = sqlstore.New("postgres", dsn, dbLog)
+
+	// Get database configuration
+	config := getDatabaseConfig(exPath)
+	var storeConnStr string
+	if config.Type == "postgres" {
+		storeConnStr = fmt.Sprintf(
+			"user=%s password=%s dbname=%s host=%s port=%s sslmode=disable",
+			config.User, config.Password, config.Name, config.Host, config.Port,
+		)
+		container, err = sqlstore.New("postgres", storeConnStr, dbLog)
+	} else {
+		storeConnStr = "file:" + filepath.Join(config.Path, "main.db") + "?_pragma=foreign_keys(1)&_busy_timeout=3000"
+		container, err = sqlstore.New("sqlite", storeConnStr, dbLog)
+	}
+
 	if err != nil {
-		log.Fatal().Err(err).Msg("Falha ao criar container sqlstore")
+		log.Fatal().Err(err).Msg("Error creating sqlstore")
 		os.Exit(1)
 	}
 
@@ -188,72 +182,67 @@ func main() {
 	go func() {
 		if *sslcert != "" {
 			if err := srv.ListenAndServeTLS(*sslcert, *sslprivkey); err != nil && err != http.ErrServerClosed {
-				log.Fatal().Err(err).Msg("Falha ao iniciar o servidor HTTPS")
+				log.Fatal().Err(err).Msg("HTTPS server failed to start")
 			}
 		} else {
 			if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-				log.Fatal().Err(err).Msg("Falha ao iniciar o servidor HTTP")
+				log.Fatal().Err(err).Msg("HTTP server failed to start")
 			}
 		}
 	}()
-	log.Info().Str("address", *address).Str("port", *port).Msg("Servidor iniciado. Aguardando conexões...")
+	log.Info().Str("address", *address).Str("port", *port).Msg("Server started. Waiting for connections...")
 
 	<-done
-	log.Warn().Msg("Servidor parando...")
+	log.Warn().Msg("Stopping server...")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if err := srv.Shutdown(ctx); err != nil {
-		log.Error().Err(err).Msg("Falha ao parar o servidor")
+		log.Error().Err(err).Msg("Failed to stop server")
 		os.Exit(1)
 	}
-	log.Info().Msg("Servidor saiu corretamente")
+	log.Info().Msg("Server Exited Properly")
 }
 
-func runMigrations(db *sqlx.DB, exPath string) error {
-	log.Info().Msg("Checando se já existe algum usuário...")
-
-	var userCount int
-	if err := db.Get(&userCount, "SELECT COUNT(*) FROM users;"); err == nil {
-		if userCount > 0 {
-			log.Info().Msgf("Usuário(s) encontrado(s): %d. Pulando migrações...", userCount)
-			return nil
-		}
-		log.Warn().Msg("Nenhum usuário encontrado. Rodando migração e inserindo usuário padrão.")
-		return applyMigrationsAndCreateUser(db, exPath)
-	} else {
-		log.Warn().Err(err).Msg("Erro consultando usuários (talvez a tabela nem exista). Rodando migração...")
-		return applyMigrationsAndCreateUser(db, exPath)
-	}
-}
-
-func applyMigrationsAndCreateUser(db *sqlx.DB, exPath string) error {
-	log.Info().Msg("Executando migrações...")
-
-	migFile := filepath.Join(exPath, "migrations", "0001_create_users_table.up.sql")
-	sqlBytes, err := ioutil.ReadFile(migFile)
+func initializeSchema(db *sqlx.DB) error {
+	// First, check if the table exists
+	var exists bool
+	err := db.Get(&exists, `
+        SELECT EXISTS (
+            SELECT 1 
+            FROM information_schema.tables 
+            WHERE table_name = 'users'
+        );`)
 	if err != nil {
-		return fmt.Errorf("falha ao ler arquivo de migração (%s): %w", migFile, err)
-	}
-	if _, err = db.Exec(string(sqlBytes)); err != nil {
-		return fmt.Errorf("falha ao executar migração: %w", err)
-	}
-	log.Info().Msg("Migração executada com sucesso.")
-
-	// Usar o token administrativo definido na variável de ambiente
-	userToken := *adminToken
-	if userToken == "" {
-		userToken = "1234ABCD" // Valor padrão caso não esteja definido
-		log.Warn().Msg("WUZAPI_ADMIN_TOKEN não definido, usando token padrão")
+		log.Error().Err(err).Msg("Failed to check if users table exists")
+		return err
 	}
 
-	if _, err = db.Exec("INSERT INTO users (name, token) VALUES ($1, $2)", "admin", userToken); err != nil {
-		if strings.Contains(err.Error(), "duplicate key") {
-			log.Warn().Msg("Usuário padrão já existe. Ignorando.")
-			return nil
-		}
-		return fmt.Errorf("erro ao inserir usuário padrão: %w", err)
+	if exists {
+		log.Info().Msg("Users table already exists")
+		return nil
 	}
-	log.Info().Msgf("Usuário padrão (admin/%s) inserido com sucesso.", userToken)
+
+	// PostgreSQL version of the create table statement
+	sqlStmt := `CREATE TABLE IF NOT EXISTS users (
+        id SERIAL PRIMARY KEY,
+        name TEXT NOT NULL,
+        token TEXT NOT NULL,
+        webhook TEXT NOT NULL DEFAULT '',
+        jid TEXT NOT NULL DEFAULT '',
+        qrcode TEXT NOT NULL DEFAULT '',
+        connected INTEGER,
+        expiration INTEGER,
+        events TEXT NOT NULL DEFAULT 'All',
+        proxy_url TEXT DEFAULT ''
+    );`
+
+	_, err = db.Exec(sqlStmt)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to create users table")
+		return err
+	}
+
+	log.Info().Msg("Successfully created users table")
 	return nil
 }

@@ -1,7 +1,7 @@
 openapi: 3.0.0
 info:
   title: WUZAPI
-  description: "WUZAPI implements a REST API for WhatsApp.\n\nHá dois métodos de autenticação:\n\n1. **Para usuários normais**: Use o cabeçalho 'token' que será correspondido com a tabela 'users' no banco de dados.\n\n2. **Para administradores**: Use o cabeçalho 'Authorization' com o token administrativo para acessar rotas protegidas de administração.\n\nA API cria automaticamente um usuário administrador com o nome 'admin' e o token definido na variável de ambiente WUZAPI_ADMIN_TOKEN.\n\nVocê também pode inserir um usuário adicional com este comando:\n\n<pre>psql -h '$DB_HOST' -p '$DB_PORT' -U '$DB_USER' -d '$DB_NAME' -c 'INSERT INTO users (name, token) VALUES ('usuario2','seu_token_aqui');\"</pre>\n\nVocê precisará escanear o código QR usando seu próprio front-end ou poderá usar o fornecido [aqui](/login?token=seu_token_aqui).\n\nPara receber mensagens, você precisará criar seu próprio servidor e definir sua URL como hook usando a chamada de API [webhook](#Webhook).\n\n <b>PS:</b> Números de telefone devem ter código de país com ou sem o sinal <b>+</b>, por exemplo: <b>5491155553934</b> ou <b>+5491155553934</b>, mas nativamente o WhatsApp requer prefixo sem sinal de adição."
+  description: "WUZAPI implements a REST API for WhatsApp.\n\nFor authentication you must pass the 'token' header with a token that will be matched with the 'users' table on database).\n\nYou can insert a sample user with this command:\n\n<pre><code>curl -X POST http://localhost:8080/admin/users \\\n-H \"Authorization: $WUZAPI_ADMIN_TOKEN\" \\\n-H \"Content-Type: application/json\" \\\n-d '{\"name\": \"John\", \"token\": \"Z1234ABCD\", \"events\": \"All\"}' </code> </pre>\n\nYou will need to scan the QR code using your own front end or you could use the provided one [here](/login?token=1234ABCD).\n\nTo receive messages you will need to create your own server and set its URL as hook using the [webhook](#Webhook) API call.\n\n <b>PS:</b> Phone numbers should have country code with or without the <b>+</b> sign eg: <b>5491155553934</b> or <b>+5491155553934</b>, but natively whatsapp requires no plus sign prefix."
   version: '3.0'
   termsOfService: ''
    
@@ -82,7 +82,21 @@ paths:
                 example: 
                   code: 204
                   success: true
-
+  /newsletter/list:
+    get:
+      tags:
+        - Newsletter
+      summary: List subscribed newsletters
+      description: Returns complete list of subscribed newsletters
+      security:
+        - ApiKeyAuth: []
+      responses:
+        200:
+          description: Response
+          content:
+            application/json:
+              schema:
+                example: {"code": 200, "data": {"Newsletter": [{"id": "120363144038483540@newsletter", "state": {"type": "active" }, "thread_metadata": {"creation_time": "1688746895", "description": {"id": "1689653839450668", "text": "WhatsApp’s official channel. Follow for our latest feature launches, updates, exclusive drops and more.", "update_time": "1689653839450668" }, "invite": "0029Va4K0PZ5a245NkngBA2M", "name": {"id": "1688746895480511", "text": "WhatsApp", "update_time": "1688746895480511" }, "picture": {"direct_path": "/v/t61.24694-24/416962407_970228831134395_8869146381947923973_n.jpg?ccb=11-4&oh=01_Q5AaIRyTfP806JEGJDm0XWU5E-D4LcA-Wj3csSwh1jJTVanC&oe=67D550F1&_nc_sid=5e03e0&_nc_cat=110", "id": "1707950960975554", "type": "IMAGE", "url": "" }, "preview": {"direct_path": "/v/t61.24694-24/416962407_970228831134395_8869146381947923973_n.jpg?stp=dst-jpg_s192x192_tt6&ccb=11-4&oh=01_Q5AaIawuPXJUw9grRFJZtAJEc6QNm0XpqJq4X1Ssi9xNI0Qf&oe=67D550F1&_nc_sid=5e03e0&_nc_cat=110", "id": "1707950960975554", "type": "PREVIEW", "url": "" }, "settings": {"reaction_codes": {"value": "ALL" } }, "subscribers_count": "0", "verification": "verified" }, "viewer_metadata": {"mute": "on", "role": "subscriber" } } ] }, "success": true }
   /webhook:
     get:
       tags:
@@ -157,7 +171,6 @@ paths:
             application/json:
               schema:
                 example: { "code": 200, "data": { "Details": "Webhook and events deleted successfully" }, "success": true }
-  /webhook/update:
     put:
       tags:
         - Webhook
@@ -452,6 +465,29 @@ paths:
             application/json:
               schema:
                 example: { "code": 200, "data": { "5491122223333@s.whatsapp.net": { "BusinessName": "", "FirstName": "", "Found": true, "FullName": "", "PushName": "FOP2" }, "549113334444@s.whatsapp.net": { "BusinessName": "", "FirstName": "", "Found": true, "FullName": "", "PushName": "Asternic" } } }
+  /chat/delete:
+    post:
+      tags:
+        - Chat 
+      summary: Deletes a message sent by user
+      description: Deletes a messages sent by the same user
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#definitions/DeleteMessage'
+
+      responses:
+        200:
+          description: Response
+          content:
+            application/json:
+              schema:
+                example: { "code": 200, "data": { "Details": "Message deleted" }, "success": true }
+
   /chat/markread:
     post:
       tags:
@@ -799,6 +835,7 @@ paths:
       description: Returns complete list of subscribed groups
       security:
         - ApiKeyAuth: []
+
       responses:
         200:
           description: Response
@@ -812,6 +849,8 @@ paths:
         - Group 
       summary: Get Group Invite Link
       description: Gets the invite link for a group, optionally resetting it to create a new/different one
+      security:
+        - ApiKeyAuth: []
       parameters:
         - in: query
           name: groupJID
@@ -838,6 +877,8 @@ paths:
         - Group 
       summary: Gets group information
       description: Retrieves information about a specific group
+      security:
+        - ApiKeyAuth: []
       parameters:
         - in: query
           name: groupJID
@@ -898,21 +939,6 @@ paths:
               schema:
                 example: { "code": 200, "data": { "Details": "Group Photo set successfully", "PictureID": "1222332123" }, "success": true }
 
-  /newsletter/list:
-    get:
-      tags:
-        - Newsletter
-      summary: List subscribed newsletters
-      description: Returns complete list of subscribed newsletters
-
-      responses:
-        200:
-          description: Response
-          content:
-            application/json:
-              schema:
-                example: {"code": 200, "data": {"Newsletter": [{"id": "120363144038483540@newsletter", "state": {"type": "active" }, "thread_metadata": {"creation_time": "1688746895", "description": {"id": "1689653839450668", "text": "WhatsApp’s official channel. Follow for our latest feature launches, updates, exclusive drops and more.", "update_time": "1689653839450668" }, "invite": "0029Va4K0PZ5a245NkngBA2M", "name": {"id": "1688746895480511", "text": "WhatsApp", "update_time": "1688746895480511" }, "picture": {"direct_path": "/v/t61.24694-24/416962407_970228831134395_8869146381947923973_n.jpg?ccb=11-4&oh=01_Q5AaIRyTfP806JEGJDm0XWU5E-D4LcA-Wj3csSwh1jJTVanC&oe=67D550F1&_nc_sid=5e03e0&_nc_cat=110", "id": "1707950960975554", "type": "IMAGE", "url": "" }, "preview": {"direct_path": "/v/t61.24694-24/416962407_970228831134395_8869146381947923973_n.jpg?stp=dst-jpg_s192x192_tt6&ccb=11-4&oh=01_Q5AaIawuPXJUw9grRFJZtAJEc6QNm0XpqJq4X1Ssi9xNI0Qf&oe=67D550F1&_nc_sid=5e03e0&_nc_cat=110", "id": "1707950960975554", "type": "PREVIEW", "url": "" }, "settings": {"reaction_codes": {"value": "ALL" } }, "subscribers_count": "0", "verification": "verified" }, "viewer_metadata": {"mute": "on", "role": "subscriber" } } ] }, "success": true }
-
 
 definitions:
   User:
@@ -923,7 +949,7 @@ definitions:
         example: 1
       name:
         type: string
-        example: admin
+        example: John Doe
 
   CreateUser:
     type: object
@@ -933,10 +959,10 @@ definitions:
     properties:
       name:
         type: string
-        example: admin
+        example: John Doe
       token:
         type: string
-        example: "seu_token_aqui"
+        example: "1234ABCD"
 
   DeleteUser:
     type: object
@@ -1030,7 +1056,7 @@ definitions:
     properties:
       type:
         type: string
-        example: avaliable
+        example: available
   MessageContact:
     type: object
     required: 
@@ -1334,6 +1360,14 @@ definitions:
           Participant:
             type: string
             example: "5491155553935@s.whatsapp.net"
+  DeleteMessage:
+    type: object
+    required:
+      - Id
+    properties:
+      Id:
+        type: string
+        example: "1234-abcd-21234"
   Markread:
     type: object
     required:

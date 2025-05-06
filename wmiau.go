@@ -13,27 +13,23 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"sync/atomic"
 	"time"
 
 	"github.com/go-resty/resty/v2"
-	"github.com/jmoiron/sqlx" // Importação do sqlx
+	"github.com/jmoiron/sqlx"
 	"github.com/mdp/qrterminal/v3"
 	"github.com/patrickmn/go-cache"
 	"github.com/rs/zerolog/log"
 	"github.com/skip2/go-qrcode"
 	"go.mau.fi/whatsmeow"
 	"go.mau.fi/whatsmeow/appstate"
-	waProto "go.mau.fi/whatsmeow/binary/proto"
+	"go.mau.fi/whatsmeow/proto/waCompanionReg"
 	"go.mau.fi/whatsmeow/store"
 	"go.mau.fi/whatsmeow/types"
 	"go.mau.fi/whatsmeow/types/events"
 	waLog "go.mau.fi/whatsmeow/util/log"
 )
 
-// var wlog waLog.Logger
-var clientPointer = make(map[int]*whatsmeow.Client)
-var clientHttp = make(map[int]*resty.Client)
 var historySyncID int32
 
 // Declaração do campo db como *sqlx.DB
@@ -126,26 +122,18 @@ func parseJID(arg string) (types.JID, bool) {
 }
 
 func (s *server) startClient(userID int, textjid string, token string, subscriptions []string) {
-
 	log.Info().Str("userid", strconv.Itoa(userID)).Str("jid", textjid).Msg("Starting websocket connection to Whatsapp")
 
 	var deviceStore *store.Device
 	var err error
 
-	if clientPointer[userID] != nil {
-		isConnected := clientPointer[userID].IsConnected()
-		if isConnected == true {
-			return
-		}
-	}
-
+	// First handle the device store initialization
 	if textjid != "" {
 		jid, _ := parseJID(textjid)
-		// If you want multiple sessions, remember their JIDs and use .GetDevice(jid) or .GetAllDevices() instead.
-		//deviceStore, err := container.GetFirstDevice()
 		deviceStore, err = container.GetDevice(jid)
 		if err != nil {
-			panic(err)
+			log.Error().Err(err).Msg("Failed to get device")
+			deviceStore = container.NewDevice()
 		}
 	} else {
 		log.Warn().Msg("No jid found. Creating new device")
@@ -157,33 +145,56 @@ func (s *server) startClient(userID int, textjid string, token string, subscript
 		deviceStore = container.NewDevice()
 	}
 
-	//store.CompanionProps.PlatformType = waProto.CompanionProps_CHROME.Enum()
-	//store.CompanionProps.Os = proto.String("Mac OS")
-
-	osName := "Mac OS 10"
-	store.DeviceProps.PlatformType = waProto.DeviceProps_UNKNOWN.Enum()
-	store.DeviceProps.Os = &osName
-
 	clientLog := waLog.Stdout("Client", *waDebug, *colorOutput)
+
+	// Create the client with initialized deviceStore
 	var client *whatsmeow.Client
 	if *waDebug != "" {
 		client = whatsmeow.NewClient(deviceStore, clientLog)
 	} else {
 		client = whatsmeow.NewClient(deviceStore, nil)
 	}
-	clientPointer[userID] = client
+
+	// Now we can use the client with the manager
+	clientManager.SetWhatsmeowClient(userID, client)
+
+	// When deleting clients
+	// clientManager.DeleteWhatsmeowClient(userID)
+	// clientManager.DeleteHTTPClient(userID)
+
+	if textjid != "" {
+		jid, _ := parseJID(textjid)
+		deviceStore, err = container.GetDevice(jid)
+		if err != nil {
+			panic(err)
+		}
+	} else {
+		log.Warn().Msg("No jid found. Creating new device")
+		deviceStore = container.NewDevice()
+	}
+
+	/*
+		if deviceStore == nil {
+			log.Warn().Msg("No store found. Creating new one")
+			deviceStore = container.NewDevice()
+		}
+	*/
+
+	store.DeviceProps.PlatformType = waCompanionReg.DeviceProps_UNKNOWN.Enum()
+	store.DeviceProps.Os = osName
+
+	clientManager.SetWhatsmeowClient(userID, client)
 	mycli := MyClient{client, 1, userID, token, subscriptions, s.db}
 	mycli.eventHandlerID = mycli.WAClient.AddEventHandler(mycli.myEventHandler)
 
-	//clientHttp[userID] = resty.New().EnableTrace()
-	clientHttp[userID] = resty.New()
-	clientHttp[userID].SetRedirectPolicy(resty.FlexibleRedirectPolicy(15))
+	httpClient := resty.New()
+	httpClient.SetRedirectPolicy(resty.FlexibleRedirectPolicy(15))
 	if *waDebug == "DEBUG" {
-		clientHttp[userID].SetDebug(true)
+		httpClient.SetDebug(true)
 	}
-	clientHttp[userID].SetTimeout(30 * time.Second)
-	clientHttp[userID].SetTLSClientConfig(&tls.Config{InsecureSkipVerify: true})
-	clientHttp[userID].OnError(func(req *resty.Request, err error) {
+	httpClient.SetTimeout(30 * time.Second)
+	httpClient.SetTLSClientConfig(&tls.Config{InsecureSkipVerify: true})
+	httpClient.OnError(func(req *resty.Request, err error) {
 		if v, ok := err.(*resty.ResponseError); ok {
 			// v.Response contains the last response from the server
 			// v.Err contains the original error
@@ -196,22 +207,24 @@ func (s *server) startClient(userID int, textjid string, token string, subscript
 	var proxyURL string
 	err = s.db.Get(&proxyURL, "SELECT proxy_url FROM users WHERE id=$1", userID)
 	if err == nil && proxyURL != "" {
-		clientHttp[userID].SetProxy(proxyURL)
+		httpClient.SetProxy(proxyURL)
 	}
+	clientManager.SetHTTPClient(userID, httpClient)
 
 	if client.Store.ID == nil {
 		// No ID stored, new login
-
 		qrChan, err := client.GetQRChannel(context.Background())
 		if err != nil {
 			// This error means that we're already logged in, so ignore it.
 			if !errors.Is(err, whatsmeow.ErrQRStoreContainsID) {
 				log.Error().Err(err).Msg("Failed to get QR channel")
+				return
 			}
 		} else {
 			err = client.Connect() // Si no conectamos no se puede generar QR
 			if err != nil {
-				panic(err)
+				log.Error().Err(err).Msg("Failed to connect client")
+				return
 			}
 			for evt := range qrChan {
 				if evt.Event == "code" {
@@ -230,19 +243,19 @@ func (s *server) startClient(userID int, textjid string, token string, subscript
 					}
 				} else if evt.Event == "timeout" {
 					// Clear QR code from DB on timeout
-					sqlStmt := `UPDATE users SET qrcode=$1 WHERE id=$2`
-					_, err := s.db.Exec(sqlStmt, "", userID)
+					sqlStmt := `UPDATE users SET qrcode='' WHERE id=$1`
+					_, err := s.db.Exec(sqlStmt, userID)
 					if err != nil {
 						log.Error().Err(err).Msg(sqlStmt)
 					}
 					log.Warn().Msg("QR timeout killing channel")
-					delete(clientPointer, userID)
+					clientManager.DeleteWhatsmeowClient(userID)
 					killchannel[userID] <- true
 				} else if evt.Event == "success" {
 					log.Info().Msg("QR pairing ok!")
 					// Clear QR code after pairing
-					sqlStmt := `UPDATE users SET qrcode=$1, connected=1 WHERE id=$2`
-					_, err := s.db.Exec(sqlStmt, "", userID)
+					sqlStmt := `UPDATE users SET qrcode='', connected=1 WHERE id=$1`
+					_, err := s.db.Exec(sqlStmt, userID)
 					if err != nil {
 						log.Error().Err(err).Msg(sqlStmt)
 					}
@@ -267,8 +280,8 @@ func (s *server) startClient(userID int, textjid string, token string, subscript
 		case <-killchannel[userID]:
 			log.Info().Str("userid", strconv.Itoa(userID)).Msg("Received kill signal")
 			client.Disconnect()
-			delete(clientPointer, userID)
-			sqlStmt := `UPDATE users SET qrcode=$1, connected=0 WHERE id=$2`
+			clientManager.DeleteWhatsmeowClient(userID)
+			sqlStmt := `UPDATE users SET qrcode='', connected=0 WHERE id=$1`
 			_, err := s.db.Exec(sqlStmt, "", userID)
 			if err != nil {
 				log.Error().Err(err).Msg(sqlStmt)
@@ -296,12 +309,6 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 	postmap["event"] = rawEvt
 	dowebhook := 0
 	path := ""
-
-	ex, err := os.Executable()
-	if err != nil {
-		panic(err)
-	}
-	exPath := filepath.Dir(ex)
 
 	switch evt := rawEvt.(type) {
 	case *events.AppStateSyncComplete:
@@ -345,7 +352,7 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 		if !found {
 			log.Warn().Msg("No user info cached on pairing?")
 		} else {
-			txtid := myuserinfo.(Values).Get("Id")
+			txtid = myuserinfo.(Values).Get("Id")
 			token := myuserinfo.(Values).Get("Token")
 			v := updateUserInfo(myuserinfo, "Jid", fmt.Sprintf("%s", jid))
 			userinfocache.Set(token, v, cache.NoExpiration)
@@ -373,188 +380,253 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 
 		log.Info().Str("id", evt.Info.ID).Str("source", evt.Info.SourceString()).Str("parts", strings.Join(metaParts, ", ")).Msg("Message Received")
 
-		// try to get Image if any
-		img := evt.Message.GetImageMessage()
-		if img != nil {
-			// check/creates user directory for files
-			userDirectory := filepath.Join(exPath, "files", "user_"+txtid)
-			_, err := os.Stat(userDirectory)
-			if os.IsNotExist(err) {
-				errDir := os.MkdirAll(userDirectory, 0751)
+		if !*skipMedia {
+			// try to get Image if any
+			img := evt.Message.GetImageMessage()
+			if img != nil {
+				// Create a temporary directory in /tmp
+				tmpDirectory := filepath.Join("/tmp", "user_"+txtid)
+				errDir := os.MkdirAll(tmpDirectory, 0751)
 				if errDir != nil {
-					log.Error().Err(errDir).Msg("Could not create user directory")
+					log.Error().Err(errDir).Msg("Could not create temporary directory")
 					return
+				}
+
+				// Download the image
+				data, err := mycli.WAClient.Download(img)
+				if err != nil {
+					log.Error().Err(err).Msg("Failed to download image")
+					return
+				}
+
+				// Determine the file extension based on the MIME type
+				exts, _ := mime.ExtensionsByType(img.GetMimetype())
+				tmpPath := filepath.Join(tmpDirectory, evt.Info.ID+exts[0])
+
+				// Write the image to the temporary file
+				err = os.WriteFile(tmpPath, data, 0600)
+				if err != nil {
+					log.Error().Err(err).Msg("Failed to save image to temporary file")
+					return
+				}
+
+				// Convert the image to base64
+				base64String, mimeType, err := fileToBase64(tmpPath)
+				if err != nil {
+					log.Error().Err(err).Msg("Failed to convert image to base64")
+					return
+				}
+
+				// Add the base64 string and other details to the postmap
+				postmap["base64"] = base64String
+				postmap["mimeType"] = mimeType
+				postmap["fileName"] = filepath.Base(tmpPath)
+
+				// Log the successful conversion
+				log.Info().Str("path", tmpPath).Msg("Image converted to base64")
+
+				// Delete the temporary file
+				err = os.Remove(tmpPath)
+				if err != nil {
+					log.Error().Err(err).Msg("Failed to delete temporary file")
+				} else {
+					log.Info().Str("path", tmpPath).Msg("Temporary file deleted")
 				}
 			}
 
-			data, err := mycli.WAClient.Download(img)
-			if err != nil {
-				log.Error().Err(err).Msg("Failed to download image")
-				return
-			}
-			exts, _ := mime.ExtensionsByType(img.GetMimetype())
-			path = filepath.Join(userDirectory, evt.Info.ID+exts[0])
-			err = os.WriteFile(path, data, 0600)
-			if err != nil {
-				log.Error().Err(err).Msg("Failed to save image")
-				return
-			}
-			log.Info().Str("path", path).Msg("Image saved")
-			// Converte a imagem para base64
-			base64String, mimeType, err := fileToBase64(path)
-			if err == nil {
+			// try to get Audio if any
+			audio := evt.Message.GetAudioMessage()
+			if audio != nil {
+				// Create a temporary directory in /tmp
+				tmpDirectory := filepath.Join("/tmp", "user_"+txtid)
+				errDir := os.MkdirAll(tmpDirectory, 0751)
+				if errDir != nil {
+					log.Error().Err(errDir).Msg("Could not create temporary directory")
+					return
+				}
+
+				// Download the audio
+				data, err := mycli.WAClient.Download(audio)
+				if err != nil {
+					log.Error().Err(err).Msg("Failed to download audio")
+					return
+				}
+
+				// Determine the file extension based on the MIME type
+				exts, _ := mime.ExtensionsByType(audio.GetMimetype())
+				var ext string
+				if len(exts) > 0 {
+					ext = exts[0]
+				} else {
+					ext = ".ogg" // Default extension if MIME type is not recognized
+				}
+				tmpPath := filepath.Join(tmpDirectory, evt.Info.ID+ext)
+
+				// Write the audio to the temporary file
+				err = os.WriteFile(tmpPath, data, 0600)
+				if err != nil {
+					log.Error().Err(err).Msg("Failed to save audio to temporary file")
+					return
+				}
+
+				// Convert the audio to base64
+				base64String, mimeType, err := fileToBase64(tmpPath)
+				if err != nil {
+					log.Error().Err(err).Msg("Failed to convert audio to base64")
+					return
+				}
+
+				// Add the base64 string and other details to the postmap
 				postmap["base64"] = base64String
 				postmap["mimeType"] = mimeType
-				postmap["fileName"] = filepath.Base(path)
-			} else {
-				log.Error().Err(err).Msg("Failed to convert image to base64")
-			}
-			// log.Debug().Str("path",path).Msg("Image converted to base64")
-		}
+				postmap["fileName"] = filepath.Base(tmpPath)
 
-		// try to get Audio if any
-		audio := evt.Message.GetAudioMessage()
-		if audio != nil {
-			// check/creates user directory for files
-			userDirectory := filepath.Join(exPath, "files", "user_"+txtid)
-			_, err := os.Stat(userDirectory)
-			if os.IsNotExist(err) {
-				errDir := os.MkdirAll(userDirectory, 0751)
-				if errDir != nil {
-					log.Error().Err(errDir).Msg("Could not create user directory")
-					return
+				// Log the successful conversion
+				log.Info().Str("path", tmpPath).Msg("Audio converted to base64")
+
+				// Delete the temporary file
+				err = os.Remove(tmpPath)
+				if err != nil {
+					log.Error().Err(err).Msg("Failed to delete temporary file")
+				} else {
+					log.Info().Str("path", tmpPath).Msg("Temporary file deleted")
 				}
 			}
 
-			data, err := mycli.WAClient.Download(audio)
-			if err != nil {
-				log.Error().Err(err).Msg("Failed to download audio")
-				return
-			}
-			exts, _ := mime.ExtensionsByType(audio.GetMimetype())
-			var ext string
-			if len(exts) > 0 {
-				ext = exts[0]
-			} else {
-				ext = ".ogg"
-			}
-			path = filepath.Join(userDirectory, evt.Info.ID+ext)
-			err = os.WriteFile(path, data, 0600)
-			if err != nil {
-				log.Error().Err(err).Msg("Failed to save audio")
-				return
-			}
-			log.Info().Str("path", path).Msg("Audio saved")
-			// Converte o áudio para base64
-			base64String, mimeType, err := fileToBase64(path)
-			if err == nil {
+			// try to get Document if any
+			document := evt.Message.GetDocumentMessage()
+			if document != nil {
+				// Create a temporary directory in /tmp
+				tmpDirectory := filepath.Join("/tmp", "user_"+txtid)
+				errDir := os.MkdirAll(tmpDirectory, 0751)
+				if errDir != nil {
+					log.Error().Err(errDir).Msg("Could not create temporary directory")
+					return
+				}
+
+				// Download the document
+				data, err := mycli.WAClient.Download(document)
+				if err != nil {
+					log.Error().Err(err).Msg("Failed to download document")
+					return
+				}
+
+				// Determine the file extension
+				extension := ""
+				exts, err := mime.ExtensionsByType(document.GetMimetype())
+				if err == nil && len(exts) > 0 {
+					extension = exts[0]
+				} else {
+					filename := document.FileName
+					if filename != nil {
+						extension = filepath.Ext(*filename)
+					} else {
+						extension = ".bin" // Default extension if no filename or MIME type is available
+					}
+				}
+				tmpPath := filepath.Join(tmpDirectory, evt.Info.ID+extension)
+
+				// Write the document to the temporary file
+				err = os.WriteFile(tmpPath, data, 0600)
+				if err != nil {
+					log.Error().Err(err).Msg("Failed to save document to temporary file")
+					return
+				}
+
+				// Convert the document to base64
+				base64String, mimeType, err := fileToBase64(tmpPath)
+				if err != nil {
+					log.Error().Err(err).Msg("Failed to convert document to base64")
+					return
+				}
+
+				// Add the base64 string and other details to the postmap
 				postmap["base64"] = base64String
 				postmap["mimeType"] = mimeType
-				postmap["fileName"] = filepath.Base(path)
-			} else {
-				log.Error().Err(err).Msg("Failed to convert audio to base64")
-			}
-			// log.Debug().Str("path",path).Msg("Audio converted to base64")
-		}
-		// try to get Document if any
-		document := evt.Message.GetDocumentMessage()
-		if document != nil {
+				postmap["fileName"] = filepath.Base(tmpPath)
 
-			// check/creates user directory for files
-			userDirectory := filepath.Join(exPath, "files", "user_"+txtid)
-			_, err := os.Stat(userDirectory)
-			if os.IsNotExist(err) {
-				errDir := os.MkdirAll(userDirectory, 0751)
-				if errDir != nil {
-					log.Error().Err(errDir).Msg("Could not create user directory")
-					return
+				// Log the successful conversion
+				log.Info().Str("path", tmpPath).Msg("Document converted to base64")
+
+				// Delete the temporary file
+				err = os.Remove(tmpPath)
+				if err != nil {
+					log.Error().Err(err).Msg("Failed to delete temporary file")
+				} else {
+					log.Info().Str("path", tmpPath).Msg("Temporary file deleted")
 				}
 			}
 
-			data, err := mycli.WAClient.Download(document)
-			if err != nil {
-				log.Error().Err(err).Msg("Failed to download document")
-				return
-			}
-			extension := ""
-			exts, err := mime.ExtensionsByType(document.GetMimetype())
-			if err != nil {
-				extension = exts[0]
-			} else {
-				filename := document.FileName
-				extension = filepath.Ext(*filename)
-			}
-			path = filepath.Join(userDirectory, evt.Info.ID+extension)
-			err = os.WriteFile(path, data, 0600)
-			if err != nil {
-				log.Error().Err(err).Msg("Failed to save document")
-				return
-			}
-			log.Info().Str("path", path).Msg("Document saved")
-			// Converte o documento para base64
-			base64String, mimeType, err := fileToBase64(path)
-			if err == nil {
-				postmap["base64"] = base64String
-				postmap["mimeType"] = mimeType
-				postmap["fileName"] = filepath.Base(path)
-			} else {
-				log.Error().Err(err).Msg("Failed to convert document to base64")
-			}
-			// log.Debug().Str("path",path).Msg("Document converted to base64")
-		}
-
-		// try to get Video if any
-		video := evt.Message.GetVideoMessage()
-		if video != nil {
-			// check/creates user directory for files
-			userDirectory := filepath.Join(exPath, "files", "user_"+txtid)
-			_, err := os.Stat(userDirectory)
-			if os.IsNotExist(err) {
-				errDir := os.MkdirAll(userDirectory, 0751)
+			// try to get Video if any
+			video := evt.Message.GetVideoMessage()
+			if video != nil {
+				// Create a temporary directory in /tmp
+				tmpDirectory := filepath.Join("/tmp", "user_"+txtid)
+				errDir := os.MkdirAll(tmpDirectory, 0751)
 				if errDir != nil {
-					log.Error().Err(errDir).Msg("Could not create user directory")
+					log.Error().Err(errDir).Msg("Could not create temporary directory")
 					return
 				}
-			}
 
-			data, err := mycli.WAClient.Download(video)
-			if err != nil {
-				log.Error().Err(err).Msg("Failed to download video")
-				return
-			}
-			exts, _ := mime.ExtensionsByType(video.GetMimetype())
-			path = filepath.Join(userDirectory, evt.Info.ID+exts[0])
-			err = os.WriteFile(path, data, 0600)
-			if err != nil {
-				log.Error().Err(err).Msg("Failed to save video")
-				return
-			}
-			log.Info().Str("path", path).Msg("Video saved")
-			// Converte o vídeo para base64
-			base64String, mimeType, err := fileToBase64(path)
-			if err == nil {
+				// Download the video
+				data, err := mycli.WAClient.Download(video)
+				if err != nil {
+					log.Error().Err(err).Msg("Failed to download video")
+					return
+				}
+
+				// Determine the file extension based on the MIME type
+				exts, _ := mime.ExtensionsByType(video.GetMimetype())
+				tmpPath := filepath.Join(tmpDirectory, evt.Info.ID+exts[0])
+
+				// Write the video to the temporary file
+				err = os.WriteFile(tmpPath, data, 0600)
+				if err != nil {
+					log.Error().Err(err).Msg("Failed to save video to temporary file")
+					return
+				}
+
+				// Convert the video to base64
+				base64String, mimeType, err := fileToBase64(tmpPath)
+				if err != nil {
+					log.Error().Err(err).Msg("Failed to convert video to base64")
+					return
+				}
+
+				// Add the base64 string and other details to the postmap
 				postmap["base64"] = base64String
 				postmap["mimeType"] = mimeType
-				postmap["fileName"] = filepath.Base(path)
-			} else {
-				log.Error().Err(err).Msg("Failed to convert video to base64")
+				postmap["fileName"] = filepath.Base(tmpPath)
+
+				// Log the successful conversion
+				log.Info().Str("path", tmpPath).Msg("Video converted to base64")
+
+				// Delete the temporary file
+				err = os.Remove(tmpPath)
+				if err != nil {
+					log.Error().Err(err).Msg("Failed to delete temporary file")
+				} else {
+					log.Info().Str("path", tmpPath).Msg("Temporary file deleted")
+				}
 			}
-			// log.Debug().Str("path",path).Msg("Video converted to base64")
 		}
 
 	case *events.Receipt:
 		postmap["type"] = "ReadReceipt"
 		dowebhook = 1
-		if evt.Type == events.ReceiptTypeRead || evt.Type == events.ReceiptTypeReadSelf {
-			log.Info().Strs("id", evt.MessageIDs).Str("source", evt.SourceString()).Str("timestamp", fmt.Sprintf("%d", evt.Timestamp)).Msg("Message was read")
-			if evt.Type == events.ReceiptTypeRead {
+		//if evt.Type == events.ReceiptTypeRead || evt.Type == events.ReceiptTypeReadSelf {
+		if evt.Type == types.ReceiptTypeRead || evt.Type == types.ReceiptTypeReadSelf {
+			log.Info().Strs("id", evt.MessageIDs).Str("source", evt.SourceString()).Str("timestamp", fmt.Sprintf("%v", evt.Timestamp)).Msg("Message was read")
+			//if evt.Type == events.ReceiptTypeRead {
+			if evt.Type == types.ReceiptTypeRead {
 				postmap["state"] = "Read"
 			} else {
 				postmap["state"] = "ReadSelf"
 			}
-		} else if evt.Type == events.ReceiptTypeDelivered {
+			//} else if evt.Type == events.ReceiptTypeDelivered {
+		} else if evt.Type == types.ReceiptTypeDelivered {
 			postmap["state"] = "Delivered"
-			log.Info().Str("id", evt.MessageIDs[0]).Str("source", evt.SourceString()).Str("timestamp", fmt.Sprintf("%d", evt.Timestamp)).Msg("Message delivered")
+			log.Info().Str("id", evt.MessageIDs[0]).Str("source", evt.SourceString()).Str("timestamp", fmt.Sprintf("%v", evt.Timestamp)).Msg("Message delivered")
 		} else {
 			// Discard webhooks for inactive or other delivery types
 			return
@@ -567,7 +639,7 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 			if evt.LastSeen.IsZero() {
 				log.Info().Str("from", evt.From.String()).Msg("User is now offline")
 			} else {
-				log.Info().Str("from", evt.From.String()).Str("lastSeen", fmt.Sprintf("%d", evt.LastSeen)).Msg("User is now offline")
+				log.Info().Str("from", evt.From.String()).Str("lastSeen", fmt.Sprintf("%v", evt.LastSeen)).Msg("User is now offline")
 			}
 		} else {
 			postmap["state"] = "online"
@@ -576,34 +648,6 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 	case *events.HistorySync:
 		postmap["type"] = "HistorySync"
 		dowebhook = 1
-
-		// check/creates user directory for files
-		userDirectory := filepath.Join(exPath, "files", "user_"+txtid)
-		_, err := os.Stat(userDirectory)
-		if os.IsNotExist(err) {
-			errDir := os.MkdirAll(userDirectory, 0751)
-			if errDir != nil {
-				log.Error().Err(errDir).Msg("Could not create user directory")
-				return
-			}
-		}
-
-		id := atomic.AddInt32(&historySyncID, 1)
-		fileName := filepath.Join(userDirectory, "history-"+strconv.Itoa(int(id))+".json")
-		file, err := os.OpenFile(fileName, os.O_WRONLY|os.O_CREATE, 0600)
-		if err != nil {
-			log.Error().Err(err).Msg("Failed to open file to write history sync")
-			return
-		}
-		enc := json.NewEncoder(file)
-		enc.SetIndent("", "  ")
-		err = enc.Encode(evt.Data)
-		if err != nil {
-			log.Error().Err(err).Msg("Failed to write history sync")
-			return
-		}
-		log.Info().Str("filename", fileName).Msg("Wrote history sync")
-		_ = file.Close()
 	case *events.AppState:
 		log.Info().Str("index", fmt.Sprintf("%+v", evt.Index)).Str("actionValue", fmt.Sprintf("%+v", evt.SyncActionValue)).Msg("App state event received")
 	case *events.LoggedOut:
