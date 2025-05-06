@@ -157,9 +157,6 @@ request body, always passing the Token header for authenticating the request.
 Check the [API Reference](https://github.com/asternic/wuzapi/blob/main/API.md)
 
 ## Contributors
-Thanks to these amazing people:
-<!-- ALL-CONTRIBUTORS-LIST:START - Do not remove -->
-<!-- ALL-CONTRIBUTORS-LIST:END -->
 
 ## License
 
