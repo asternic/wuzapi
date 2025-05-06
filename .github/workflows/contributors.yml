@@ -1,0 +1,22 @@
+name: Update Contributors
+on:
+  schedule:
+    - cron: "0 0 * * *" # Runs daily
+  workflow_dispatch: # Allows manual triggering
+jobs:
+  update-contributors:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: BobAnkh/add-contributors@v1
+        with:
+          REPO_NAME: ${{ github.repository }}
+          CONTRIBUTORS_PER_LINE: 6 # Optional: Number of contributors per line
+          COL_WIDTH: 18 # Optional: Width of each column
+          COMMIT_MESSAGE: "docs: Update contributors list"
+      - name: Commit changes
+        run: |
+          git config --global user.name 'GitHub Actions'
+          git config --global user.email 'actions@github.com'
+          git commit -am "$COMMIT_MESSAGE"
+          git push
