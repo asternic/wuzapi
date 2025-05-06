@@ -8,12 +8,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: BobAnkh/add-contributors@v1
+      - uses: BobAnkh/add-contributors@master
         with:
-          REPO_NAME: ${{ github.repository }}
-          CONTRIBUTORS_PER_LINE: 6 # Optional: Number of contributors per line
-          COL_WIDTH: 18 # Optional: Width of each column
-          COMMIT_MESSAGE: "docs: Update contributors list"
+          CONTRIBUTOR: '## Contributors'
+          COLUMN_PER_ROW: '6'
+          ACCESS_TOKEN: ${{secrets.GITHUB_TOKEN}}
+          IMG_WIDTH: '100'
+          FONT_SIZE: '14'
+          PATH: '/README.md'
+          COMMIT_MESSAGE: 'docs(README): update contributors'
+          AVATAR_SHAPE: 'round'
       - name: Commit changes
         run: |
           git config --global user.name 'GitHub Actions'
