@@ -6,8 +6,9 @@ The API supports two authentication methods:
 2. **Admin Token**: For admin endpoints (/admin/**), use the `Authorization` header with the admin token value (set in WUZAPI_ADMIN_TOKEN).
 
 ### Request Requirements
-Content-Type: application/json (JSON-encoded body)
-Authentication: Include the `Authorization` header in all requests.
+
+* Content-Type: application/json (JSON-encoded body)
+* Authentication: Include the `Authorization` header in all requests.
 
 ---
 
