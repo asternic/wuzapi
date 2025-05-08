@@ -207,12 +207,29 @@ func main() {
 func initializeSchema(db *sqlx.DB) error {
 	// First, check if the table exists
 	var exists bool
-	err := db.Get(&exists, `
-        SELECT EXISTS (
-            SELECT 1 
-            FROM information_schema.tables 
-            WHERE table_name = 'users'
-        );`)
+	var err error
+
+	// Detect the database driver
+	driverName := db.DriverName()
+
+	if driverName == "postgres" {
+		err = db.Get(&exists, `
+            SELECT EXISTS (
+                SELECT 1
+                FROM information_schema.tables
+                WHERE table_name = 'users'
+            );`)
+	} else if driverName == "sqlite" {
+		err = db.Get(&exists, `
+            SELECT EXISTS (
+                SELECT 1
+                FROM sqlite_master
+                WHERE type='table' AND name='users'
+            );`)
+	} else {
+		return fmt.Errorf("unsupported database driver: %s", driverName)
+	}
+
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to check if users table exists")
 		return err
@@ -222,20 +239,36 @@ func initializeSchema(db *sqlx.DB) error {
 		log.Info().Msg("Users table already exists")
 		return nil
 	}
-
-	// PostgreSQL version of the create table statement
-	sqlStmt := `CREATE TABLE IF NOT EXISTS users (
-        id SERIAL PRIMARY KEY,
-        name TEXT NOT NULL,
-        token TEXT NOT NULL,
-        webhook TEXT NOT NULL DEFAULT '',
-        jid TEXT NOT NULL DEFAULT '',
-        qrcode TEXT NOT NULL DEFAULT '',
-        connected INTEGER,
-        expiration INTEGER,
-        events TEXT NOT NULL DEFAULT 'All',
-        proxy_url TEXT DEFAULT ''
-    );`
+	// Create table statement that works with both PostgreSQL and SQLite
+	var sqlStmt string
+	if driverName == "postgres" {
+		sqlStmt = `CREATE TABLE users (
+            id SERIAL PRIMARY KEY,
+            name TEXT NOT NULL,
+            token TEXT NOT NULL,
+            webhook TEXT NOT NULL DEFAULT '',
+            jid TEXT NOT NULL DEFAULT '',
+            qrcode TEXT NOT NULL DEFAULT '',
+            connected INTEGER,
+            expiration INTEGER,
+            events TEXT NOT NULL DEFAULT 'All',
+            proxy_url TEXT DEFAULT ''
+        );`
+	} else {
+		// SQLite version
+		sqlStmt = `CREATE TABLE users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            token TEXT NOT NULL,
+            webhook TEXT NOT NULL DEFAULT '',
+            jid TEXT NOT NULL DEFAULT '',
+            qrcode TEXT NOT NULL DEFAULT '',
+            connected INTEGER,
+            expiration INTEGER,
+            events TEXT NOT NULL DEFAULT 'All',
+            proxy_url TEXT DEFAULT ''
+        );`
+	}
 
 	_, err = db.Exec(sqlStmt)
 	if err != nil {
