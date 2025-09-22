@@ -38,7 +38,7 @@ func getDatabaseConfig(exPath string) DatabaseConfig {
 	dbPort := os.Getenv("DB_PORT")
 	dbSSL := os.Getenv("DB_SSLMODE")
 
-    sslMode := dbSSL
+	sslMode := dbSSL
 	if dbSSL == "true" {
 		sslMode = "require"
 	} else if dbSSL == "false" || dbSSL == "" {

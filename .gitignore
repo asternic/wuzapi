@@ -32,7 +32,6 @@ tasks/
 scripts/
 .roo/
 .cursor/
-.env.example
 .roomodes
 .taskmasterconfig
 .windsurfrules

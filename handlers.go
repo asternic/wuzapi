@@ -1002,52 +1002,69 @@ func (s *server) SendImage() http.HandlerFunc {
 		var filedata []byte
 		var thumbnailBytes []byte
 
-		if t.Image[0:10] == "data:image" {
+		if len(t.Image) >= 10 && t.Image[0:10] == "data:image" {
 			var dataURL, err = dataurl.DecodeString(t.Image)
 			if err != nil {
 				s.Respond(w, r, http.StatusBadRequest, errors.New("could not decode base64 encoded data from payload"))
 				return
 			} else {
 				filedata = dataURL.Data
-				uploaded, err = clientManager.GetWhatsmeowClient(txtid).Upload(context.Background(), filedata, whatsmeow.MediaImage)
-				if err != nil {
-					s.Respond(w, r, http.StatusInternalServerError, errors.New(fmt.Sprintf("failed to upload file: %v", err)))
-					return
-				}
 			}
-
-			// decode jpeg into image.Image
-			reader := bytes.NewReader(filedata)
-			img, _, err := image.Decode(reader)
+		} else if isHTTPURL(t.Image) {
+			data, ct, err := fetchURLBytes(t.Image)
 			if err != nil {
-				s.Respond(w, r, http.StatusInternalServerError, errors.New(fmt.Sprintf("could not decode image for thumbnail preparation: %v", err)))
+				s.Respond(w, r, http.StatusBadRequest, errors.New(fmt.Sprintf("failed to fetch image from url: %v", err)))
 				return
 			}
-
-			// resize to width 72 using Lanczos resampling and preserve aspect ratio
-			m := resize.Thumbnail(72, 72, img, resize.Lanczos3)
-
-			tmpFile, err := os.CreateTemp("", "resized-*.jpg")
+			mimeType := ct
+			if !strings.HasPrefix(strings.ToLower(mimeType), "image/") {
+				mimeType = "image/jpeg"
+			}
+			imgDataURL := dataurl.New(data, mimeType)
+			parsed, err := dataurl.DecodeString(imgDataURL.String())
 			if err != nil {
-				s.Respond(w, r, http.StatusInternalServerError, errors.New(fmt.Sprintf("Could not create temp file for thumbnail: %v", err)))
+				s.Respond(w, r, http.StatusInternalServerError, errors.New("could not re-encode image to base64"))
 				return
 			}
-			defer tmpFile.Close()
-
-			// write new image to file
-			if err := jpeg.Encode(tmpFile, m, nil); err != nil {
-				s.Respond(w, r, http.StatusInternalServerError, errors.New(fmt.Sprintf("Failed to encode jpeg: %v", err)))
-				return
-			}
-
-			thumbnailBytes, err = os.ReadFile(tmpFile.Name())
-			if err != nil {
-				s.Respond(w, r, http.StatusInternalServerError, errors.New(fmt.Sprintf("Failed to read %s: %v", tmpFile.Name(), err)))
-				return
-			}
-
+			filedata = parsed.Data
 		} else {
 			s.Respond(w, r, http.StatusBadRequest, errors.New("Image data should start with \"data:image/png;base64,\""))
+			return
+		}
+
+		uploaded, err = clientManager.GetWhatsmeowClient(txtid).Upload(context.Background(), filedata, whatsmeow.MediaImage)
+		if err != nil {
+			s.Respond(w, r, http.StatusInternalServerError, errors.New(fmt.Sprintf("failed to upload file: %v", err)))
+			return
+		}
+
+		// decode jpeg into image.Image
+		reader := bytes.NewReader(filedata)
+		img, _, err := image.Decode(reader)
+		if err != nil {
+			s.Respond(w, r, http.StatusInternalServerError, errors.New(fmt.Sprintf("could not decode image for thumbnail preparation: %v", err)))
+			return
+		}
+
+		// resize to width 72 using Lanczos resampling and preserve aspect ratio
+		m := resize.Thumbnail(72, 72, img, resize.Lanczos3)
+
+		tmpFile, err := os.CreateTemp("", "resized-*.jpg")
+		if err != nil {
+			s.Respond(w, r, http.StatusInternalServerError, errors.New(fmt.Sprintf("Could not create temp file for thumbnail: %v", err)))
+			return
+		}
+		defer tmpFile.Close()
+
+		// write new image to file
+		if err := jpeg.Encode(tmpFile, m, nil); err != nil {
+			s.Respond(w, r, http.StatusInternalServerError, errors.New(fmt.Sprintf("Failed to encode jpeg: %v", err)))
+			return
+		}
+
+		thumbnailBytes, err = os.ReadFile(tmpFile.Name())
+		if err != nil {
+			s.Respond(w, r, http.StatusInternalServerError, errors.New(fmt.Sprintf("Failed to read %s: %v", tmpFile.Name(), err)))
 			return
 		}
 
@@ -1288,14 +1305,34 @@ func (s *server) SendVideo() http.HandlerFunc {
 				return
 			} else {
 				filedata = dataURL.Data
-				uploaded, err = clientManager.GetWhatsmeowClient(txtid).Upload(context.Background(), filedata, whatsmeow.MediaVideo)
-				if err != nil {
-					s.Respond(w, r, http.StatusInternalServerError, errors.New(fmt.Sprintf("failed to upload file: %v", err)))
-					return
-				}
+
 			}
+		} else if isHTTPURL(t.Video) {
+			data, ct, err := fetchURLBytes(t.Video)
+			if err != nil {
+				s.Respond(w, r, http.StatusBadRequest, errors.New(fmt.Sprintf("failed to fetch image from url: %v", err)))
+				return
+			}
+			mimeType := ct
+			if !strings.HasPrefix(strings.ToLower(mimeType), "video/") {
+				mimeType = "video/mpeg"
+			}
+			imgDataURL := dataurl.New(data, mimeType)
+			parsed, err := dataurl.DecodeString(imgDataURL.String())
+			if err != nil {
+				s.Respond(w, r, http.StatusInternalServerError, errors.New("could not re-encode video to base64"))
+				return
+			}
+			filedata = parsed.Data
+
 		} else {
 			s.Respond(w, r, http.StatusBadRequest, errors.New("data should start with \"data:mime/type;base64,\""))
+			return
+		}
+
+		uploaded, err = clientManager.GetWhatsmeowClient(txtid).Upload(context.Background(), filedata, whatsmeow.MediaVideo)
+		if err != nil {
+			s.Respond(w, r, http.StatusInternalServerError, errors.New(fmt.Sprintf("failed to upload file: %v", err)))
 			return
 		}
 
@@ -2099,7 +2136,7 @@ func (s *server) SendEditMessage() http.HandlerFunc {
 			return
 		}
 
-		log.Info().Str("timestamp", fmt.Sprintf("%d", resp.Timestamp)).Str("id", msgid).Msg("Message edit sent")
+		log.Info().Str("timestamp", fmt.Sprintf("%d", resp.Timestamp.Unix())).Str("id", msgid).Msg("Message edit sent")
 		response := map[string]interface{}{"Details": "Sent", "Timestamp": resp.Timestamp.Unix(), "Id": msgid}
 		responseJson, err := json.Marshal(response)
 		if err != nil {
@@ -2313,7 +2350,7 @@ func (s *server) SendTemplate() http.HandlerFunc {
 			return
 		}
 
-		log.Info().Str("timestamp", fmt.Sprintf("%d", resp.Timestamp)).Str("id", msgid).Msg("Message sent")
+		log.Info().Str("timestamp", fmt.Sprintf("%d", resp.Timestamp.Unix())).Str("id", msgid).Msg("Message sent")
 		response := map[string]interface{}{"Details": "Sent", "Timestamp": resp.Timestamp.Unix(), "Id": msgid}
 		responseJson, err := json.Marshal(response)
 		if err != nil {
@@ -3392,7 +3429,7 @@ func (s *server) CreateGroup() http.HandlerFunc {
 			Participants: participantJIDs,
 		}
 
-		groupInfo, err := clientManager.GetWhatsmeowClient(txtid).CreateGroup(req)
+		groupInfo, err := clientManager.GetWhatsmeowClient(txtid).CreateGroup(r.Context(), req)
 
 		if err != nil {
 			log.Error().Str("error", fmt.Sprintf("%v", err)).Msg("failed to create group")
@@ -3517,7 +3554,7 @@ func (s *server) SetDisappearingTimer() http.HandlerFunc {
 			return
 		}
 
-		err = clientManager.GetWhatsmeowClient(txtid).SetDisappearingTimer(group, duration)
+		err = clientManager.GetWhatsmeowClient(txtid).SetDisappearingTimer(group, duration, time.Now())
 
 		if err != nil {
 			log.Error().Str("error", fmt.Sprintf("%v", err)).Msg("failed to set disappearing timer")
