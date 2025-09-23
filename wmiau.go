@@ -842,6 +842,80 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 					log.Error().Err(err).Msg("Failed to delete temporary file")
 				}
 			}
+
+			sticker := evt.Message.GetStickerMessage()
+			if sticker != nil {
+				tmpDirectory := filepath.Join("/tmp", "user_"+txtid)
+				errDir := os.MkdirAll(tmpDirectory, 0751)
+				if errDir != nil {
+					log.Error().Err(errDir).Msg("Could not create temporary directory")
+					return
+				}
+
+				// baixa o sticker usando a interface DownloadableMessage
+				data, err := mycli.WAClient.Download(context.Background(), sticker)
+				if err != nil {
+					log.Error().Err(err).Msg("Failed to download sticker")
+					return
+				}
+
+				// tenta inferir extensão pelo mimetype; fallback para .webp
+				exts, _ := mime.ExtensionsByType(sticker.GetMimetype())
+				ext := ".webp"
+				if len(exts) > 0 && exts[0] != "" {
+					ext = exts[0]
+				}
+
+				tmpPath := filepath.Join(tmpDirectory, evt.Info.ID+ext)
+				if err := os.WriteFile(tmpPath, data, 0600); err != nil {
+					log.Error().Err(err).Msg("Failed to save sticker to temporary file")
+					return
+				}
+
+				// se usar S3 (mesmo fluxo das outras mídias)
+				if s3Config.Enabled == "true" && (s3Config.MediaDelivery == "s3" || s3Config.MediaDelivery == "both") {
+					isIncoming := evt.Info.IsFromMe == false
+					contactJID := evt.Info.Sender.String()
+					if evt.Info.IsGroup {
+						contactJID = evt.Info.Chat.String()
+					}
+					s3Data, err := GetS3Manager().ProcessMediaForS3(
+						context.Background(),
+						txtid,
+						contactJID,
+						evt.Info.ID,
+						data,
+						sticker.GetMimetype(),
+						filepath.Base(tmpPath),
+						isIncoming,
+					)
+					if err != nil {
+						log.Error().Err(err).Msg("Failed to upload sticker to S3")
+					} else {
+						postmap["s3"] = s3Data
+					}
+				}
+
+				// base64 (mesmo contrato de saída das outras mídias)
+				if s3Config.MediaDelivery == "base64" || s3Config.MediaDelivery == "both" {
+					base64String, mimeType, err := fileToBase64(tmpPath)
+					if err != nil {
+						log.Error().Err(err).Msg("Failed to convert sticker to base64")
+						return
+					}
+					postmap["base64"] = base64String
+					postmap["mimeType"] = mimeType
+					postmap["fileName"] = filepath.Base(tmpPath)
+				}
+
+				// metadados úteis (opcional, mas práticos)
+				postmap["isSticker"] = true
+				postmap["stickerAnimated"] = sticker.GetIsAnimated()
+
+				if err := os.Remove(tmpPath); err != nil {
+					log.Error().Err(err).Msg("Failed to delete temporary file")
+				}
+			}
 		}
 
 	case *events.Receipt:
