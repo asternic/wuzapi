@@ -65,6 +65,7 @@ func init() {
 
 	flag.Parse()
 
+	log.Info().Str("DB_PASSWORD", os.Getenv("DB_PASSWORD")).Msg("DB_PASSWORD from environment")
 	// Novo bloco para sobrescrever o osName pelo ENV, se existir
 	if v := os.Getenv("SESSION_DEVICE_NAME"); v != "" {
 		*osName = v
