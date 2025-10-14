@@ -69,6 +69,7 @@ paths:
                     public_url: "https://s3.amazonaws.com"
                     media_delivery: "both"
                     retention_days: 30
+                  history: 0
   /admin/users/{id}:
     delete:
       tags:
@@ -1057,6 +1058,90 @@ paths:
             application/json:
               schema:
                 example: { "code": 200, "data": { "Details": "Chat presence set successfuly" }, "success": true } 
+  /chat/history:
+    get:
+      tags:
+        - Chat
+      summary: Get chat message history
+      description: Retrieves message history for a specific chat. Returns messages in reverse chronological order (newest first). Requires message history to be enabled on the server.
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - name: chat_jid
+          in: query
+          required: true
+          description: The JID (WhatsApp ID) of the chat to retrieve history for
+          schema:
+            type: string
+            example: "5491155553333@s.whatsapp.net"
+        - name: limit
+          in: query
+          required: false
+          description: Maximum number of messages to retrieve (default is 50)
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000
+            default: 50
+            example: 100
+      responses:
+        200:
+          description: Message history retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 200
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/definitions/HistoryMessage'
+                example:
+                  code: 200
+                  success: true
+                  data:
+                    - id: 1
+                      user_id: "abc123def456"
+                      chat_jid: "5491155553333@s.whatsapp.net"
+                      sender_jid: "5491155554444@s.whatsapp.net"
+                      message_id: "3EB0C767D26A1B5F7C83"
+                      timestamp: "2023-12-01T15:30:00Z"
+                      message_type: "text"
+                      text_content: "Hello, how are you?"
+                      media_link: ""
+                    - id: 2
+                      user_id: "abc123def456"
+                      chat_jid: "5491155553333@s.whatsapp.net"
+                      sender_jid: "5491155553333@s.whatsapp.net"
+                      message_id: "4FB1D878E37B2C6G8D94"
+                      timestamp: "2023-12-01T15:25:00Z"
+                      message_type: "image"
+                      text_content: "Check out this photo!"
+                      media_link: "https://example.com/media/image123.jpg"
+        400:
+          description: Bad request - missing or invalid parameters
+          content:
+            application/json:
+              schema:
+                example: { "code": 400, "error": "chat_jid is required", "success": false }
+        501:
+          description: Not implemented - message history is disabled
+          content:
+            application/json:
+              schema:
+                example: { "code": 501, "error": "message history is disabled", "success": false }
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                example: { "code": 500, "error": "failed to get message history", "success": false }
   /group/create:
     post:
       tags:
@@ -1505,6 +1590,11 @@ definitions:
             type: integer
             example: 30
             description: "Retention days for the user, default is 30"
+      history:
+        type: integer
+        example: 0
+        description: "Number of messages to store in history per chat for this user. 0 means no history is saved, any positive number enables history storage for that many messages per chat. Default is 0"
+        default: 0
 
   DeleteUser:
     type: object
@@ -1512,6 +1602,46 @@ definitions:
       id:
         type: string
         example: 4e4942c7dee1deef99ab8fd9f7350de5
+  HistoryMessage:
+    type: object
+    properties:
+      id:
+        type: integer
+        description: "Unique identifier for the message in the history database"
+        example: 1
+      user_id:
+        type: string
+        description: "ID of the user who owns this message history"
+        example: "abc123def456"
+      chat_jid:
+        type: string
+        description: "WhatsApp JID of the chat where this message was sent/received"
+        example: "5491155553333@s.whatsapp.net"
+      sender_jid:
+        type: string
+        description: "WhatsApp JID of the user who sent this message"
+        example: "5491155554444@s.whatsapp.net"
+      message_id:
+        type: string
+        description: "WhatsApp message ID"
+        example: "3EB0C767D26A1B5F7C83"
+      timestamp:
+        type: string
+        format: date-time
+        description: "Timestamp when the message was sent/received"
+        example: "2023-12-01T15:30:00Z"
+      message_type:
+        type: string
+        description: "Type of message (text, image, audio, video, document, sticker, contact, location, etc.)"
+        example: "text"
+      text_content:
+        type: string
+        description: "Text content of the message (for text messages or captions)"
+        example: "Hello, how are you?"
+      media_link:
+        type: string
+        description: "Link to media file (for media messages)"
+        example: "https://example.com/media/image123.jpg"
   GroupPhoto:
     type: object
     properties:

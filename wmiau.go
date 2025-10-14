@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -37,6 +38,7 @@ type MyClient struct {
 	token          string
 	subscriptions  []string
 	db             *sqlx.DB
+	s              *server
 }
 
 func sendToGlobalWebHook(jsonData []byte, token string, userID string) {
@@ -184,7 +186,7 @@ func sendEventWithWebHook(mycli *MyClient, postmap map[string]interface{}, path 
 	// Get global webhook if configured
 	go sendToGlobalWebHook(jsonData, mycli.token, mycli.userID)
 
-	go sendToGlobalRabbit(jsonData)
+	go sendToGlobalRabbit(jsonData, mycli.token, mycli.userID)
 }
 
 func checkIfSubscribedToEvent(subscribedEvents []string, eventType string, userId string) bool {
@@ -201,7 +203,7 @@ func checkIfSubscribedToEvent(subscribedEvents []string, eventType string, userI
 
 // Connects to Whatsapp Websocket on server startup if last state was connected
 func (s *server) connectOnStartup() {
-	rows, err := s.db.Queryx("SELECT id,name,token,jid,webhook,events,proxy_url,CASE WHEN s3_enabled THEN 'true' ELSE 'false' END AS s3_enabled,media_delivery FROM users WHERE connected=1")
+	rows, err := s.db.Queryx("SELECT id,name,token,jid,webhook,events,proxy_url,CASE WHEN s3_enabled THEN 'true' ELSE 'false' END AS s3_enabled,media_delivery,COALESCE(history, 0) as history FROM users WHERE connected=1")
 	if err != nil {
 		log.Error().Err(err).Msg("DB Problem")
 		return
@@ -217,7 +219,8 @@ func (s *server) connectOnStartup() {
 		proxy_url := ""
 		s3_enabled := ""
 		media_delivery := ""
-		err = rows.Scan(&txtid, &name, &token, &jid, &webhook, &events, &proxy_url, &s3_enabled, &media_delivery)
+		var history int
+		err = rows.Scan(&txtid, &name, &token, &jid, &webhook, &events, &proxy_url, &s3_enabled, &media_delivery, &history)
 		if err != nil {
 			log.Error().Err(err).Msg("DB Problem")
 			return
@@ -233,6 +236,7 @@ func (s *server) connectOnStartup() {
 				"Events":        events,
 				"S3Enabled":     s3_enabled,
 				"MediaDelivery": media_delivery,
+				"History":       fmt.Sprintf("%d", history),
 			}}
 			userinfocache.Set(token, v, cache.NoExpiration)
 			// Gets and set subscription to webhook events
@@ -382,7 +386,7 @@ func (s *server) startClient(userID string, textjid string, token string, subscr
 	store.DeviceProps.Os = osName
 
 	clientManager.SetWhatsmeowClient(userID, client)
-	mycli := MyClient{client, 1, userID, token, subscriptions, s.db}
+	mycli := MyClient{client, 1, userID, token, subscriptions, s.db, s}
 	mycli.eventHandlerID = mycli.WAClient.AddEventHandler(mycli.myEventHandler)
 
 	// CORREÇÃO: Armazenar o MyClient no clientManager
@@ -979,6 +983,205 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 				} else {
 					log.Info().Str("path", tmpPath).Msg("Temporary file deleted")
 				}
+			}
+
+			sticker := evt.Message.GetStickerMessage()
+			if sticker != nil {
+				tmpDirectory := filepath.Join("/tmp", "user_"+txtid)
+				errDir := os.MkdirAll(tmpDirectory, 0751)
+				if errDir != nil {
+					log.Error().Err(errDir).Msg("Could not create temporary directory")
+					return
+				}
+
+				// download the sticker using the DownloadableMessage interface
+				data, err := mycli.WAClient.Download(context.Background(), sticker)
+				if err != nil {
+					log.Error().Err(err).Msg("Failed to download sticker")
+					return
+				}
+
+				// tries to infer extension by mimetype; fallback to .webp
+				exts, _ := mime.ExtensionsByType(sticker.GetMimetype())
+				ext := ".webp"
+				if len(exts) > 0 && exts[0] != "" {
+					ext = exts[0]
+				}
+
+				tmpPath := filepath.Join(tmpDirectory, evt.Info.ID+ext)
+				if err := os.WriteFile(tmpPath, data, 0600); err != nil {
+					log.Error().Err(err).Msg("Failed to save sticker to temporary file")
+					return
+				}
+
+				// if using S3 (same stream as other media)
+				if s3Config.Enabled == "true" && (s3Config.MediaDelivery == "s3" || s3Config.MediaDelivery == "both") {
+					isIncoming := evt.Info.IsFromMe == false
+					contactJID := evt.Info.Sender.String()
+					if evt.Info.IsGroup {
+						contactJID = evt.Info.Chat.String()
+					}
+					s3Data, err := GetS3Manager().ProcessMediaForS3(
+						context.Background(),
+						txtid,
+						contactJID,
+						evt.Info.ID,
+						data,
+						sticker.GetMimetype(),
+						filepath.Base(tmpPath),
+						isIncoming,
+					)
+					if err != nil {
+						log.Error().Err(err).Msg("Failed to upload sticker to S3")
+					} else {
+						postmap["s3"] = s3Data
+					}
+				}
+
+				// base64 (same output contract as other media)
+				if s3Config.MediaDelivery == "base64" || s3Config.MediaDelivery == "both" {
+					base64String, mimeType, err := fileToBase64(tmpPath)
+					if err != nil {
+						log.Error().Err(err).Msg("Failed to convert sticker to base64")
+						return
+					}
+					postmap["base64"] = base64String
+					postmap["mimeType"] = mimeType
+					postmap["fileName"] = filepath.Base(tmpPath)
+				}
+
+				// useful metadata (optional, but handy)
+				postmap["isSticker"] = true
+				postmap["stickerAnimated"] = sticker.GetIsAnimated()
+
+				if err := os.Remove(tmpPath); err != nil {
+					log.Error().Err(err).Msg("Failed to delete temporary file")
+				}
+			}
+
+		}
+
+		// Save message to history regardless of skipMedia setting
+		// Get user's history setting from cache
+		var historyLimit int
+		userinfo, found := userinfocache.Get(mycli.token)
+		if found {
+			historyStr := userinfo.(Values).Get("History")
+			historyLimit, _ = strconv.Atoi(historyStr)
+		} else {
+			log.Warn().Str("userID", mycli.userID).Msg("User info not found in cache, skipping history")
+			historyLimit = 0
+		}
+
+		if historyLimit > 0 {
+			messageType := "text"
+			textContent := ""
+			mediaLink := ""
+			caption := ""
+			replyToMessageID := ""
+
+			// Check for delete messages first
+			if protocolMsg := evt.Message.GetProtocolMessage(); protocolMsg != nil && protocolMsg.GetType() == 0 {
+				messageType = "delete"
+				if protocolMsg.GetKey() != nil {
+					textContent = protocolMsg.GetKey().GetID() // Store the deleted message ID
+				}
+				log.Info().Str("deletedMessageID", textContent).Str("messageID", evt.Info.ID).Msg("Delete message detected")
+				// Check for reactions
+			} else if reaction := evt.Message.GetReactionMessage(); reaction != nil {
+				messageType = "reaction"
+				replyToMessageID = reaction.GetKey().GetID()
+				textContent = reaction.GetText() // This will be the emoji
+			} else if img := evt.Message.GetImageMessage(); img != nil {
+				messageType = "image"
+				caption = img.GetCaption()
+			} else if video := evt.Message.GetVideoMessage(); video != nil {
+				messageType = "video"
+				caption = video.GetCaption()
+			} else if audio := evt.Message.GetAudioMessage(); audio != nil {
+				messageType = "audio"
+			} else if doc := evt.Message.GetDocumentMessage(); doc != nil {
+				messageType = "document"
+				caption = doc.GetCaption()
+			} else if sticker := evt.Message.GetStickerMessage(); sticker != nil {
+				messageType = "sticker"
+			} else if contact := evt.Message.GetContactMessage(); contact != nil {
+				messageType = "contact"
+				textContent = contact.GetDisplayName()
+			} else if location := evt.Message.GetLocationMessage(); location != nil {
+				messageType = "location"
+				textContent = location.GetName()
+			}
+
+			// Extract text content for non-reaction and non-delete messages
+			if messageType != "reaction" && messageType != "delete" {
+				if conv := evt.Message.GetConversation(); conv != "" {
+					textContent = conv
+				} else if ext := evt.Message.GetExtendedTextMessage(); ext != nil {
+					textContent = ext.GetText()
+					// Check if this is a reply to another message
+					if contextInfo := ext.GetContextInfo(); contextInfo != nil && contextInfo.GetStanzaId() != "" {
+						replyToMessageID = contextInfo.GetStanzaId()
+					}
+				} else {
+					textContent = caption
+				}
+
+				// Set default text content for media messages without captions
+				if textContent == "" {
+					switch messageType {
+					case "image":
+						textContent = ":image:"
+					case "video":
+						textContent = ":video:"
+					case "audio":
+						textContent = ":audio:"
+					case "document":
+						textContent = ":document:"
+					case "sticker":
+						textContent = ":sticker:"
+					case "contact":
+						if textContent == "" {
+							textContent = ":contact:"
+						}
+					case "location":
+						if textContent == "" {
+							textContent = ":location:"
+						}
+					}
+				}
+			}
+
+			// Check for replies in regular conversation messages too
+			if messageType == "text" && replyToMessageID == "" {
+				// For regular text messages, check if there's context info indicating a reply
+				// This might be available in the message context
+				if conv := evt.Message.GetConversation(); conv != "" {
+					// Check if the message has reply context (this depends on WhatsApp message structure)
+					// For now, we'll rely on ExtendedTextMessage for reply detection
+				}
+			}
+
+			// Try to get media link from S3 data if available
+			if s3Data, ok := postmap["s3"].(map[string]interface{}); ok {
+				if url, ok := s3Data["url"].(string); ok {
+					mediaLink = url
+				}
+			}
+
+			// Only save if there's meaningful content (including delete messages)
+			if textContent != "" || mediaLink != "" || (messageType != "text" && messageType != "reaction") || messageType == "delete" {
+				err := mycli.s.saveMessageToHistory(mycli.userID, evt.Info.Chat.String(), evt.Info.Sender.String(), evt.Info.ID, messageType, textContent, mediaLink, replyToMessageID)
+				if err != nil {
+					log.Error().Err(err).Msg("Failed to save message to history")
+				} else {
+					err = mycli.s.trimMessageHistory(mycli.userID, evt.Info.Chat.String(), historyLimit)
+					if err != nil {
+						log.Error().Err(err).Msg("Failed to trim message history")
+					}
+				}
+			} else {
+				log.Debug().Str("messageType", messageType).Str("messageID", evt.Info.ID).Msg("Skipping empty message from history")
 			}
 		}
 

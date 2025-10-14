@@ -139,6 +139,12 @@
           <div class="description">Configure webhook URL and event subscriptions.</div>
         </div>
       </div>
+      <div class="purple card hidden widget" style="cursor: pointer;" id="historyConfig">
+        <div class="content"><a class="ui purple right ribbon label">Config</a>
+          <div class="header">Message History</div>
+          <div class="description">Configure message history.</div>
+        </div>
+      </div>
     </div>
 
     <div class="ui horizontal divider widget"> User </div>
@@ -452,6 +458,28 @@
     </div>
   </div>
 
+  <!-- History Configuration Modal -->
+  <div class="ui modal" id="modalHistoryConfig"><i class="close icon"></i>
+    <div class="header"> History Configuration </div>
+    <div class="content">
+      <div class="ui info message">
+        <div class="header">Message History</div>
+        <p>Number of messages to keep in history database. Set to zero to disable history.</p>
+      </div>
+      <div class="ui form">
+        <div class="field" id="messageHistoryField">
+          <label>History</label>
+          <input id="history" type="number" placeholder="0">
+        </div>
+      </div>
+    </div>
+    <div class="actions">
+      <div class="ui cancel button secondary">Cancel</div>
+      <div class="ui positive right labeled icon button" id="saveProxyConfig">Save<i class="checkmark icon"></i></div>
+    </div>
+  </div>
+
+
   <!-- Proxy Configuration Modal -->
   <div class="ui modal" id="modalProxyConfig"><i class="close icon"></i>
     <div class="header"> Proxy Configuration </div>
@@ -564,6 +592,11 @@
             <!-- Special -->
             <option value="All">All Events</option>
           </select>
+        </div>
+        <div class="field">
+          <label>Message History</label>
+          <input type="number" name="history" min="0" value="0" placeholder="0">
+          <small>Number of messages to store in history per chat for this instance. Set to 0 to disable message history.</small>
         </div>
 
         <!-- Proxy Configuration -->

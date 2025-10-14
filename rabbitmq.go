@@ -3,7 +3,7 @@ package main
 import (
 	"os"
 	"sync"
-
+	"encoding/json"
 	"github.com/rabbitmq/amqp091-go"
 	"github.com/rs/zerolog/log"
 )
@@ -87,13 +87,39 @@ func PublishToRabbit(data []byte, queueOverride ...string) error {
 	return err
 }
 
-// Usage - like sendToGlobalWebhook
-func sendToGlobalRabbit(jsonData []byte, queueName ...string) {
+func sendToGlobalRabbit(jsonData []byte, token string, userID string, queueName ...string) {
 	if !rabbitEnabled {
 		log.Debug().Msg("RabbitMQ publishing is disabled, not sending message")
 		return
 	}
-	err := PublishToRabbit(jsonData, queueName...)
+
+	// Extract instance information
+	instance_name := ""
+	userinfo, found := userinfocache.Get(token)
+	if found {
+		instance_name = userinfo.(Values).Get("Name")
+	}
+
+	// Parse the original JSON into a map
+	var originalData map[string]interface{}
+	err := json.Unmarshal(jsonData, &originalData)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to unmarshal original JSON data for RabbitMQ")
+		return
+	}
+
+	// Add the new fields directly to the original data
+	originalData["userID"] = userID
+	originalData["instanceName"] = instance_name
+
+	// Marshal back to JSON
+	enhancedJSON, err := json.Marshal(originalData)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to marshal enhanced data for RabbitMQ")
+		return
+	}
+
+	err = PublishToRabbit(enhancedJSON, queueName...)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to publish to RabbitMQ")
 	}

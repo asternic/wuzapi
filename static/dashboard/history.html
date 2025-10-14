@@ -1,0 +1,924 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>WuzAPI - Chat History</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/fomantic-ui@2.9.4/dist/semantic.min.css">
+  <link rel="stylesheet" href="css/app.css">
+  <style>
+    .history-container {
+      display: flex;
+      height: 100vh;
+      background: #f8f9fa;
+      font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+      font-size: 12px;
+    }
+    
+    .sidebar {
+      width: 280px;
+      background: #fff;
+      border-right: 1px solid #ddd;
+      display: flex;
+      flex-direction: column;
+    }
+    
+    .sidebar-header {
+      padding: 10px 15px;
+      border-bottom: 1px solid #ddd;
+      background: #f1f3f4;
+      color: #333;
+      font-weight: 600;
+      font-size: 12px;
+    }
+    
+    .sidebar-header h3 {
+      margin: 0;
+      font-size: 14px;
+      cursor: pointer;
+      transition: color 0.2s;
+    }
+    
+    .sidebar-header h3:hover {
+      color: #2196f3;
+    }
+    
+    .instance-selector {
+      padding: 10px;
+      border-bottom: 1px solid #ddd;
+      background: #fafafa;
+    }
+    
+    .chat-list {
+      flex: 1;
+      overflow-y: auto;
+    }
+    
+    .chat-item {
+      padding: 6px 10px;
+      border-bottom: 1px solid #f0f0f0;
+      cursor: pointer;
+      transition: background-color 0.1s;
+      font-size: 11px;
+    }
+    
+    .chat-item:hover {
+      background-color: #f0f0f0;
+    }
+    
+    .chat-item.active {
+      background-color: #e3f2fd;
+      border-left: 3px solid #2196f3;
+    }
+    
+    .chat-name {
+      font-weight: 600;
+      font-size: 12px;
+      margin-bottom: 2px;
+    }
+    
+    .chat-jid {
+      font-size: 10px;
+      color: #666;
+      font-family: monospace;
+    }
+    
+    .main-content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      background: #fff;
+    }
+    
+    .chat-header {
+      padding: 9px 15px;
+      border-bottom: 1px solid #ddd;
+      background: #f1f3f4;
+      font-size: 13px;
+    }
+    
+    .chat-messages {
+      flex: 1;
+      overflow-y: auto;
+      background: #fff;
+    }
+    
+    .messages-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 11px;
+    }
+    
+    .message-row {
+      border-bottom: 1px solid #ddd;
+      cursor: pointer;
+      transition: background-color 0.1s;
+    }
+    
+    .message-row:hover {
+      background-color: #f8f9fa;
+    }
+    
+    .message-row.me {
+      background-color: #e8f5e8;
+    }
+    
+    .message-row.me:hover {
+      background-color: #d4edda;
+    }
+    
+    .message-row td {
+      padding: 4px 8px;
+      vertical-align: top;
+      border: none;
+    }
+    
+    .message-timestamp {
+      width: 120px;
+      color: #666;
+      font-size: 10px;
+      white-space: nowrap;
+    }
+    
+    .message-sender {
+      width: 150px;
+      font-weight: 500;
+      color: #333;
+    }
+    
+    .message-content {
+      color: #333;
+      word-break: break-word;
+      max-width: 400px;
+    }
+    
+    .message-type {
+      width: 60px;
+      font-size: 9px;
+      color: #888;
+      text-transform: uppercase;
+      padding: 2px 6px;
+      display: inline-block;
+    }
+    
+    .json-expanded {
+      background: #f8f9fa !important;
+    }
+    
+    .json-content {
+      background: #f1f3f4;
+      font-family: 'Courier New', monospace;
+      font-size: 10px;
+      white-space: pre-wrap;
+      padding: 0 5px;
+    }
+    
+    .quoted-message {
+      background: #f0f0f0;
+      border-left: 3px solid #ccc;
+      padding: 4px 8px;
+      margin: 2px 0 4px 0;
+      border-radius: 2px;
+      font-size: 10px;
+    }
+    
+    .quote-header {
+      font-weight: 600;
+      color: #666;
+      margin-bottom: 2px;
+    }
+    
+    .quote-content {
+      color: #888;
+      font-style: italic;
+    }
+    
+    .reply-content {
+      margin-top: 4px;
+    }
+    
+    .deleted-message {
+      background: #fff3e0;
+      border-left: 3px solid #ff9800;
+      padding: 4px 8px;
+      margin: 2px 0;
+      border-radius: 2px;
+      font-size: 11px;
+      color: #bf360c;
+    }
+    
+    .deleted-message s {
+      text-decoration: line-through;
+      color: #666;
+    }
+    
+    .quoted-message i {
+      color: #999;
+      font-size: 9px;
+    }
+    
+    .no-selection {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      color: #666;
+      font-size: 16px;
+    }
+    
+    .loading {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+    }
+    
+    .error-message {
+      padding: 20px;
+      color: #d32f2f;
+      background: #ffebee;
+      border: 1px solid #ffcdd2;
+      border-radius: 4px;
+      margin: 20px;
+    }
+    
+    .media-message {
+      font-style: italic;
+      color: rgba(255, 255, 255, 0.9);
+    }
+    
+    .message.other .media-message {
+      color: #666;
+    }
+    
+    @media (max-width: 768px) {
+      .sidebar {
+        width: 250px;
+      }
+      
+      .message-bubble {
+        max-width: 85%;
+      }
+    }
+    
+    .json-view {
+      font-family: 'Courier New', monospace;
+      background: #f8f9fa;
+      border: 1px solid #e0e0e0;
+      border-radius: 4px;
+      padding: 15px;
+      margin: 10px 0;
+      overflow-x: auto;
+      white-space: pre-wrap;
+      font-size: 12px;
+      line-height: 1.4;
+    }
+    
+    .json-message {
+      background: white;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      padding: 10px;
+      margin: 5px 0;
+      font-size: 11px;
+    }
+  </style>
+</head>
+<body>
+
+<!-- Login Modal -->
+<div class="ui modal" id="loginModal">
+  <div class="header">
+    <i class="lock icon"></i>
+    Authentication Required
+  </div>
+  <div class="content">
+    <div class="ui form">
+      <div class="field">
+        <label>Access Token</label>
+        <input type="password" id="tokenInput" placeholder="Enter your user token or admin token">
+        <div class="ui info message">
+          <p>This page requires authentication. Please enter your user token or admin token to continue.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="actions">
+    <div class="ui cancel button">Cancel</div>
+    <div class="ui primary button" id="loginBtn">Login</div>
+  </div>
+</div>
+
+<div class="history-container" id="historyContainer" style="display: none;">
+  <div class="sidebar">
+    <div class="sidebar-header">
+      <h3 onclick="refreshPage()">
+        <i class="history icon"></i>
+        Chat History
+      </h3>
+    </div>
+    
+    <div class="instance-selector">
+      <label style="display: block; margin-bottom: 8px; font-weight: 600;">Instance:</label>
+      <select class="ui fluid dropdown" id="instanceSelect">
+        <option value="">Select an instance...</option>
+      </select>
+    </div>
+    
+    <div class="chat-list" id="chatList">
+      <div class="ui message">
+        <p>Select an instance to view chats</p>
+      </div>
+    </div>
+  </div>
+  
+  <div class="main-content">
+    <div class="chat-header" id="chatHeader" style="display: none;">
+      <div>
+        <strong id="chatTitle"></strong>
+        <span style="color: #666; margin-left: 10px;" id="chatJidDisplay"></span>
+        <span style="color: #888; margin-left: 10px;" id="messageCount"></span>
+      </div>
+    </div>
+    
+    <div class="chat-messages" id="chatMessages">
+      <div class="no-selection" style="padding: 40px; text-align: center; color: #666; font-size: 14px;">
+        <div style="margin-bottom: 10px; font-weight: 600;">Chat History Viewer</div>
+        <p style="margin: 0;">Select a chat on the left to see the entries and json for them.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/fomantic-ui@2.9.4/dist/semantic.min.js"></script>
+
+<script>
+let currentToken = '';
+let currentInstance = '';
+let currentChatJid = '';
+let instanceChatMap = {};
+let contactsCache = {};
+let sessionInfo = {};
+let allContacts = {};
+let groupsInfo = {};
+
+$(document).ready(function() {
+  // Initialize dropdown and checkbox
+  $('.ui.dropdown').dropdown();
+  $('.ui.checkbox').checkbox();
+  
+  // Login function
+  function performLogin() {
+    const token = $('#tokenInput').val().trim();
+    if (!token) {
+      alert('Please enter a token');
+      return false;
+    }
+    
+    currentToken = token;
+    $('#loginBtn').addClass('loading');
+    loadInstances();
+    return false; // Prevent modal from closing immediately
+  }
+  
+  // Show login modal
+  $('#loginModal').modal({
+    closable: false,
+    onApprove: function() {
+      return performLogin();
+    }
+  }).modal('show');
+  
+  // Handle login button click
+  $('#loginBtn').click(function(e) {
+    e.preventDefault();
+    performLogin();
+  });
+  
+  // Handle Enter key in token input
+  $('#tokenInput').keypress(function(e) {
+    if (e.which === 13) { // Enter key
+      e.preventDefault();
+      performLogin();
+    }
+  });
+  
+  // Instance selection handler
+  $('#instanceSelect').on('change', function() {
+    const selectedInstance = $(this).val();
+    if (selectedInstance && instanceChatMap[selectedInstance]) {
+      currentInstance = selectedInstance;
+      loadChatsForInstance(selectedInstance);
+    } else {
+      $('#chatList').html('<div class="ui message"><p>No chats found for this instance</p></div>');
+      clearChatView();
+    }
+  });
+  
+
+});
+
+// Function to refresh the page and reinitialize everything
+function refreshPage() {
+  // Clear all data
+  currentInstance = '';
+  currentChatJid = '';
+  instanceChatMap = {};
+  contactsCache = {};
+  sessionInfo = {};
+  allContacts = {};
+  groupsInfo = {};
+  
+  // Reset UI
+  $('#instanceSelect').dropdown('clear');
+  $('#chatList').html('<div class="ui message"><p>Select an instance to view chats</p></div>');
+  clearChatView();
+  
+  // Reload all data
+  loadInstances();
+}
+
+function loadInstances() {
+  showLoading();
+  
+  // Load all necessary data in parallel
+  Promise.all([
+    loadChatHistory(),
+    loadSessionStatus(),
+    loadContacts(),
+    loadGroups()
+  ]).then(() => {
+    populateInstanceDropdown();
+    $('#historyContainer').show();
+    $('#loginModal').modal('hide');
+    $('#loginBtn').removeClass('loading');
+    
+    // Clear loading message and show default state
+    clearChatView();
+  }).catch(error => {
+    $('#loginBtn').removeClass('loading');
+    if (error.status === 401) {
+      alert('Invalid token. Please try again.');
+      $('#tokenInput').focus();
+    } else {
+      alert('Failed to load data: ' + (error.message || 'Unknown error'));
+    }
+    
+    // Clear loading message even on error
+    clearChatView();
+  });
+}
+
+function loadChatHistory() {
+  return new Promise((resolve, reject) => {
+    $.ajax({
+      url: '/chat/history?chat_jid=index',
+      method: 'GET',
+      headers: {
+        'token': currentToken
+      },
+      success: function(response) {
+        instanceChatMap = response.data || response;
+        resolve();
+      },
+      error: function(xhr) {
+        reject(xhr);
+      }
+    });
+  });
+}
+
+function loadSessionStatus() {
+  return new Promise((resolve, reject) => {
+    $.ajax({
+      url: '/session/status',
+      method: 'GET',
+      headers: {
+        'token': currentToken
+      },
+      success: function(response) {
+        sessionInfo = response.data || response;
+        console.log('Session info loaded:', sessionInfo);
+        resolve();
+      },
+      error: function(xhr) {
+        console.warn('Failed to load session status:', xhr);
+        // Don't reject - session status is optional
+        resolve();
+      }
+    });
+  });
+}
+
+function loadContacts() {
+  return new Promise((resolve, reject) => {
+    $.ajax({
+      url: '/user/contacts',
+      method: 'GET',
+      headers: {
+        'token': currentToken
+      },
+      success: function(response) {
+        allContacts = response.data || response;
+        console.log('Contacts loaded:', Object.keys(allContacts).length, 'contacts');
+        resolve();
+      },
+      error: function(xhr) {
+        console.warn('Failed to load contacts:', xhr);
+        // Don't reject - contacts are optional
+        resolve();
+      }
+    });
+  });
+}
+
+function loadGroups() {
+  return new Promise((resolve, reject) => {
+    $.ajax({
+      url: '/group/list',
+      method: 'GET',
+      headers: {
+        'token': currentToken
+      },
+      success: function(response) {
+        const groupsData = response.data || response;
+        // Convert groups array to JID -> info mapping
+        if (groupsData.Groups) {
+          groupsData.Groups.forEach(group => {
+            groupsInfo[group.JID] = group;
+          });
+        }
+        console.log('Groups loaded:', Object.keys(groupsInfo).length, 'groups');
+        resolve();
+      },
+      error: function(xhr) {
+        console.warn('Failed to load groups:', xhr);
+        // Don't reject - groups are optional
+        resolve();
+      }
+    });
+  });
+}
+
+function populateInstanceDropdown() {
+  const select = $('#instanceSelect');
+  select.empty().append('<option value="">Select an instance...</option>');
+  
+  Object.keys(instanceChatMap).forEach(instance => {
+    const chatCount = instanceChatMap[instance].length;
+    
+    // Get display name for instance
+    let instanceDisplayName = instance;
+    
+    // If this is the current session, use the name from session info
+    if (sessionInfo.id === instance && sessionInfo.name) {
+      instanceDisplayName = `${sessionInfo.name} (You)`;
+    } else {
+      // For other instances, show a shortened version of the ID
+      instanceDisplayName = `Instance ${instance.substring(0, 8)}...`;
+    }
+    
+    select.append(`<option value="${instance}">${instanceDisplayName} (${chatCount} chats)</option>`);
+  });
+  
+  // Auto-select current user's instance first if it exists
+  const instances = Object.keys(instanceChatMap);
+  if (sessionInfo.id && instances.includes(sessionInfo.id)) {
+    select.val(sessionInfo.id).trigger('change');
+  } else if (instances.length === 1) {
+    select.val(instances[0]).trigger('change');
+  }
+  
+  select.dropdown('refresh');
+}
+
+function loadChatsForInstance(instance) {
+  const chats = instanceChatMap[instance] || [];
+  
+  if (chats.length === 0) {
+    $('#chatList').html('<div class="ui message"><p>No chats found for this instance</p></div>');
+    return;
+  }
+  
+  // Render the chats with timestamps
+  renderChatList(instance, chats);
+}
+
+function renderChatList(instance, chats) {
+  const chatList = $('#chatList');
+  chatList.empty();
+  
+  chats.forEach(chat => {
+    // Handle both new format (object) and old format (string) for backward compatibility
+    const chatJid = typeof chat === 'string' ? chat : chat.chat_jid;
+    
+    // Parse timestamp with better handling for the API format
+    let lastUpdated = null;
+    if (typeof chat === 'object' && chat.last_updated) {
+      const timestamp = chat.last_updated;
+      
+      // Handle the format: "2025-09-28 14:12:36.233262431 +0530 IST"
+      // Convert to ISO format that JavaScript can parse
+      const isoTimestamp = timestamp
+        .replace(' +0530 IST', '+05:30')  // Fix timezone format
+        .replace(' ', 'T');               // Replace space with T
+      
+      lastUpdated = new Date(isoTimestamp);
+      
+      // If still invalid, try without nanoseconds
+      if (isNaN(lastUpdated.getTime())) {
+        const withoutNanos = isoTimestamp.replace(/\.\d+/, '');
+        lastUpdated = new Date(withoutNanos);
+      }
+      
+      // If still invalid, set to null
+      if (isNaN(lastUpdated.getTime())) {
+        console.warn('Failed to parse timestamp:', timestamp);
+        lastUpdated = null;
+      }
+    }
+    
+    // Get proper display name
+    const displayName = getDisplayName(chatJid);
+    const isGroup = chatJid.includes('@g.us');
+    
+    // Format timestamp
+    const timeStr = lastUpdated ? lastUpdated.toLocaleString() : '';
+    
+    const chatItem = $(`
+      <div class="chat-item" data-chat-jid="${chatJid}">
+        <div class="chat-name">
+          <i class="${isGroup ? 'users' : 'user'} icon"></i>
+          ${displayName}
+        </div>
+        <div class="chat-jid" style="font-size: 11px; color: #888; margin-top: 2px;">${chatJid}</div>
+        ${timeStr ? `<div class="chat-timestamp" style="font-size: 11px; color: #999; margin-top: 4px;">
+          <i class="clock icon"></i>${timeStr}
+        </div>` : ''}
+      </div>
+    `);
+    
+    chatItem.click(function() {
+      $('.chat-item').removeClass('active');
+      $(this).addClass('active');
+      loadChatMessages(instance, chatJid, displayName);
+    });
+    
+    chatList.append(chatItem);
+  });
+}
+
+function loadChatMessages(instance, chatJid, displayName) {
+  currentChatJid = chatJid;
+  
+  // Update header with better info
+  const properDisplayName = getDisplayName(chatJid);
+  const isGroup = chatJid.includes('@g.us');
+  
+  let headerInfo = `<i class="${isGroup ? 'users' : 'user'} icon"></i>${properDisplayName}`;
+  if (isGroup && groupsInfo[chatJid]) {
+    const participantCount = groupsInfo[chatJid].Participants ? groupsInfo[chatJid].Participants.length : 0;
+    headerInfo += ` <span style="font-size: 12px; color: #666;">(${participantCount} participants)</span>`;
+  }
+  
+  $('#chatTitle').html(headerInfo);
+  $('#chatJidDisplay').text(chatJid);
+  $('#chatHeader').show();
+  
+  // Show loading
+  $('#chatMessages').html('<div class="loading"><div class="ui active loader"></div></div>');
+  
+  $.ajax({
+    url: `/chat/history?chat_jid=${encodeURIComponent(chatJid)}&limit=100`,
+    method: 'GET',
+    headers: {
+      'token': currentToken
+    },
+    success: function(response) {
+      const messages = response.data || response; // Handle both wrapped and unwrapped responses
+      window.currentMessages = messages; // Store for toggle functionality
+      renderMessages(messages);
+    },
+    error: function(xhr) {
+      $('#chatMessages').html(`
+        <div class="error-message">
+          Failed to load messages: ${xhr.responseJSON?.error || 'Unknown error'}
+        </div>
+      `);
+    }
+  });
+}
+
+function renderMessages(messages) {
+  const container = $('#chatMessages');
+  container.empty();
+  
+  if (messages.length === 0) {
+    container.html('<div style="padding: 20px; text-align: center; color: #666;">No messages found in this chat</div>');
+    return;
+  }
+  
+  // Update message count in header
+  $('#messageCount').text(`(${messages.length} messages)`);
+  
+  // Create message ID to message mapping for quote lookup
+  const messageMap = {};
+  messages.forEach(msg => {
+    if (msg.message_id) {
+      messageMap[msg.message_id] = msg;
+    }
+  });
+  
+  // Create table
+  const table = $('<table class="messages-table"></table>');
+  
+  // Reverse messages to show oldest first
+  const sortedMessages = [...messages].reverse();
+  
+  sortedMessages.forEach((message, index) => {
+    const isMe = isMyMessage(message.sender_jid);
+    const timestamp = new Date(message.timestamp).toLocaleString();
+    
+    // Get sender display name
+    const senderDisplayName = getSenderDisplayName(message.sender_jid);
+    
+    // Process message content for quotes and replies
+    const processedContent = processMessageContent(message, messageMap);
+    
+    // Create row
+    const row = $(`
+      <tr class="message-row ${isMe ? 'me' : ''}" data-message-index="${index}">
+        <td class="message-timestamp">${timestamp}</td>
+        <td class="message-sender">${senderDisplayName}</td>
+        <td class="message-type">${message.message_type}</td>
+        <td class="message-content">${processedContent}</td>
+      </tr>
+    `);
+    
+    // Add click handler to expand JSON
+    row.click(function(e) {
+      e.preventDefault();
+      toggleMessageJson($(this), message);
+    });
+    
+    table.append(row);
+  });
+  
+  container.append(table);
+  
+  // Scroll to bottom to show most recent messages
+  setTimeout(() => {
+    container.scrollTop(container[0].scrollHeight);
+  }, 100);
+}
+
+function processMessageContent(message, messageMap) {
+  let content = message.text_content || '';
+  
+  // Handle delete message types
+  if (message.message_type === 'delete') {
+    const deletedMessageId = message.text_content;
+    const deletedMessage = messageMap[deletedMessageId];
+    
+    if (deletedMessage) {
+      let deletedContent = getMessageDisplayContent(deletedMessage);
+      
+      // Truncate if too long
+      if (deletedContent.length > 100) {
+        deletedContent = deletedContent.substring(0, 100) + '...';
+      }
+      
+      return `<div class="deleted-message"><s title="This message was deleted">${deletedContent}</s> <span style="color: #888; font-size: 10px;">(deleted)</span></div>`;
+    } else {
+      return `<div class="deleted-message"><i>Message deleted (original not in history)</i></div>`;
+    }
+  }
+  
+  // Handle media messages
+  if (message.media_link) {
+    content = `[Media: ${message.media_link}]`;
+  }
+  if (!content && message.message_type !== 'delete') {
+    content = '[Media message]';
+  }
+  
+  // Check if this message has a quoted message
+  if (message.quoted_message_id && message.quoted_message_id.trim() !== '') {
+    const quotedMessage = messageMap[message.quoted_message_id];
+    
+    let quoteDisplay = '';
+    if (quotedMessage) {
+      const quotedSender = getSenderDisplayName(quotedMessage.sender_jid);
+      let quotedContent = getMessageDisplayContent(quotedMessage);
+      
+      // Truncate long quoted content
+      if (quotedContent.length > 100) {
+        quotedContent = quotedContent.substring(0, 100) + '...';
+      }
+      
+      quoteDisplay = `<div class="quoted-message">
+        <div class="quote-header">${quotedSender}:</div>
+        <div class="quote-content">${quotedContent}</div>
+      </div>`;
+    } else {
+      quoteDisplay = '<div class="quoted-message"><i>quoted message not in history</i></div>';
+    }
+    
+    // The content is the reply text itself
+    return quoteDisplay + '<div class="reply-content">' + content + '</div>';
+  }
+  
+  return content;
+}
+
+function getMessageDisplayContent(message) {
+  if (message.media_link) {
+    return '[Media message]';
+  }
+
+  return message.text_content || '[Media message]';
+}
+
+function toggleMessageJson(row, message) {
+  const nextRow = row.next();
+  
+  // If JSON is already expanded, collapse it
+  if (nextRow.hasClass('json-expanded')) {
+    nextRow.remove();
+    return;
+  }
+  
+  // Remove any other expanded JSON
+  $('.json-expanded').remove();
+  
+  // Create JSON expansion
+  const jsonRow = $(`
+    <tr class="json-expanded">
+      <td colspan="4">
+        <div class="json-content">${JSON.stringify(message, null, 2)}</div>
+      </td>
+    </tr>
+  `);
+  
+  row.after(jsonRow);
+}
+
+function clearChatView() {
+  $('#chatHeader').hide();
+  $('#chatMessages').html('<div style="padding: 40px; text-align: center; color: #666; font-size: 14px;"><div style="margin-bottom: 10px; font-weight: 600;">Chat History Viewer</div><p style="margin: 0;">Select a chat on the left to see the entries and json for them.</p></div>');
+  currentChatJid = '';
+}
+
+function showLoading() {
+  $('#chatMessages').html('<div class="loading"><div class="ui active loader"></div><p style="text-align: center; margin-top: 20px;">Loading chat history, contacts, and groups...</p></div>');
+}
+
+// Helper function to check if a message is from the current user
+function isMyMessage(senderJid) {
+  if (senderJid === 'me') return true;
+  
+  // Check if sender matches our session JID
+  if (sessionInfo.jid) {
+    // Extract base number from both JIDs (before the : and @)
+    // Handle both "919480240751:20@s.whatsapp.net" and "919480240751@s.whatsapp.net" formats
+    const myBaseJid = sessionInfo.jid.split('@')[0].split(':')[0]; // "919480240751"
+    const senderBaseJid = senderJid.split('@')[0].split(':')[0];   // "919480240751"
+    
+    return myBaseJid === senderBaseJid;
+  }
+  
+  return false;
+}
+
+// Helper function to get display name for a JID
+function getDisplayName(jid) {
+  // Check if it's a group
+  if (jid.includes('@g.us')) {
+    if (groupsInfo[jid]) {
+      return groupsInfo[jid].Name;
+    }
+  }
+  
+  // Check contacts
+  if (allContacts[jid]) {
+    const contact = allContacts[jid];
+    return contact.PushName || contact.FullName || contact.FirstName || jid;
+  }
+  
+  // Return JID as fallback
+  return jid;
+}
+
+// Helper function to get sender display name in group chats
+function getSenderDisplayName(senderJid) {
+  if (isMyMessage(senderJid)) {
+    return sessionInfo.name || 'Me';
+  }
+  
+  return getDisplayName(senderJid);
+}
+</script>
+
+</body>
+</html>

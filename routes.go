@@ -48,6 +48,7 @@ func (s *server) routes() {
 	adminRoutes.Handle("/users", s.ListUsers()).Methods("GET")
 	adminRoutes.Handle("/users/{id}", s.ListUsers()).Methods("GET")
 	adminRoutes.Handle("/users", s.AddUser()).Methods("POST")
+	adminRoutes.Handle("/users/{id}", s.EditUser()).Methods("PUT")
 	adminRoutes.Handle("/users/{id}", s.DeleteUser()).Methods("DELETE")
 	adminRoutes.Handle("/users/{id}/full", s.DeleteUserComplete()).Methods("DELETE")
 
@@ -85,6 +86,7 @@ func (s *server) routes() {
 	s.router.Handle("/webhook", c.Then(s.UpdateWebhook())).Methods("PUT")
 
 	s.router.Handle("/session/proxy", c.Then(s.SetProxy())).Methods("POST")
+	s.router.Handle("/session/history", c.Then(s.SetHistory())).Methods("POST")
 
 	s.router.Handle("/session/s3/config", c.Then(s.ConfigureS3())).Methods("POST")
 	s.router.Handle("/session/s3/config", c.Then(s.GetS3Config())).Methods("GET")
@@ -106,6 +108,7 @@ func (s *server) routes() {
 	s.router.Handle("/chat/send/list", c.Then(s.SendList())).Methods("POST")
 	s.router.Handle("/chat/send/poll", c.Then(s.SendPoll())).Methods("POST")
 	s.router.Handle("/chat/send/edit", c.Then(s.SendEditMessage())).Methods("POST")
+	s.router.Handle("/chat/history", c.Then(s.GetHistory())).Methods("GET")
 
 	s.router.Handle("/user/presence", c.Then(s.SendPresence())).Methods("POST")
 	s.router.Handle("/user/info", c.Then(s.GetUser())).Methods("POST")
