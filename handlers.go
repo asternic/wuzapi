@@ -3151,7 +3151,7 @@ func (s *server) ListGroups() http.HandlerFunc {
 			return
 		}
 
-		resp, err := clientManager.GetWhatsmeowClient(txtid).GetJoinedGroups()
+		resp, err := clientManager.GetWhatsmeowClient(txtid).GetJoinedGroups(r.Context())
 
 		if err != nil {
 			msg := fmt.Sprintf("failed to get group list: %v", err)
@@ -3392,7 +3392,7 @@ func (s *server) CreateGroup() http.HandlerFunc {
 			Participants: participantJIDs,
 		}
 
-		groupInfo, err := clientManager.GetWhatsmeowClient(txtid).CreateGroup(req)
+		groupInfo, err := clientManager.GetWhatsmeowClient(txtid).CreateGroup(r.Context(), req)
 
 		if err != nil {
 			log.Error().Str("error", fmt.Sprintf("%v", err)).Msg("failed to create group")
@@ -3470,8 +3470,9 @@ func (s *server) SetGroupLocked() http.HandlerFunc {
 func (s *server) SetDisappearingTimer() http.HandlerFunc {
 
 	type setDisappearingTimerStruct struct {
-		GroupJID string `json:"groupjid"`
-		Duration string `json:"duration"` // "24h", "7d", "90d", "off"
+		GroupJID  string `json:"groupjid"`
+		Duration  string `json:"duration"` // "24h", "7d", "90d", "off"
+		Timestamp *int64 `json:"timestamp,omitempty"` // Optional: Unix timestamp in seconds
 	}
 
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -3517,7 +3518,14 @@ func (s *server) SetDisappearingTimer() http.HandlerFunc {
 			return
 		}
 
-		err = clientManager.GetWhatsmeowClient(txtid).SetDisappearingTimer(group, duration)
+		var timerTime time.Time
+		if t.Timestamp != nil {
+			timerTime = time.Unix(*t.Timestamp, 0)
+		} else {
+			timerTime = time.Now()
+		}
+
+		err = clientManager.GetWhatsmeowClient(txtid).SetDisappearingTimer(group, duration, timerTime)
 
 		if err != nil {
 			log.Error().Str("error", fmt.Sprintf("%v", err)).Msg("failed to set disappearing timer")
