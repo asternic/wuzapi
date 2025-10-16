@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"mime"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -28,6 +29,7 @@ import (
 	"go.mau.fi/whatsmeow/types"
 	"go.mau.fi/whatsmeow/types/events"
 	waLog "go.mau.fi/whatsmeow/util/log"
+	"golang.org/x/net/proxy"
 )
 
 // db field declaration as *sqlx.DB
@@ -412,7 +414,24 @@ func (s *server) startClient(userID string, textjid string, token string, subscr
 	var proxyURL string
 	err = s.db.Get(&proxyURL, "SELECT proxy_url FROM users WHERE id=$1", userID)
 	if err == nil && proxyURL != "" {
+		// Apply proxy to Resty HTTP client for webhooks/downloads
 		httpClient.SetProxy(proxyURL)
+
+		// Also configure whatsmeow client's proxy BEFORE connecting
+		if parsed, perr := url.Parse(proxyURL); perr == nil {
+			if parsed.Scheme == "socks5" || parsed.Scheme == "socks5h" {
+				// Build SOCKS dialer from URL (supports user:pass in URL)
+				dialer, derr := proxy.FromURL(parsed, nil)
+				if derr != nil {
+					log.Warn().Err(derr).Str("proxy", proxyURL).Msg("Failed to build SOCKS proxy dialer")
+				} else {
+					client.SetSOCKSProxy(dialer, whatsmeow.SetProxyOptions{})
+				}
+			} else {
+				// http/https proxies
+				client.SetProxyAddress(parsed.String(), whatsmeow.SetProxyOptions{})
+			}
+		}
 	}
 	clientManager.SetHTTPClient(userID, httpClient)
 
