@@ -3074,9 +3074,10 @@ func (s *server) DownloadAudio() http.HandlerFunc {
 func (s *server) React() http.HandlerFunc {
 
 	type textStruct struct {
-		Phone string
-		Body  string
-		Id    string
+		Phone       string
+		Body        string
+		Id          string
+		Participant string
 	}
 
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -3111,7 +3112,6 @@ func (s *server) React() http.HandlerFunc {
 
 		recipient, ok := parseJID(t.Phone)
 		if !ok {
-			log.Error().Msg(fmt.Sprintf("%s", err))
 			s.Respond(w, r, http.StatusBadRequest, errors.New("could not parse Group JID"))
 			return
 		}
@@ -3133,20 +3133,32 @@ func (s *server) React() http.HandlerFunc {
 			reaction = ""
 		}
 
+		var participantJID types.JID
+		if !fromMe && t.Participant != "" {
+			if pj, ok := parseJID(t.Participant); ok {
+				participantJID = pj
+			}
+		}
+
+		key := &waCommon.MessageKey{
+			RemoteJID: proto.String(recipient.String()),
+			FromMe:    proto.Bool(fromMe),
+			ID:        proto.String(msgid),
+		}
+		if !fromMe && participantJID.String() != "" {
+			key.Participant = proto.String(participantJID.String())
+		}
+
 		msg := &waE2E.Message{
 			ReactionMessage: &waE2E.ReactionMessage{
-				Key: &waCommon.MessageKey{
-					RemoteJID: proto.String(recipient.String()),
-					FromMe:    proto.Bool(fromMe),
-					ID:        proto.String(msgid),
-				},
+				Key:               key,
 				Text:              proto.String(reaction),
 				GroupingKey:       proto.String(reaction),
 				SenderTimestampMS: proto.Int64(time.Now().UnixMilli()),
 			},
 		}
 
-		resp, err = clientManager.GetWhatsmeowClient(txtid).SendMessage(context.Background(), recipient, msg, whatsmeow.SendRequestExtra{ID: msgid})
+		resp, err = clientManager.GetWhatsmeowClient(txtid).SendMessage(context.Background(), recipient, msg)
 		if err != nil {
 			s.Respond(w, r, http.StatusInternalServerError, errors.New(fmt.Sprintf("error sending message: %v", err)))
 			return

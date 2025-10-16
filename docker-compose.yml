@@ -48,6 +48,7 @@ services:
 
   rabbitmq:
     image: rabbitmq:3-management
+    hostname: rabbitmq
     environment:
       RABBITMQ_DEFAULT_USER: wuzapi
       RABBITMQ_DEFAULT_PASS: wuzapi

@@ -75,8 +75,9 @@ func PublishToRabbit(data []byte, queueOverride ...string) error {
 		false,     // mandatory
 		false,     // immediate
 		amqp091.Publishing{
-			ContentType: "application/json",
-			Body:        data,
+			ContentType:  "application/json",
+			Body:         data,
+			DeliveryMode: amqp091.Persistent,
 		},
 	)
 	if err != nil {
