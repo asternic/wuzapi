@@ -1,6 +1,7 @@
 # wuzapi/docker-compose.prod.yml
 services:
   wuzapi-server:
+    image: branustech/wuzapi:1.0.0
     labels:
       - traefik.enable=true
 
