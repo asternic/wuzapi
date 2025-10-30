@@ -572,7 +572,7 @@ func (s *server) startClient(userID string, textjid string, token string, subscr
 			clientManager.DeleteMyClient(userID)
 			clientManager.DeleteHTTPClient(userID)
 			sqlStmt := `UPDATE users SET qrcode='', connected=0 WHERE id=$1`
-			_, err := s.db.Exec(sqlStmt, "", userID)
+			_, err := s.db.Exec(sqlStmt, userID)
 			if err != nil {
 				log.Error().Err(err).Msg(sqlStmt)
 			}
