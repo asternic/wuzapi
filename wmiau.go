@@ -57,7 +57,6 @@ func sendToGlobalWebHook(jsonData []byte, token string, userID string) {
 		// Add extra information for the global webhook
 		globalData := map[string]string{
 			"jsonData":     jsonDataStr,
-			"token":        token,
 			"userID":       userID,
 			"instanceName": instance_name,
 		}
@@ -78,7 +77,6 @@ func sendToUserWebHookWithHmac(webhookurl string, path string, jsonData []byte, 
 	}
 	data := map[string]string{
 		"jsonData":     string(jsonData),
-		"token":        token,
 		"instanceName": instance_name,
 	}
 

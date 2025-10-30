@@ -105,7 +105,6 @@ func callHookWithHmac(myurl string, payload map[string]string, id string, encryp
 			var postmap map[string]interface{}
 			err := json.Unmarshal([]byte(jsonStr), &postmap)
 			if err == nil {
-				postmap["token"] = payload["token"]
 				body = postmap
 			}
 		}
