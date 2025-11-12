@@ -1500,16 +1500,16 @@ paths:
                                     data:
                                         type: object
                                         properties:
-                                            URL:
+                                            url:
                                                 type: string
                                                 example: 'https://pps.whatsapp.net/v/t61.24694-24/227295214_112447507729487_4643695328050510566_n.jpg?stp=dst-jpg_s96x96&ccb=11-4&oh=ja432434a91e8f41d86d341bx889c217&oe=543222A4'
-                                            ID:
+                                            id:
                                                 type: string
                                                 example: '1645308319'
-                                            Type:
+                                            type:
                                                 type: string
                                                 example: 'preview'
-                                            DirectPath:
+                                            direct_path:
                                                 type: string
                                                 example: '/v/t61.24694-24/227295214_112447507729487_4643695328050510566_n.jpg?stp=dst-jpg_s96x96&ccb=11-4&oh=ja432434a91e8f41d86d341ba889c217&oe=543222A4'
                             example:
