@@ -246,6 +246,12 @@ func (ss *stdioServer) routeRequest(req *jsonRpcRequest) {
 	case "chat.send.text":
 		httpMethod = "POST"
 		httpPath = "/chat/send/text"
+	case "chat.download.image":
+		httpMethod = "POST"
+		httpPath = "/chat/downloadimage"
+	case "chat.download.video":
+		httpMethod = "POST"
+		httpPath = "/chat/downloadvideo"
 	case "chat.history":
 		httpMethod = "GET"
 		chatJID, ok := req.Params["chat_jid"].(string)
