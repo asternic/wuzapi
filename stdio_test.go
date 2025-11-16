@@ -322,13 +322,13 @@ func TestChatHistory(t *testing.T) {
 
 // testRequest builds a JSON-RPC request with type safety
 type testRequest struct {
-	ID     string
+	ID     interface{} // Can be string, int, or nil
 	Method string
 	Params interface{}
 }
 
-// newRequest creates a new request builder
-func newRequest(id, method string, params interface{}) *testRequest {
+// newRequest creates a new request builder with string or numeric ID
+func newRequest(id interface{}, method string, params interface{}) *testRequest {
 	return &testRequest{
 		ID:     id,
 		Method: method,
@@ -605,19 +605,8 @@ func TestNumericRequestID(t *testing.T) {
 	s := makeTestServer(t)
 
 	// Send request with numeric ID (JSON-RPC 2.0 compliant)
-	request := `{"id":42,"method":"health"}`
-	stdin := bytes.NewBufferString(request + "\n")
-	stdout := &bytes.Buffer{}
-	stdioServer := newStdioServerWithIO(s, stdin, stdout)
-
-	if err := stdioServer.Start(); err != nil {
-		t.Fatalf("Start() failed: %v", err)
-	}
-
-	var response map[string]interface{}
-	if err := json.Unmarshal(stdout.Bytes(), &response); err != nil {
-		t.Fatalf("Failed to parse response: %v", err)
-	}
+	request := newRequest(42, "health", nil).toJSON(t)
+	response := executeRequest(t, s, request)
 
 	expected := map[string]interface{}{
 		"jsonrpc": "2.0",
@@ -627,16 +616,7 @@ func TestNumericRequestID(t *testing.T) {
 		t.Errorf("Response mismatch:\n%s", diff)
 	}
 
-	// Verify the ID is returned as a number (not string)
-	id, ok := response["id"].(float64)
-	if !ok {
-		t.Errorf("Expected numeric ID in response, got: %T %v", response["id"], response["id"])
-	}
-	if id != 42 {
-		t.Errorf("Expected ID 42, got: %v", id)
-	}
-
-	// Verify success response (has result, no error)
+	// Verify it's a success response (has result, no error)
 	if response["result"] == nil {
 		t.Errorf("Expected result field, got nil")
 	}
@@ -649,19 +629,8 @@ func TestNumericZeroRequestID(t *testing.T) {
 	s := makeTestServer(t)
 
 	// Send request with numeric ID 0 (valid per JSON-RPC 2.0 spec)
-	request := `{"id":0,"method":"health"}`
-	stdin := bytes.NewBufferString(request + "\n")
-	stdout := &bytes.Buffer{}
-	stdioServer := newStdioServerWithIO(s, stdin, stdout)
-
-	if err := stdioServer.Start(); err != nil {
-		t.Fatalf("Start() failed: %v", err)
-	}
-
-	var response map[string]interface{}
-	if err := json.Unmarshal(stdout.Bytes(), &response); err != nil {
-		t.Fatalf("Failed to parse response: %v", err)
-	}
+	request := newRequest(0, "health", nil).toJSON(t)
+	response := executeRequest(t, s, request)
 
 	expected := map[string]interface{}{
 		"jsonrpc": "2.0",
@@ -671,16 +640,7 @@ func TestNumericZeroRequestID(t *testing.T) {
 		t.Errorf("Response mismatch:\n%s", diff)
 	}
 
-	// Verify the ID is returned as 0 (not rejected as missing)
-	id, ok := response["id"].(float64)
-	if !ok {
-		t.Errorf("Expected numeric ID in response, got: %T %v", response["id"], response["id"])
-	}
-	if id != 0 {
-		t.Errorf("Expected ID 0, got: %v", id)
-	}
-
-	// Verify success response (has result, no error)
+	// Verify it's a success response (has result, no error)
 	if response["result"] == nil {
 		t.Errorf("Expected result field, got nil")
 	}
@@ -782,19 +742,8 @@ func TestStringRequestID(t *testing.T) {
 	s := makeTestServer(t)
 
 	// Send request with string ID (also JSON-RPC 2.0 compliant)
-	request := `{"id":"test-123","method":"health"}`
-	stdin := bytes.NewBufferString(request + "\n")
-	stdout := &bytes.Buffer{}
-	stdioServer := newStdioServerWithIO(s, stdin, stdout)
-
-	if err := stdioServer.Start(); err != nil {
-		t.Fatalf("Start() failed: %v", err)
-	}
-
-	var response map[string]interface{}
-	if err := json.Unmarshal(stdout.Bytes(), &response); err != nil {
-		t.Fatalf("Failed to parse response: %v", err)
-	}
+	request := newRequest("test-123", "health", nil).toJSON(t)
+	response := executeRequest(t, s, request)
 
 	expected := map[string]interface{}{
 		"jsonrpc": "2.0",
@@ -804,16 +753,7 @@ func TestStringRequestID(t *testing.T) {
 		t.Errorf("Response mismatch:\n%s", diff)
 	}
 
-	// Verify the ID is returned as a string
-	id, ok := response["id"].(string)
-	if !ok {
-		t.Errorf("Expected string ID in response, got: %T %v", response["id"], response["id"])
-	}
-	if id != "test-123" {
-		t.Errorf("Expected ID 'test-123', got: %v", id)
-	}
-
-	// Verify success response (has result, no error)
+	// Verify it's a success response (has result, no error)
 	if response["result"] == nil {
 		t.Errorf("Expected result field, got nil")
 	}
