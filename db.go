@@ -22,8 +22,8 @@ type DatabaseConfig struct {
 	SSLMode  string
 }
 
-func InitializeDatabase(exPath string) (*sqlx.DB, error) {
-	config := getDatabaseConfig(exPath)
+func InitializeDatabase(exPath, dataDirFlag string) (*sqlx.DB, error) {
+	config := getDatabaseConfig(exPath, dataDirFlag)
 
 	if config.Type == "postgres" {
 		return initializePostgres(config)
@@ -31,7 +31,7 @@ func InitializeDatabase(exPath string) (*sqlx.DB, error) {
 	return initializeSQLite(config)
 }
 
-func getDatabaseConfig(exPath string) DatabaseConfig {
+func getDatabaseConfig(exPath, dataDirFlag string) DatabaseConfig {
 	dbUser := os.Getenv("DB_USER")
 	dbPassword := os.Getenv("DB_PASSWORD")
 	dbName := os.Getenv("DB_NAME")
@@ -58,9 +58,15 @@ func getDatabaseConfig(exPath string) DatabaseConfig {
 		}
 	}
 
+	// Use datadir flag if provided, otherwise fall back to executable directory
+	dataPath := exPath
+	if dataDirFlag != "" {
+		dataPath = dataDirFlag
+	}
+
 	return DatabaseConfig{
 		Type: "sqlite",
-		Path: filepath.Join(exPath, "dbdata"),
+		Path: filepath.Join(dataPath, "dbdata"),
 	}
 }
 
