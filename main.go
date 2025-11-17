@@ -60,6 +60,7 @@ var (
 	globalWebhook       = flag.String("globalwebhook", "", "Global webhook URL to receive all events from all users")
 	versionFlag         = flag.Bool("version", false, "Display version information and exit")
 	mode                = flag.String("mode", "http", "Server mode: http or stdio")
+	dataDir             = flag.String("datadir", "", "Data directory for database and session files (defaults to executable directory)")
 
 	globalHMACKeyEncrypted []byte
 
@@ -348,7 +349,7 @@ func main() {
 	}
 	exPath := filepath.Dir(ex)
 
-	db, err := InitializeDatabase(exPath)
+	db, err := InitializeDatabase(exPath, *dataDir)
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to initialize database")
 		os.Exit(1)
@@ -376,7 +377,7 @@ func main() {
 	}
 
 	// Get database configuration
-	config := getDatabaseConfig(exPath)
+	config := getDatabaseConfig(exPath, *dataDir)
 	var storeConnStr string
 	if config.Type == "postgres" {
 		storeConnStr = fmt.Sprintf(
