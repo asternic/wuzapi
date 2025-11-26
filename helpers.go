@@ -8,6 +8,7 @@ import (
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/tls"
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
@@ -101,6 +102,31 @@ var (
 	openGraphCache = cache.New(5*time.Minute, 10*time.Minute) // Cache Open Graph data for 5 minutes, cleanup every 10 minutes
 
 )
+
+var (
+	webhookHTTPClient     *resty.Client
+	webhookHTTPClientOnce sync.Once
+)
+
+func getWebhookHTTPClient() *resty.Client {
+	webhookHTTPClientOnce.Do(func() {
+		c := resty.New()
+		c.SetRedirectPolicy(resty.FlexibleRedirectPolicy(15))
+		if *waDebug == "DEBUG" {
+			c.SetDebug(true)
+		}
+		c.SetTimeout(30 * time.Second)
+		c.SetTLSClientConfig(&tls.Config{InsecureSkipVerify: true})
+		c.OnError(func(req *resty.Request, err error) {
+			if v, ok := err.(*resty.ResponseError); ok {
+				log.Debug().Str("response", v.Response.String()).Msg("resty error")
+				log.Error().Err(v.Err).Msg("resty error")
+			}
+		})
+		webhookHTTPClient = c
+	})
+	return webhookHTTPClient
+}
 
 func Find(slice []string, val string) bool {
 	for _, item := range slice {
@@ -228,7 +254,7 @@ func callHook(myurl string, payload map[string]string, userID string) {
 func callHookWithHmac(myurl string, payload map[string]string, userID string, encryptedHmacKey []byte) {
 	log.Info().Str("url", myurl).Str("userID", userID).Msg("Sending POST to client with retry logic")
 
-	client := clientManager.GetHTTPClient(userID)
+	client := getWebhookHTTPClient()
 
 	// Retry settings
 	maxRetries := 1
@@ -380,7 +406,7 @@ func callHookFile(myurl string, payload map[string]string, userID string, file s
 func callHookFileWithHmac(myurl string, payload map[string]string, userID string, file string, encryptedHmacKey []byte) error {
 	log.Info().Str("file", file).Str("url", myurl).Msg("Sending POST with retry logic")
 
-	client := clientManager.GetHTTPClient(userID)
+	client := getWebhookHTTPClient()
 
 	maxRetries := 1
 	if *webhookRetryEnabled {
