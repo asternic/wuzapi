@@ -76,10 +76,79 @@ func initializePostgres(config DatabaseConfig) (*sqlx.DB, error) {
 	}
 
 	if err := db.Ping(); err != nil {
-		return nil, fmt.Errorf("failed to ping postgres database: %w", err)
+		db.Close()
+		if createErr := createPostgresDatabase(config); createErr != nil {
+			return nil, fmt.Errorf("failed to ping postgres database and could not create it: ping error: %w, create error: %v", err, createErr)
+		}
+
+		db, err = sqlx.Open("postgres", dsn)
+		if err != nil {
+			return nil, fmt.Errorf("failed to open postgres connection after creating database: %w", err)
+		}
+
+		if err := db.Ping(); err != nil {
+			return nil, fmt.Errorf("failed to ping postgres database after creating it: %w", err)
+		}
 	}
 
 	return db, nil
+}
+
+func createPostgresDatabase(config DatabaseConfig) error {
+	systemDSN := fmt.Sprintf(
+		"user=%s password=%s dbname=postgres host=%s port=%s sslmode=%s",
+		config.User, config.Password, config.Host, config.Port, config.SSLMode,
+	)
+
+	systemDB, err := sqlx.Open("postgres", systemDSN)
+	if err != nil {
+		return fmt.Errorf("failed to connect to system postgres database: %w", err)
+	}
+	defer systemDB.Close()
+
+	if err := systemDB.Ping(); err != nil {
+		return fmt.Errorf("failed to ping system postgres database: %w", err)
+	}
+
+	var exists bool
+	checkQuery := "SELECT EXISTS(SELECT 1 FROM pg_database WHERE datname = $1)"
+	if err := systemDB.Get(&exists, checkQuery, config.Name); err != nil {
+		return fmt.Errorf("failed to check if database exists: %w", err)
+	}
+
+	if exists {
+		return nil
+	}
+
+	if !isValidDatabaseName(config.Name) {
+		return fmt.Errorf("invalid database name: %s", config.Name)
+	}
+
+	createQuery := fmt.Sprintf("CREATE DATABASE %s", config.Name)
+	if _, err := systemDB.Exec(createQuery); err != nil {
+		return fmt.Errorf("failed to create database '%s': %w", config.Name, err)
+	}
+
+	fmt.Printf("Database '%s' created successfully\n", config.Name)
+	return nil
+}
+
+func isValidDatabaseName(name string) bool {
+	if len(name) == 0 || len(name) > 63 {
+		return false
+	}
+	for i, r := range name {
+		if i == 0 {
+			if !((r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || r == '_') {
+				return false
+			}
+		} else {
+			if !((r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_') {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 func initializeSQLite(config DatabaseConfig) (*sqlx.DB, error) {
