@@ -1729,6 +1729,13 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 		postmap["type"] = "CallOffer"
 		dowebhook = 1
 		log.Info().Str("event", fmt.Sprintf("%+v", evt)).Msg("Got call offer")
+		// fmt.Println("📞 --- CALL OFFER RECEIVED ---")
+		// fmt.Printf("From: %s\n", evt.CallCreator.String())
+		// fmt.Printf("Call ID: %s\n", evt.CallID)
+		// fmt.Printf("Timestamp: %v\n", evt.Timestamp)
+		// data, _ := json.MarshalIndent(evt, "", "  ")
+		// fmt.Println(string(data))
+		// fmt.Println("-----------------------------")
 	case *events.CallAccept:
 		postmap["type"] = "CallAccept"
 		dowebhook = 1
@@ -1958,4 +1965,40 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 	if dowebhook == 1 {
 		sendEventWithWebHook(mycli, postmap, path)
 	}
+}
+
+// LogCallEvents escucha intentos de llamada para depurar el protocolo VoIP
+func (s *server) LogCallEvents(client *whatsmeow.Client) {
+	client.AddEventHandler(func(evt interface{}) {
+		switch v := evt.(type) {
+		case *events.CallOffer:
+			// ESTO ES LO QUE BUSCAMOS
+			// Aquí viene la oferta de llamada con los datos de cifrado iniciales
+			fmt.Println("📞 --- CALL OFFER RECEIVED ---")
+			fmt.Printf("From: %s\n", v.CallCreator.String())
+			fmt.Printf("Call ID: %s\n", v.CallID)
+			fmt.Printf("Timestamp: %v\n", v.Timestamp)
+
+			// Analizando la data oscura
+			// v.MediaVIPNode contiene información sobre el transporte (IPs de WhatsApp)
+			// Pero necesitamos ver si podemos extraer los bytes de la llave.
+
+			// Nota: whatsmeow ya descifra la capa de transporte,
+			// pero el stream de audio (SRTP) se negocia aquí.
+
+			// Vamos a imprimir todo el objeto para ver qué pescamos
+			data, _ := json.MarshalIndent(v, "", "  ")
+			fmt.Println(string(data))
+			fmt.Println("-----------------------------")
+
+		case *events.CallAccept:
+			fmt.Println("📞 ✅ Call Accepted by another device")
+			fmt.Printf("Call ID: %s\n", v.CallID)
+
+		case *events.CallTerminate:
+			fmt.Println("📞 ❌ Call Ended")
+			fmt.Printf("Call ID: %s\n", v.CallID)
+			fmt.Printf("Reason: %s\n", v.Reason)
+		}
+	})
 }
