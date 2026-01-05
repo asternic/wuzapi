@@ -2306,41 +2306,36 @@ func (s *server) SendPoll() http.HandlerFunc {
 func (s *server) DeleteMessage() http.HandlerFunc {
 
 	type textStruct struct {
-		Phone string
-		Id    string
+		Phone     string 
+		Id        string 
+		SenderJID string 
 	}
 
 	return func(w http.ResponseWriter, r *http.Request) {
 
 		txtid := r.Context().Value("userinfo").(Values).Get("Id")
 
-		if clientManager.GetWhatsmeowClient(txtid) == nil {
+		client := clientManager.GetWhatsmeowClient(txtid)
+		if client == nil {
 			s.Respond(w, r, http.StatusInternalServerError, errors.New("no session"))
 			return
 		}
 
-		msgid := ""
-		var resp whatsmeow.SendResponse
-
-		decoder := json.NewDecoder(r.Body)
 		var t textStruct
-		err := decoder.Decode(&t)
-		if err != nil {
-			s.Respond(w, r, http.StatusBadRequest, errors.New("could not decode Payload"))
+		if err := json.NewDecoder(r.Body).Decode(&t); err != nil {
+			s.Respond(w, r, http.StatusBadRequest, errors.New("could not decode payload"))
 			return
 		}
 
 		if t.Phone == "" {
-			s.Respond(w, r, http.StatusBadRequest, errors.New("missing Phone in Payload"))
+			s.Respond(w, r, http.StatusBadRequest, errors.New("missing Phone in payload"))
 			return
 		}
 
 		if t.Id == "" {
-			s.Respond(w, r, http.StatusBadRequest, errors.New("missing Id in Payload"))
+			s.Respond(w, r, http.StatusBadRequest, errors.New("missing Id in payload"))
 			return
 		}
-
-		msgid = t.Id
 
 		recipient, ok := parseJID(t.Phone)
 		if !ok {
@@ -2348,22 +2343,42 @@ func (s *server) DeleteMessage() http.HandlerFunc {
 			return
 		}
 
-		resp, err = clientManager.GetWhatsmeowClient(txtid).SendMessage(context.Background(), recipient, clientManager.GetWhatsmeowClient(txtid).BuildRevoke(recipient, types.EmptyJID, msgid))
+		// Determine the sender JID: if provided, convert; otherwise use EmptyJID
+		var sender types.JID
+		if t.SenderJID != "" {
+			var parseErr error
+			sender, parseErr = types.ParseJID(t.SenderJID)
+			if parseErr != nil {
+				s.Respond(w, r, http.StatusBadRequest, errors.New("invalid SenderJID"))
+				return
+			}
+		} else {
+			sender = types.EmptyJID
+		}
+
+		resp, err := client.SendMessage(
+			context.Background(),
+			recipient,
+			client.BuildRevoke(recipient, sender, t.Id),
+		)
 		if err != nil {
 			s.Respond(w, r, http.StatusInternalServerError, errors.New(fmt.Sprintf("error sending message: %v", err)))
 			return
 		}
 
-		log.Info().Str("timestamp", fmt.Sprintf("%v", resp.Timestamp)).Str("id", msgid).Msg("Message deleted")
-		response := map[string]interface{}{"Details": "Deleted", "Timestamp": resp.Timestamp.Unix(), "Id": msgid}
+		log.Info().Str("timestamp", fmt.Sprintf("%v", resp.Timestamp)).Str("id", t.Id).Msg("Message deleted")
+		response := map[string]interface{}{
+			"Details":   "Deleted",
+			"Timestamp": resp.Timestamp.Unix(),
+			"Id":        t.Id,
+		}
+
 		responseJson, err := json.Marshal(response)
 		if err != nil {
 			s.Respond(w, r, http.StatusInternalServerError, err)
 		} else {
 			s.Respond(w, r, http.StatusOK, string(responseJson))
 		}
-
-		return
 	}
 }
 
