@@ -34,7 +34,7 @@ Garantir que o Codex execute mudanças pequenas, testáveis, com rastreabilidade
 
 - **Status (last completed milestone):** _none_
 - **Last review:** 2026-01-05 — avaliação de adequação do specs para integração Chatwoot (pendências registradas fora do tracker)
-- **Last update:** 2026-01-07 — M0.4 adicionada base internal/testutil
+- **Last update:** 2026-01-07 — M0.5 go test ./... ok
 - **Next up:** **Milestone M0: Preparar fork, ambiente e harness de testes**
 
 ---
@@ -265,7 +265,7 @@ Autenticação das Client APIs usa `inbox_identifier` e `contact_identifier`.
 - [x] Documentar no README (ou em `specs.md` seção “Como rodar local”) o fluxo básico: `go test ./...`, `docker compose up`, `go run`
 - [x] Criar `docker-compose.dev.yml` (ou equivalente) para subir banco + WuzAPI local com variáveis mínimas
 - [x] Adicionar um pacote de testes base (ex: `internal/testutil`) para facilitar mocks HTTP e fixtures JSON
-- [ ] Rodar `go test ./...` e corrigir qualquer falha existente (se houver) antes de iniciar features
+- [x] Rodar `go test ./...` e corrigir qualquer falha existente (se houver) antes de iniciar features
 
 Critério de aceite M0:
 - `go test ./...` passa localmente
