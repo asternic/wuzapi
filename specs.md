@@ -32,10 +32,10 @@ Garantir que o Codex execute mudanças pequenas, testáveis, com rastreabilidade
 
 ### Progress Tracker (Checkpoint)
 
-- **Status (last completed milestone):** _none_
+- **Status (last completed milestone):** M0
 - **Last review:** 2026-01-05 — avaliação de adequação do specs para integração Chatwoot (pendências registradas fora do tracker)
-- **Last update:** 2026-01-07 — M0.5 go test ./... ok
-- **Next up:** **Milestone M0: Preparar fork, ambiente e harness de testes**
+- **Last update:** 2026-01-07 — M0 concluída
+- **Next up:** **Milestone M1: Persistência (migrações) e modelo de config/mapeamento**
 
 ---
 
