@@ -70,6 +70,11 @@ var migrations = []Migration{
 		Name:  "add_data_json",
 		UpSQL: addDataJsonSQL,
 	},
+	{
+		ID:    9,
+		Name:  "add_chatwoot_tables",
+		UpSQL: addChatwootTablesSQL,
+	},
 }
 
 const changeIDToStringSQL = `
@@ -208,6 +213,81 @@ BEGIN
     -- Add dataJson column to message_history table if it doesn't exist
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'message_history' AND column_name = 'datajson') THEN
         ALTER TABLE message_history ADD COLUMN datajson TEXT;
+    END IF;
+END $$;
+
+-- SQLite version (handled in code)
+`
+
+const addChatwootTablesSQL = `
+-- PostgreSQL version
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'chatwoot_config') THEN
+        CREATE TABLE chatwoot_config (
+            id SERIAL PRIMARY KEY,
+            wuzapi_user_id TEXT NOT NULL,
+            chatwoot_base_url TEXT NOT NULL,
+            account_id INTEGER NOT NULL,
+            api_token TEXT NOT NULL,
+            inbox_identifier TEXT NOT NULL,
+            inbox_name TEXT NOT NULL,
+            inbox_id INTEGER NOT NULL,
+            callback_secret TEXT NOT NULL,
+            hmac_secret TEXT DEFAULT '',
+            enabled BOOLEAN DEFAULT FALSE,
+            sign_messages BOOLEAN DEFAULT FALSE,
+            signature_text TEXT DEFAULT '',
+            reopen_conversations BOOLEAN DEFAULT FALSE,
+            set_conversations_pending BOOLEAN DEFAULT FALSE,
+            ignore_groups BOOLEAN DEFAULT FALSE,
+            enable_typing_indicator BOOLEAN DEFAULT FALSE,
+            ignored_numbers TEXT DEFAULT '',
+            system_contact_identifier TEXT DEFAULT '',
+            system_conversation_id INTEGER,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'chatwoot_map') THEN
+        CREATE TABLE chatwoot_map (
+            id SERIAL PRIMARY KEY,
+            wuzapi_user_id TEXT NOT NULL,
+            wa_jid TEXT NOT NULL,
+            wa_phone TEXT NOT NULL,
+            chatwoot_contact_identifier TEXT NOT NULL,
+            chatwoot_conversation_id INTEGER,
+            conversation_status TEXT,
+            last_sync_at TIMESTAMP,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'chatwoot_config_wuzapi_user_id_uq') THEN
+        CREATE UNIQUE INDEX chatwoot_config_wuzapi_user_id_uq ON chatwoot_config (wuzapi_user_id);
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'chatwoot_config_callback_secret_uq') THEN
+        CREATE UNIQUE INDEX chatwoot_config_callback_secret_uq ON chatwoot_config (callback_secret);
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'chatwoot_config_inbox_identifier_uq') THEN
+        CREATE UNIQUE INDEX chatwoot_config_inbox_identifier_uq ON chatwoot_config (inbox_identifier);
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'chatwoot_config_inbox_id_uq') THEN
+        CREATE UNIQUE INDEX chatwoot_config_inbox_id_uq ON chatwoot_config (inbox_id);
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'chatwoot_map_user_jid_uq') THEN
+        CREATE UNIQUE INDEX chatwoot_map_user_jid_uq ON chatwoot_map (wuzapi_user_id, wa_jid);
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'chatwoot_map_user_contact_uq') THEN
+        CREATE UNIQUE INDEX chatwoot_map_user_contact_uq ON chatwoot_map (wuzapi_user_id, chatwoot_contact_identifier);
     END IF;
 END $$;
 
@@ -432,6 +512,81 @@ func applyMigration(db *sqlx.DB, migration Migration) error {
 		if db.DriverName() == "sqlite" {
 			// Add dataJson column to message_history table for SQLite
 			err = addColumnIfNotExistsSQLite(tx, "message_history", "datajson", "TEXT")
+		} else {
+			_, err = tx.Exec(migration.UpSQL)
+		}
+	} else if migration.ID == 9 {
+		if db.DriverName() == "sqlite" {
+			err = createTableIfNotExistsSQLite(tx, "chatwoot_config", `
+				CREATE TABLE chatwoot_config (
+					id INTEGER PRIMARY KEY AUTOINCREMENT,
+					wuzapi_user_id TEXT NOT NULL,
+					chatwoot_base_url TEXT NOT NULL,
+					account_id INTEGER NOT NULL,
+					api_token TEXT NOT NULL,
+					inbox_identifier TEXT NOT NULL,
+					inbox_name TEXT NOT NULL,
+					inbox_id INTEGER NOT NULL,
+					callback_secret TEXT NOT NULL,
+					hmac_secret TEXT DEFAULT '',
+					enabled BOOLEAN DEFAULT 0,
+					sign_messages BOOLEAN DEFAULT 0,
+					signature_text TEXT DEFAULT '',
+					reopen_conversations BOOLEAN DEFAULT 0,
+					set_conversations_pending BOOLEAN DEFAULT 0,
+					ignore_groups BOOLEAN DEFAULT 0,
+					enable_typing_indicator BOOLEAN DEFAULT 0,
+					ignored_numbers TEXT DEFAULT '',
+					system_contact_identifier TEXT DEFAULT '',
+					system_conversation_id INTEGER,
+					created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+					updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+				)`)
+			if err == nil {
+				_, err = tx.Exec(`
+					CREATE UNIQUE INDEX IF NOT EXISTS chatwoot_config_wuzapi_user_id_uq
+					ON chatwoot_config (wuzapi_user_id)`)
+			}
+			if err == nil {
+				_, err = tx.Exec(`
+					CREATE UNIQUE INDEX IF NOT EXISTS chatwoot_config_callback_secret_uq
+					ON chatwoot_config (callback_secret)`)
+			}
+			if err == nil {
+				_, err = tx.Exec(`
+					CREATE UNIQUE INDEX IF NOT EXISTS chatwoot_config_inbox_identifier_uq
+					ON chatwoot_config (inbox_identifier)`)
+			}
+			if err == nil {
+				_, err = tx.Exec(`
+					CREATE UNIQUE INDEX IF NOT EXISTS chatwoot_config_inbox_id_uq
+					ON chatwoot_config (inbox_id)`)
+			}
+			if err == nil {
+				err = createTableIfNotExistsSQLite(tx, "chatwoot_map", `
+					CREATE TABLE chatwoot_map (
+						id INTEGER PRIMARY KEY AUTOINCREMENT,
+						wuzapi_user_id TEXT NOT NULL,
+						wa_jid TEXT NOT NULL,
+						wa_phone TEXT NOT NULL,
+						chatwoot_contact_identifier TEXT NOT NULL,
+						chatwoot_conversation_id INTEGER,
+						conversation_status TEXT,
+						last_sync_at DATETIME,
+						created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+						updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+					)`)
+			}
+			if err == nil {
+				_, err = tx.Exec(`
+					CREATE UNIQUE INDEX IF NOT EXISTS chatwoot_map_user_jid_uq
+					ON chatwoot_map (wuzapi_user_id, wa_jid)`)
+			}
+			if err == nil {
+				_, err = tx.Exec(`
+					CREATE UNIQUE INDEX IF NOT EXISTS chatwoot_map_user_contact_uq
+					ON chatwoot_map (wuzapi_user_id, chatwoot_contact_identifier)`)
+			}
 		} else {
 			_, err = tx.Exec(migration.UpSQL)
 		}

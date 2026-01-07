@@ -34,7 +34,7 @@ Garantir que o Codex execute mudanças pequenas, testáveis, com rastreabilidade
 
 - **Status (last completed milestone):** M0
 - **Last review:** 2026-01-05 — avaliação de adequação do specs para integração Chatwoot (pendências registradas fora do tracker)
-- **Last update:** 2026-01-07 — M0 concluída
+- **Last update:** 2026-01-07 — M1.1 migração chatwoot_config/chatwoot_map adicionada
 - **Next up:** **Milestone M1: Persistência (migrações) e modelo de config/mapeamento**
 
 ---
@@ -274,7 +274,7 @@ Critério de aceite M0:
 ---
 
 ### Milestone M1: Persistência (migrações) e modelo de config/mapeamento
-- [ ] Adicionar migração SQL (PostgreSQL + SQLite) para criar `chatwoot_config` e `chatwoot_map`
+- [x] Adicionar migração SQL (PostgreSQL + SQLite) para criar `chatwoot_config` e `chatwoot_map`
 - [ ] Incluir novos campos de config (account_id, api_token, inbox_name, toggles, ignored_numbers)
 - [ ] Adicionar índices únicos conforme seção 3.1
 - [ ] Implementar funções DB (sqlx) para:
