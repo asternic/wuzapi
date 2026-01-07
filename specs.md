@@ -34,7 +34,7 @@ Garantir que o Codex execute mudanças pequenas, testáveis, com rastreabilidade
 
 - **Status (last completed milestone):** _none_
 - **Last review:** 2026-01-05 — avaliação de adequação do specs para integração Chatwoot (pendências registradas fora do tracker)
-- **Last update:** 2026-01-07 — requisitos de configuração via dashboard, onboarding e QR code no formato do WuzAPI incorporados
+- **Last update:** 2026-01-07 — M0.2 documentado fluxo local no README
 - **Next up:** **Milestone M0: Preparar fork, ambiente e harness de testes**
 
 ---
@@ -261,8 +261,8 @@ Autenticação das Client APIs usa `inbox_identifier` e `contact_identifier`.
 ## 7) Milestones e tarefas
 
 ### Milestone M0: Preparar fork, ambiente e harness de testes
-- [ ] Criar fork do repositório e adicionar `upstream` remoto (para comparar e puxar mudanças quando necessário)
-- [ ] Documentar no README (ou em `specs.md` seção “Como rodar local”) o fluxo básico: `go test ./...`, `docker compose up`, `go run`
+- [x] Criar fork do repositório e adicionar `upstream` remoto (para comparar e puxar mudanças quando necessário)
+- [x] Documentar no README (ou em `specs.md` seção “Como rodar local”) o fluxo básico: `go test ./...`, `docker compose up`, `go run`
 - [ ] Criar `docker-compose.dev.yml` (ou equivalente) para subir banco + WuzAPI local com variáveis mínimas
 - [ ] Adicionar um pacote de testes base (ex: `internal/testutil`) para facilitar mocks HTTP e fixtures JSON
 - [ ] Rodar `go test ./...` e corrigir qualquer falha existente (se houver) antes de iniciar features

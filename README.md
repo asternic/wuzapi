@@ -65,6 +65,14 @@ go mod tidy
 go build .
 ```
 
+## Local development (quickstart)
+
+```
+go test ./...
+docker compose up
+go run .
+```
+
 ## Homebrew installation
 
 To install `wuzapi` via [Homebrew](https://brew.sh) use:
