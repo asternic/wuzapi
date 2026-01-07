@@ -1,0 +1,46 @@
+services:
+  wuzapi-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "${WUZAPI_PORT:-8080}:8080"
+    environment:
+      - WUZAPI_ADMIN_TOKEN=${WUZAPI_ADMIN_TOKEN:-dev_admin_token}
+      - WUZAPI_GLOBAL_ENCRYPTION_KEY=${WUZAPI_GLOBAL_ENCRYPTION_KEY:-dev_encryption_key_32_bytes_1234}
+      - WUZAPI_GLOBAL_HMAC_KEY=${WUZAPI_GLOBAL_HMAC_KEY:-dev_hmac_key_32_chars_1234567890}
+      - DB_USER=${DB_USER:-wuzapi}
+      - DB_PASSWORD=${DB_PASSWORD:-wuzapi}
+      - DB_NAME=${DB_NAME:-wuzapi}
+      - DB_HOST=db
+      - DB_PORT=${DB_PORT:-5432}
+      - DB_SSLMODE=${DB_SSLMODE:-false}
+      - TZ=${TZ:-America/Sao_Paulo}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - wuzapi-dev-network
+
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: ${DB_USER:-wuzapi}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-wuzapi}
+      POSTGRES_DB: ${DB_NAME:-wuzapi}
+    volumes:
+      - db_data_dev:/var/lib/postgresql/data
+    networks:
+      - wuzapi-dev-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-wuzapi}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+networks:
+  wuzapi-dev-network:
+    driver: bridge
+
+volumes:
+  db_data_dev:
