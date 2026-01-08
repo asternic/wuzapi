@@ -34,7 +34,7 @@ Garantir que o Codex execute mudanças pequenas, testáveis, com rastreabilidade
 
 - **Status (last completed milestone):** M1
 - **Last review:** 2026-01-05 — avaliação de adequação do specs para integração Chatwoot (pendências registradas fora do tracker)
-- **Last update:** 2026-01-08 — M2.3 client APIs (contact/conversation/message) implementadas
+- **Last update:** 2026-01-08 — M2.4/2.5 Account API + timeout; testes via transport stub
 - **Next up:** **Milestone M2: Chatwoot client (Client APIs)**
 
 ---
@@ -298,9 +298,9 @@ Critério de aceite M1:
   - [x] `CreateContact(inbox_identifier, payload) -> contact_identifier`
   - [x] `CreateConversation(inbox_identifier, contact_identifier) -> conversation_id`
   - [x] `CreateMessage(inbox_identifier, contact_identifier, conversation_id, content) -> message_id`
-- [ ] Implementar Account API (test connection, create/update inbox)
-- [ ] Definir política de timeout e retry (no mínimo timeout)
-- [ ] Testes unitários com mock server (httptest)
+- [x] Implementar Account API (test connection, create/update inbox)
+- [x] Definir política de timeout e retry (no mínimo timeout)
+- [x] Testes unitários com mock server (httptest)
 
 Critério de aceite M2:
 - Testes cobrem respostas 200 e erros comuns (401/404/500)
