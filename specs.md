@@ -32,10 +32,10 @@ Garantir que o Codex execute mudanças pequenas, testáveis, com rastreabilidade
 
 ### Progress Tracker (Checkpoint)
 
-- **Status (last completed milestone):** M1
+- **Status (last completed milestone):** M2
 - **Last review:** 2026-01-05 — avaliação de adequação do specs para integração Chatwoot (pendências registradas fora do tracker)
-- **Last update:** 2026-01-08 — M2.4/2.5 Account API + timeout; testes via transport stub
-- **Next up:** **Milestone M2: Chatwoot client (Client APIs)**
+- **Last update:** 2026-01-08 — M2 concluída
+- **Next up:** **Milestone M3: Inbound WhatsApp -> Chatwoot**
 
 ---
 
