@@ -34,7 +34,7 @@ Garantir que o Codex execute mudanças pequenas, testáveis, com rastreabilidade
 
 - **Status (last completed milestone):** M1
 - **Last review:** 2026-01-05 — avaliação de adequação do specs para integração Chatwoot (pendências registradas fora do tracker)
-- **Last update:** 2026-01-07 — M1 concluída
+- **Last update:** 2026-01-07 — M2.1 pacote internal/chatwoot criado
 - **Next up:** **Milestone M2: Chatwoot client (Client APIs)**
 
 ---
@@ -292,7 +292,7 @@ Critério de aceite M1:
 ---
 
 ### Milestone M2: Chatwoot client (Client APIs)
-- [ ] Criar pacote `internal/chatwoot` (ou similar) com client HTTP
+- [x] Criar pacote `internal/chatwoot` (ou similar) com client HTTP
 - [ ] Confirmar endpoints e payloads do API Inbox (Chatwoot) antes de fixar assinatura das funções
 - [ ] Implementar:
   - [ ] `CreateContact(inbox_identifier, payload) -> contact_identifier`
