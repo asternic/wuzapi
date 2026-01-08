@@ -1,5 +1,6 @@
 dbdata/
 files/
+chatwoot_api_docs/
 wuzapi
 .env
 .tool-versions
