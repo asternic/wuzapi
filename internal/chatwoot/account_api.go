@@ -123,6 +123,29 @@ func (c *Client) UpdateAPIInbox(ctx context.Context, inboxID int, name, webhookU
 	return &resp, nil
 }
 
+// ToggleConversationStatus sets the status of a conversation (open, resolved, pending, snoozed).
+func (c *Client) ToggleConversationStatus(ctx context.Context, conversationID int, status string) error {
+	if err := c.validateAccount(); err != nil {
+		return err
+	}
+	if conversationID <= 0 {
+		return errors.New("conversation id is required")
+	}
+	if strings.TrimSpace(status) == "" {
+		return errors.New("status is required")
+	}
+
+	path := fmt.Sprintf("/api/v1/accounts/%d/conversations/%d/toggle_status", c.accountID, conversationID)
+	payload := map[string]string{
+		"status": status,
+	}
+	req, err := c.newAccountRequest(ctx, http.MethodPost, path, payload)
+	if err != nil {
+		return err
+	}
+	return c.do(req, nil)
+}
+
 func (c *Client) newAccountRequest(ctx context.Context, method, path string, body any) (*http.Request, error) {
 	req, err := c.newRequest(ctx, method, path, body)
 	if err != nil {

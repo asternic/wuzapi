@@ -797,6 +797,9 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 		log.Info().Msg("Received StreamReplaced event")
 		return
 	case *events.Message:
+		if err := mycli.s.handleChatwootInbound(context.Background(), evt, txtid); err != nil {
+			log.Warn().Err(err).Str("message_id", evt.Info.ID).Msg("Chatwoot inbound failed")
+		}
 
 		var s3Config struct {
 			Enabled       string `db:"s3_enabled"`

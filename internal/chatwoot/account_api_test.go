@@ -138,3 +138,35 @@ func TestAccountAPIReturnsError(t *testing.T) {
 		t.Fatalf("expected status 404, got %d", apiErr.StatusCode)
 	}
 }
+
+func TestToggleConversationStatus(t *testing.T) {
+	client, err := NewClient("https://example.test", 1, "token", WithHTTPClient(&http.Client{
+		Transport: roundTripperFunc(func(r *http.Request) (*http.Response, error) {
+			if r.Method != http.MethodPost {
+				t.Fatalf("expected POST, got %s", r.Method)
+			}
+			if r.URL.Path != "/api/v1/accounts/1/conversations/7/toggle_status" {
+				t.Fatalf("unexpected path: %s", r.URL.Path)
+			}
+			var body map[string]any
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatalf("decode body: %v", err)
+			}
+			if body["status"].(string) != "pending" {
+				t.Fatalf("unexpected status: %v", body["status"])
+			}
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Header:     http.Header{"Content-Type": []string{"application/json"}},
+				Body:       io.NopCloser(strings.NewReader(`{}`)),
+			}, nil
+		}),
+	}))
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+
+	if err := client.ToggleConversationStatus(context.Background(), 7, "pending"); err != nil {
+		t.Fatalf("ToggleConversationStatus: %v", err)
+	}
+}

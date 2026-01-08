@@ -34,7 +34,7 @@ Garantir que o Codex execute mudanças pequenas, testáveis, com rastreabilidade
 
 - **Status (last completed milestone):** M2
 - **Last review:** 2026-01-05 — avaliação de adequação do specs para integração Chatwoot (pendências registradas fora do tracker)
-- **Last update:** 2026-01-08 — M2 concluída
+- **Last update:** 2026-01-08 — M3 inbound WhatsApp -> Chatwoot implementado + testes
 - **Next up:** **Milestone M3: Inbound WhatsApp -> Chatwoot**
 
 ---
@@ -309,25 +309,25 @@ Critério de aceite M2:
 ---
 
 ### Milestone M3: Inbound WhatsApp -> Chatwoot
-- [ ] No hook `case *events.Message`:
-  - [ ] Ignorar `IsFromMe == true`
-  - [ ] Respeitar `Ignore Groups`
-  - [ ] Extrair phone/JID e conteúdo de texto (primeiro suportar apenas texto simples)
-  - [ ] Ignorar `ignored_numbers`
-- [ ] Implementar pipeline:
-  - [ ] Load config do usuário (wuzapi_user_id)
-  - [ ] Resolver ou criar contact no Chatwoot e salvar mapping
-  - [ ] Resolver ou criar conversation e salvar mapping
-  - [ ] Reabrir conversa resolvida se `Reopen Conversations` estiver habilitado
-  - [ ] Setar status `pending` se `Set Conversations as Pending` estiver habilitado
-  - [ ] Criar message incoming no Chatwoot
-- [ ] Log estruturado (info/warn/error) com correlation id (ex: message id do WhatsApp)
+- [x] No hook `case *events.Message`:
+  - [x] Ignorar `IsFromMe == true`
+  - [x] Respeitar `Ignore Groups`
+  - [x] Extrair phone/JID e conteúdo de texto (primeiro suportar apenas texto simples)
+  - [x] Ignorar `ignored_numbers`
+- [x] Implementar pipeline:
+  - [x] Load config do usuário (wuzapi_user_id)
+  - [x] Resolver ou criar contact no Chatwoot e salvar mapping
+  - [x] Resolver ou criar conversation e salvar mapping
+  - [x] Reabrir conversa resolvida se `Reopen Conversations` estiver habilitado
+  - [x] Setar status `pending` se `Set Conversations as Pending` estiver habilitado
+  - [x] Criar message incoming no Chatwoot
+- [x] Log estruturado (info/warn/error) com correlation id (ex: message id do WhatsApp)
 
 Testes:
-- [ ] Unit test do “handler inbound” com:
-  - [ ] evento IsFromMe => não chama Chatwoot
-  - [ ] evento grupo => não chama Chatwoot
-  - [ ] evento texto => chama CreateContact/Conversation/Message na ordem esperada
+- [x] Unit test do “handler inbound” com:
+  - [x] evento IsFromMe => não chama Chatwoot
+  - [x] evento grupo => não chama Chatwoot
+  - [x] evento texto => chama CreateContact/Conversation/Message na ordem esperada
 
 Critério de aceite M3:
 - Um evento de texto gera uma conversa e mensagem no Chatwoot (via mock)
@@ -430,5 +430,6 @@ Critério de aceite M7:
 7) `Ignore Groups` desabilitado deve permitir grupos no MVP ou manter fora de escopo?
 8) Como registrar e validar account webhooks para typing indicator?
 9) Resolvido: API inbox usa `channel.type=api` e `channel.webhook_url` (confirmado via rails runner/curl).
+10) Confirmar algoritmo do `identifier_hash` quando `hmac_secret` for usado no Create Contact (docs nao especificam).
 
 (Manter esta seção sempre atualizada quando surgir uma nova pendência.)
