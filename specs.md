@@ -34,7 +34,7 @@ Garantir que o Codex execute mudanças pequenas, testáveis, com rastreabilidade
 
 - **Status (last completed milestone):** M0
 - **Last review:** 2026-01-05 — avaliação de adequação do specs para integração Chatwoot (pendências registradas fora do tracker)
-- **Last update:** 2026-01-07 — M1.3 indices unicos registrados na migracao
+- **Last update:** 2026-01-07 — M1.4 CRUD chatwoot_config/chatwoot_map com testes
 - **Next up:** **Milestone M1: Persistência (migrações) e modelo de config/mapeamento**
 
 ---
@@ -277,13 +277,13 @@ Critério de aceite M0:
 - [x] Adicionar migração SQL (PostgreSQL + SQLite) para criar `chatwoot_config` e `chatwoot_map`
 - [x] Incluir novos campos de config (account_id, api_token, inbox_name, toggles, ignored_numbers)
 - [x] Adicionar índices únicos conforme seção 3.1
-- [ ] Implementar funções DB (sqlx) para:
-  - [ ] upsert de config por wuzapi_user_id
-  - [ ] get config por wuzapi_user_id
-  - [ ] upsert de map por wa_jid
-  - [ ] get map por wa_jid
-  - [ ] get map por chatwoot_contact_identifier
-  - [ ] update conversation_id/status
+- [x] Implementar funções DB (sqlx) para:
+  - [x] upsert de config por wuzapi_user_id
+  - [x] get config por wuzapi_user_id
+  - [x] upsert de map por wa_jid
+  - [x] get map por wa_jid
+  - [x] get map por chatwoot_contact_identifier
+  - [x] update conversation_id/status
 
 Critério de aceite M1:
 - Migração aplica com banco limpo
