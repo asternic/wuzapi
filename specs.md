@@ -34,7 +34,7 @@ Garantir que o Codex execute mudanças pequenas, testáveis, com rastreabilidade
 
 - **Status (last completed milestone):** M1
 - **Last review:** 2026-01-05 — avaliação de adequação do specs para integração Chatwoot (pendências registradas fora do tracker)
-- **Last update:** 2026-01-07 — M2.2 revisao de docs: falta payload do API inbox
+- **Last update:** 2026-01-08 — M2.2 payload API inbox validado (channel.type=api, channel.webhook_url)
 - **Next up:** **Milestone M2: Chatwoot client (Client APIs)**
 
 ---
@@ -293,7 +293,7 @@ Critério de aceite M1:
 
 ### Milestone M2: Chatwoot client (Client APIs)
 - [x] Criar pacote `internal/chatwoot` (ou similar) com client HTTP
-- [ ] Confirmar endpoints e payloads do API Inbox (Chatwoot) antes de fixar assinatura das funções
+- [x] Confirmar endpoints e payloads do API Inbox (Chatwoot) antes de fixar assinatura das funções
 - [ ] Implementar:
   - [ ] `CreateContact(inbox_identifier, payload) -> contact_identifier`
   - [ ] `CreateConversation(inbox_identifier, contact_identifier) -> conversation_id`
@@ -429,6 +429,6 @@ Critério de aceite M7:
 6) Semantica exata do comando `#attid` (quais IDs limpar/atualizar?)
 7) `Ignore Groups` desabilitado deve permitir grupos no MVP ou manter fora de escopo?
 8) Como registrar e validar account webhooks para typing indicator?
-9) Detalhes do payload para criar/atualizar API Inbox (channel type + webhook/callback) nao aparecem nos docs de API; precisamos da ajuda do artigo de help center ou confirmacao oficial.
+9) Resolvido: API inbox usa `channel.type=api` e `channel.webhook_url` (confirmado via rails runner/curl).
 
 (Manter esta seção sempre atualizada quando surgir uma nova pendência.)
