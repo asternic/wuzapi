@@ -34,7 +34,7 @@ Garantir que o Codex execute mudanças pequenas, testáveis, com rastreabilidade
 
 - **Status (last completed milestone):** M5
 - **Last review:** 2026-01-05 — avaliação de adequação do specs para integração Chatwoot (pendências registradas fora do tracker)
-- **Last update:** 2026-01-09 — M5 concluída (go test ./...)
+- **Last update:** 2026-01-09 — M6 onboarding contato/mensagem (go test ./...)
 - **Next up:** **Milestone M6: Onboarding e comandos operacionais**
 
 ---
@@ -399,8 +399,8 @@ Critério de aceite M5:
 ---
 
 ### Milestone M6: Onboarding e comandos operacionais
-- [ ] Criar/atualizar contato "Flownix" e conversa de onboarding no Chatwoot
-- [ ] Enviar mensagem de onboarding ao salvar configuração
+- [x] Criar/atualizar contato "Flownix" e conversa de onboarding no Chatwoot
+- [x] Enviar mensagem de onboarding ao salvar configuração
 - [ ] Implementar parser/handler de comandos (#qrcode/#help/#status/#disconnect/#attid/#updateavatar)
 - [ ] Enviar resposta no Chatwoot para cada comando
 - [ ] Implementar "Enable Typing Indicator" via eventos `conversation_typing_on/off` (Account Webhooks)

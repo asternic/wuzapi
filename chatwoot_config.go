@@ -144,6 +144,11 @@ func (s *server) SaveChatwootConfig() http.HandlerFunc {
 			return
 		}
 
+		if err := s.ensureChatwootOnboarding(r.Context(), cfg); err != nil {
+			s.Respond(w, r, http.StatusInternalServerError, err)
+			return
+		}
+
 		response := map[string]interface{}{
 			"Details": "Chatwoot configuration saved successfully",
 			"Config":  payload,

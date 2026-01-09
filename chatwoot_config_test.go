@@ -14,6 +14,7 @@ import (
 
 func TestChatwootConfigSaveAndGet(t *testing.T) {
 	s := makeTestServer(t)
+	useChatwootHTTPClient(t, chatwootOnboardingTransport())
 	saveHandler := s.SaveChatwootConfig()
 	getHandler := s.GetChatwootConfig()
 
@@ -173,6 +174,46 @@ func TestChatwootInboxProvisionCreate(t *testing.T) {
 	}
 }
 
+func TestChatwootConfigSaveCreatesOnboarding(t *testing.T) {
+	s := makeTestServer(t)
+	useChatwootHTTPClient(t, chatwootOnboardingTransport())
+
+	payload := chatwootConfigPayload{
+		ChatwootBaseURL: "https://chat.example",
+		AccountID:       1,
+		APIToken:        "api-token",
+		InboxIdentifier: "inbox-1",
+		InboxName:       "WuzAPI",
+		InboxID:         10,
+		CallbackSecret:  "secret-1234567890",
+		Enabled:         true,
+	}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal payload: %v", err)
+	}
+
+	req := withUserContext(httptest.NewRequest(http.MethodPost, "/integrations/chatwoot/config", bytes.NewReader(body)))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	s.SaveChatwootConfig().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+
+	cfg, err := s.GetChatwootConfigByUserID("user-1")
+	if err != nil {
+		t.Fatalf("get chatwoot config: %v", err)
+	}
+	if cfg.SystemContactIdentifier != "system-contact-1" {
+		t.Fatalf("expected system contact identifier, got %q", cfg.SystemContactIdentifier)
+	}
+	if !cfg.SystemConversationID.Valid || cfg.SystemConversationID.Int64 != 777 {
+		t.Fatalf("expected system conversation id 777, got %v", cfg.SystemConversationID)
+	}
+}
+
 func withUserContext(req *http.Request) *http.Request {
 	ctx := context.WithValue(req.Context(), "userinfo", Values{m: map[string]string{
 		"Id":    "user-1",
@@ -228,6 +269,21 @@ func jsonResponse(status int, payload any) (*http.Response, error) {
 		Header:     http.Header{"Content-Type": []string{"application/json"}},
 		Body:       io.NopCloser(bytes.NewReader(body)),
 	}, nil
+}
+
+func chatwootOnboardingTransport() http.RoundTripper {
+	return roundTripperFunc(func(req *http.Request) (*http.Response, error) {
+		switch req.URL.Path {
+		case "/public/api/v1/inboxes/inbox-1/contacts":
+			return jsonResponse(http.StatusOK, map[string]any{"source_id": "system-contact-1"})
+		case "/public/api/v1/inboxes/inbox-1/contacts/system-contact-1/conversations":
+			return jsonResponse(http.StatusOK, map[string]any{"id": 777})
+		case "/public/api/v1/inboxes/inbox-1/contacts/system-contact-1/conversations/777/messages":
+			return jsonResponse(http.StatusOK, map[string]any{"id": "msg-1"})
+		default:
+			return jsonResponse(http.StatusOK, map[string]any{})
+		}
+	})
 }
 
 func useChatwootHTTPClient(t *testing.T, transport http.RoundTripper) {
