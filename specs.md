@@ -32,10 +32,10 @@ Garantir que o Codex execute mudanças pequenas, testáveis, com rastreabilidade
 
 ### Progress Tracker (Checkpoint)
 
-- **Status (last completed milestone):** M4
+- **Status (last completed milestone):** M5
 - **Last review:** 2026-01-05 — avaliação de adequação do specs para integração Chatwoot (pendências registradas fora do tracker)
-- **Last update:** 2026-01-09 — M4 concluída
-- **Next up:** **Milestone M5: Configuração via dashboard e provisionamento**
+- **Last update:** 2026-01-09 — M5 concluída (go test ./...)
+- **Next up:** **Milestone M6: Onboarding e comandos operacionais**
 
 ---
 
@@ -216,6 +216,14 @@ Requisitos de segurança (MVP):
 - Create Inbox: criar API Inbox com `inbox_name`, `callback_webhook_url` e capturar `inbox_id` e `inbox_identifier`.
 - Update Inbox: atualizar o inbox existente quando configuracoes mudarem.
 
+### 4.4 Passo a passo (dashboard)
+1) Abrir o Dashboard do WuzAPI e clicar em **Chatwoot Integration**.
+2) Preencher `chatwoot_base_url`, `account_id`, `api_token` e `callback_secret`.
+3) Clique em **Test Connection** para validar as credenciais.
+4) Clique em **Create Inbox** (ou **Update Inbox**) para obter `inbox_id` e `inbox_identifier`.
+5) Ajustar toggles, assinatura e `ignored_numbers` conforme necessidade.
+6) Clique em **Save** para persistir a configuração.
+
 ---
 
 ## 5) API mapping (alto nível)
@@ -364,24 +372,24 @@ Critério de aceite M4:
 ---
 
 ### Milestone M5: Configuração via dashboard e provisionamento
-- [ ] Implementar GET/POST `/integrations/chatwoot/config`
-- [ ] Implementar `POST /integrations/chatwoot/test` (test connection)
-- [ ] Implementar `POST /integrations/chatwoot/inbox` (create/update inbox)
-- [ ] Validar inputs:
-  - [ ] base_url válido (http/https)
-  - [ ] account_id válido
-  - [ ] api_token não vazio
-  - [ ] inbox_name não vazio
-  - [ ] inbox_identifier não vazio (após create)
-  - [ ] inbox_id válido (> 0, após create)
-  - [ ] callback_secret >= 16 chars
-- [ ] UI: adicionar "Chatwoot Integration" no dashboard usando modal existente
-  - [ ] campos e toggles conforme seção 4.1
-  - [ ] botão "Test Connection" com toast de sucesso/falha
-  - [ ] botão "Create Inbox" visível após teste OK, vira "Update Inbox" após criação
-  - [ ] botão "Save" persiste config no WuzAPI
-- [ ] Documentar no `specs.md` (ou README) o passo a passo
-- [ ] Atualizar `API.md` e `static/api/spec.yml` com os novos endpoints
+- [x] Implementar GET/POST `/integrations/chatwoot/config`
+- [x] Implementar `POST /integrations/chatwoot/test` (test connection)
+- [x] Implementar `POST /integrations/chatwoot/inbox` (create/update inbox)
+- [x] Validar inputs:
+  - [x] base_url válido (http/https)
+  - [x] account_id válido
+  - [x] api_token não vazio
+  - [x] inbox_name não vazio
+  - [x] inbox_identifier não vazio (após create)
+  - [x] inbox_id válido (> 0, após create)
+  - [x] callback_secret >= 16 chars
+- [x] UI: adicionar "Chatwoot Integration" no dashboard usando modal existente
+  - [x] campos e toggles conforme seção 4.1
+  - [x] botão "Test Connection" com toast de sucesso/falha
+  - [x] botão "Create Inbox" visível após teste OK, vira "Update Inbox" após criação
+  - [x] botão "Save" persiste config no WuzAPI
+- [x] Documentar no `specs.md` (ou README) o passo a passo
+- [x] Atualizar `API.md` e `static/api/spec.yml` com os novos endpoints
 
 Critério de aceite M5:
 - Config persistida e recuperável

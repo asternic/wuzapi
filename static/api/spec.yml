@@ -333,6 +333,172 @@ paths:
             application/json:
               schema:
                 example: { "code": 200, "data": { "WebhookURL": "https://example.net/webhook", "Events": ["Message", "ReadReceipt"], "active": true }, "success": true }
+  /integrations/chatwoot/config:
+    get:
+      tags:
+        - Integrations
+      summary: Get Chatwoot configuration
+      description: Retrieves the current Chatwoot configuration for the authenticated user.
+      security:
+        - ApiKeyAuth: []
+      responses:
+        200:
+          description: Chatwoot configuration
+          content:
+            application/json:
+              schema:
+                example: { "code": 200, "data": { "chatwoot_base_url": "https://chatwoot.example.com", "account_id": 1, "api_token": "token", "inbox_name": "WuzAPI", "inbox_id": 10, "inbox_identifier": "inbox-1", "callback_secret": "secret-1234567890", "hmac_secret": "", "enabled": true, "sign_messages": false, "signature_text": "", "reopen_conversations": true, "set_conversations_pending": false, "ignore_groups": true, "enable_typing_indicator": false, "ignored_numbers": "" }, "success": true }
+        404:
+          description: Configuration not found
+    post:
+      tags:
+        - Integrations
+      summary: Save Chatwoot configuration
+      description: Stores Chatwoot configuration for the authenticated user.
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                chatwoot_base_url:
+                  type: string
+                account_id:
+                  type: integer
+                api_token:
+                  type: string
+                inbox_name:
+                  type: string
+                inbox_id:
+                  type: integer
+                inbox_identifier:
+                  type: string
+                callback_secret:
+                  type: string
+                hmac_secret:
+                  type: string
+                enabled:
+                  type: boolean
+                sign_messages:
+                  type: boolean
+                signature_text:
+                  type: string
+                reopen_conversations:
+                  type: boolean
+                set_conversations_pending:
+                  type: boolean
+                ignore_groups:
+                  type: boolean
+                enable_typing_indicator:
+                  type: boolean
+                ignored_numbers:
+                  type: string
+              required:
+                - chatwoot_base_url
+                - account_id
+                - api_token
+                - inbox_name
+                - inbox_id
+                - inbox_identifier
+                - callback_secret
+      responses:
+        200:
+          description: Configuration saved
+          content:
+            application/json:
+              schema:
+                example: { "code": 200, "data": { "Details": "Chatwoot configuration saved successfully" }, "success": true }
+        400:
+          description: Bad Request
+        500:
+          description: Internal Server Error
+  /integrations/chatwoot/test:
+    post:
+      tags:
+        - Integrations
+      summary: Test Chatwoot connection
+      description: Validates Chatwoot credentials using the Account API.
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                chatwoot_base_url:
+                  type: string
+                account_id:
+                  type: integer
+                api_token:
+                  type: string
+              required:
+                - chatwoot_base_url
+                - account_id
+                - api_token
+      responses:
+        200:
+          description: Connection test successful
+          content:
+            application/json:
+              schema:
+                example: { "code": 200, "data": { "Details": "Chatwoot connection test successful" }, "success": true }
+        400:
+          description: Bad Request
+        500:
+          description: Internal Server Error
+  /integrations/chatwoot/inbox:
+    post:
+      tags:
+        - Integrations
+      summary: Create or update Chatwoot API inbox
+      description: Creates or updates the Chatwoot API inbox and returns the inbox identifiers.
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                chatwoot_base_url:
+                  type: string
+                account_id:
+                  type: integer
+                api_token:
+                  type: string
+                inbox_name:
+                  type: string
+                inbox_id:
+                  type: integer
+                inbox_identifier:
+                  type: string
+                callback_secret:
+                  type: string
+                callback_url:
+                  type: string
+              required:
+                - chatwoot_base_url
+                - account_id
+                - api_token
+                - inbox_name
+                - callback_secret
+      responses:
+        200:
+          description: Inbox provisioned
+          content:
+            application/json:
+              schema:
+                example: { "code": 200, "data": { "Details": "Chatwoot inbox created successfully", "inbox_id": 10, "inbox_identifier": "inbox-1", "callback_url": "https://wuzapi.example.com/integrations/chatwoot/callback?token=secret" }, "success": true }
+        400:
+          description: Bad Request
+        500:
+          description: Internal Server Error
   /session/connect:
     post:
       tags:

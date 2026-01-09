@@ -337,6 +337,35 @@ document.addEventListener('DOMContentLoaded', function() {
     loadHmacConfig();
   });
 
+  // Chatwoot Configuration
+  document.getElementById('chatwootConfig').addEventListener('click', function() {
+    $('#modalChatwootConfig').modal({
+      onApprove: function() {
+        saveChatwootConfig();
+        return false;
+      }
+    }).modal('show');
+    loadChatwootConfig();
+  });
+
+  document.getElementById('testChatwootConnection').addEventListener('click', function() {
+    testChatwootConnection();
+  });
+
+  document.getElementById('provisionChatwootInbox').addEventListener('click', function() {
+    provisionChatwootInbox();
+  });
+
+  document.getElementById('chatwootCallbackSecret').addEventListener('input', function() {
+    updateChatwootCallbackURL();
+  });
+
+  $('#chatwootSignMessagesToggle').checkbox({
+    onChange: function() {
+      toggleChatwootSignatureField();
+    }
+  });
+
   // HMAC Generate Key
   document.getElementById('generateHmacKey').addEventListener('click', function() {
     generateRandomHmacKey();
@@ -1601,6 +1630,288 @@ async function deleteS3Config() {
   } finally {
     $('#deleteS3Config').removeClass('loading disabled');
   }
+}
+
+// Chatwoot Configuration Functions
+async function loadChatwootConfig() {
+  const token = getLocalStorageItem('token');
+  const myHeaders = new Headers();
+  myHeaders.append('token', token);
+
+  resetChatwootConfigForm();
+
+  try {
+    const res = await fetch(baseUrl + "/integrations/chatwoot/config", {
+      method: "GET",
+      headers: myHeaders
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      if (data.code === 200 && data.data) {
+        const cfg = data.data;
+        $('#chatwootBaseURL').val(cfg.chatwoot_base_url || '');
+        $('#chatwootAccountID').val(cfg.account_id || '');
+        $('#chatwootAPIToken').val(cfg.api_token || '');
+        $('#chatwootInboxName').val(cfg.inbox_name || '');
+        $('#chatwootInboxID').val(cfg.inbox_id || '');
+        $('#chatwootInboxIdentifier').val(cfg.inbox_identifier || '');
+        $('#chatwootCallbackSecret').val(cfg.callback_secret || '');
+        $('#chatwootHmacSecret').val(cfg.hmac_secret || '');
+        $('#chatwootEnabled').prop('checked', cfg.enabled || false);
+        $('#chatwootSignatureText').val(cfg.signature_text || '');
+        $('#chatwootReopenConversations').prop('checked', cfg.reopen_conversations || false);
+        $('#chatwootSetPending').prop('checked', cfg.set_conversations_pending || false);
+        $('#chatwootIgnoreGroups').prop('checked', cfg.ignore_groups || false);
+        $('#chatwootTypingIndicator').prop('checked', cfg.enable_typing_indicator || false);
+        $('#chatwootIgnoredNumbers').val(cfg.ignored_numbers || '');
+        $('#chatwootSignMessagesToggle').checkbox(cfg.sign_messages ? 'set checked' : 'set unchecked');
+        setChatwootInboxButtonEnabled((parseInt(cfg.inbox_id, 10) || 0) > 0);
+      }
+    }
+  } catch (error) {
+    console.error('Error loading Chatwoot config:', error);
+  } finally {
+    updateChatwootCallbackURL();
+    updateChatwootInboxButton();
+    toggleChatwootSignatureField();
+  }
+}
+
+async function saveChatwootConfig() {
+  const payload = buildChatwootConfigPayload();
+
+  if (!payload.chatwoot_base_url) {
+    showError('Chatwoot base URL is required');
+    return;
+  }
+  if (!payload.account_id) {
+    showError('Chatwoot account ID is required');
+    return;
+  }
+  if (!payload.api_token) {
+    showError('Chatwoot API token is required');
+    return;
+  }
+  if (!payload.inbox_name) {
+    showError('Inbox name is required');
+    return;
+  }
+  if (!payload.inbox_id) {
+    showError('Inbox ID is required');
+    return;
+  }
+  if (!payload.inbox_identifier) {
+    showError('Inbox identifier is required');
+    return;
+  }
+  if (!payload.callback_secret || payload.callback_secret.length < 16) {
+    showError('Callback secret must be at least 16 characters');
+    return;
+  }
+
+  const token = getLocalStorageItem('token');
+  const myHeaders = new Headers();
+  myHeaders.append('token', token);
+  myHeaders.append('Content-Type', 'application/json');
+
+  try {
+    const res = await fetch(baseUrl + "/integrations/chatwoot/config", {
+      method: "POST",
+      headers: myHeaders,
+      body: JSON.stringify(payload)
+    });
+
+    const data = await res.json();
+    if (data.success) {
+      showSuccess('Chatwoot configuration saved successfully');
+      $('#modalChatwootConfig').modal('hide');
+    } else {
+      showError('Failed to save Chatwoot configuration: ' + (data.error || 'Unknown error'));
+    }
+  } catch (error) {
+    showError('Error saving Chatwoot configuration');
+    console.error('Error:', error);
+  }
+}
+
+async function testChatwootConnection() {
+  const payload = buildChatwootConnectionPayload();
+
+  if (!payload.chatwoot_base_url || !payload.account_id || !payload.api_token) {
+    showError('Chatwoot base URL, account ID, and API token are required');
+    return;
+  }
+
+  const token = getLocalStorageItem('token');
+  const myHeaders = new Headers();
+  myHeaders.append('token', token);
+  myHeaders.append('Content-Type', 'application/json');
+
+  $('#testChatwootConnection').addClass('loading disabled');
+
+  try {
+    const res = await fetch(baseUrl + "/integrations/chatwoot/test", {
+      method: "POST",
+      headers: myHeaders,
+      body: JSON.stringify(payload)
+    });
+
+    const data = await res.json();
+    if (data.success) {
+      setChatwootInboxButtonEnabled(true);
+      showSuccess('Chatwoot connection test successful!');
+    } else {
+      showError('Chatwoot connection test failed: ' + (data.error || 'Unknown error'));
+    }
+  } catch (error) {
+    showError('Error testing Chatwoot connection');
+    console.error('Error:', error);
+  } finally {
+    $('#testChatwootConnection').removeClass('loading disabled');
+  }
+}
+
+async function provisionChatwootInbox() {
+  const payload = buildChatwootInboxPayload();
+
+  if (!payload.chatwoot_base_url || !payload.account_id || !payload.api_token) {
+    showError('Chatwoot base URL, account ID, and API token are required');
+    return;
+  }
+  if (!payload.inbox_name) {
+    showError('Inbox name is required');
+    return;
+  }
+  if (!payload.callback_secret || payload.callback_secret.length < 16) {
+    showError('Callback secret must be at least 16 characters');
+    return;
+  }
+
+  const token = getLocalStorageItem('token');
+  const myHeaders = new Headers();
+  myHeaders.append('token', token);
+  myHeaders.append('Content-Type', 'application/json');
+
+  $('#provisionChatwootInbox').addClass('loading disabled');
+
+  try {
+    const res = await fetch(baseUrl + "/integrations/chatwoot/inbox", {
+      method: "POST",
+      headers: myHeaders,
+      body: JSON.stringify(payload)
+    });
+
+    const data = await res.json();
+    if (data.success) {
+      const result = data.data || {};
+      if (result.inbox_id) {
+        $('#chatwootInboxID').val(result.inbox_id);
+      }
+      if (result.inbox_identifier) {
+        $('#chatwootInboxIdentifier').val(result.inbox_identifier);
+      }
+      updateChatwootInboxButton();
+      showSuccess('Chatwoot inbox provisioned successfully');
+    } else {
+      showError('Failed to provision Chatwoot inbox: ' + (data.error || 'Unknown error'));
+    }
+  } catch (error) {
+    showError('Error provisioning Chatwoot inbox');
+    console.error('Error:', error);
+  } finally {
+    $('#provisionChatwootInbox').removeClass('loading disabled');
+  }
+}
+
+function buildChatwootConfigPayload() {
+  return {
+    chatwoot_base_url: $('#chatwootBaseURL').val().trim(),
+    account_id: parseInt($('#chatwootAccountID').val(), 10) || 0,
+    api_token: $('#chatwootAPIToken').val().trim(),
+    inbox_name: $('#chatwootInboxName').val().trim(),
+    inbox_id: parseInt($('#chatwootInboxID').val(), 10) || 0,
+    inbox_identifier: $('#chatwootInboxIdentifier').val().trim(),
+    callback_secret: $('#chatwootCallbackSecret').val().trim(),
+    hmac_secret: $('#chatwootHmacSecret').val().trim(),
+    enabled: $('#chatwootEnabled').is(':checked'),
+    sign_messages: $('#chatwootSignMessages').is(':checked'),
+    signature_text: $('#chatwootSignatureText').val().trim(),
+    reopen_conversations: $('#chatwootReopenConversations').is(':checked'),
+    set_conversations_pending: $('#chatwootSetPending').is(':checked'),
+    ignore_groups: $('#chatwootIgnoreGroups').is(':checked'),
+    enable_typing_indicator: $('#chatwootTypingIndicator').is(':checked'),
+    ignored_numbers: $('#chatwootIgnoredNumbers').val().trim()
+  };
+}
+
+function buildChatwootConnectionPayload() {
+  return {
+    chatwoot_base_url: $('#chatwootBaseURL').val().trim(),
+    account_id: parseInt($('#chatwootAccountID').val(), 10) || 0,
+    api_token: $('#chatwootAPIToken').val().trim()
+  };
+}
+
+function buildChatwootInboxPayload() {
+  const secret = $('#chatwootCallbackSecret').val().trim();
+  const callbackURL = secret ? baseUrl + "/integrations/chatwoot/callback?token=" + encodeURIComponent(secret) : '';
+
+  return {
+    chatwoot_base_url: $('#chatwootBaseURL').val().trim(),
+    account_id: parseInt($('#chatwootAccountID').val(), 10) || 0,
+    api_token: $('#chatwootAPIToken').val().trim(),
+    inbox_name: $('#chatwootInboxName').val().trim(),
+    inbox_id: parseInt($('#chatwootInboxID').val(), 10) || 0,
+    inbox_identifier: $('#chatwootInboxIdentifier').val().trim(),
+    callback_secret: secret,
+    callback_url: callbackURL
+  };
+}
+
+function updateChatwootInboxButton() {
+  const inboxID = parseInt($('#chatwootInboxID').val(), 10) || 0;
+  $('#provisionChatwootInbox').text(inboxID > 0 ? 'Update Inbox' : 'Create Inbox');
+}
+
+function setChatwootInboxButtonEnabled(enabled) {
+  $('#provisionChatwootInbox').toggleClass('disabled', !enabled);
+  $('#provisionChatwootInbox').prop('disabled', !enabled);
+}
+
+function updateChatwootCallbackURL() {
+  const secret = $('#chatwootCallbackSecret').val().trim();
+  const url = secret ? baseUrl + "/integrations/chatwoot/callback?token=" + encodeURIComponent(secret) : '';
+  $('#chatwootCallbackURL').val(url);
+}
+
+function toggleChatwootSignatureField() {
+  const enabled = $('#chatwootSignMessages').is(':checked');
+  if (enabled) {
+    $('#chatwootSignatureField').show();
+  } else {
+    $('#chatwootSignatureField').hide();
+  }
+}
+
+function resetChatwootConfigForm() {
+  $('#chatwootBaseURL').val('');
+  $('#chatwootAccountID').val('');
+  $('#chatwootAPIToken').val('');
+  $('#chatwootInboxName').val('');
+  $('#chatwootInboxID').val('');
+  $('#chatwootInboxIdentifier').val('');
+  $('#chatwootCallbackSecret').val('');
+  $('#chatwootHmacSecret').val('');
+  $('#chatwootEnabled').prop('checked', false);
+  $('#chatwootSignMessagesToggle').checkbox('set unchecked');
+  $('#chatwootSignatureText').val('');
+  $('#chatwootReopenConversations').prop('checked', false);
+  $('#chatwootSetPending').prop('checked', false);
+  $('#chatwootIgnoreGroups').prop('checked', false);
+  $('#chatwootTypingIndicator').prop('checked', false);
+  $('#chatwootIgnoredNumbers').val('');
+  setChatwootInboxButtonEnabled(false);
 }
 
 // History Configuration Functions

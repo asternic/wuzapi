@@ -80,6 +80,10 @@ func (s *server) routes() {
 	c = c.Append(hlog.RequestIDHandler("req_id", "Request-Id"))
 
 	s.router.Handle("/session/connect", c.Then(s.Connect())).Methods("POST")
+	s.router.Handle("/integrations/chatwoot/config", c.Then(s.GetChatwootConfig())).Methods("GET")
+	s.router.Handle("/integrations/chatwoot/config", c.Then(s.SaveChatwootConfig())).Methods("POST")
+	s.router.Handle("/integrations/chatwoot/test", c.Then(s.TestChatwootConnection())).Methods("POST")
+	s.router.Handle("/integrations/chatwoot/inbox", c.Then(s.ProvisionChatwootInbox())).Methods("POST")
 	s.router.Handle("/session/disconnect", c.Then(s.Disconnect())).Methods("POST")
 	s.router.Handle("/session/logout", c.Then(s.Logout())).Methods("POST")
 	s.router.Handle("/session/status", c.Then(s.GetStatus())).Methods("GET")

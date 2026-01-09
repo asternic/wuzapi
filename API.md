@@ -1274,6 +1274,88 @@ Response:
 }
 ```
 
+# Chatwoot Integration
+
+## Overview
+
+WuzAPI can connect to Chatwoot using an API inbox. The integration uses a callback URL in the API inbox to deliver outbound messages to WhatsApp.
+
+## API Endpoints
+
+### Get Chatwoot Configuration
+```
+GET /integrations/chatwoot/config
+```
+
+Retrieve the current Chatwoot configuration for the authenticated user.
+
+### Save Chatwoot Configuration
+```
+POST /integrations/chatwoot/config
+```
+
+**Request Body:**
+```json
+{
+  "chatwoot_base_url": "https://chatwoot.example.com",
+  "account_id": 1,
+  "api_token": "your-chatwoot-token",
+  "inbox_name": "WuzAPI",
+  "inbox_id": 10,
+  "inbox_identifier": "inbox-1",
+  "callback_secret": "secret-1234567890",
+  "hmac_secret": "",
+  "enabled": true,
+  "sign_messages": false,
+  "signature_text": "",
+  "reopen_conversations": true,
+  "set_conversations_pending": false,
+  "ignore_groups": true,
+  "enable_typing_indicator": false,
+  "ignored_numbers": ""
+}
+```
+
+**Required fields:**
+- `chatwoot_base_url`, `account_id`, `api_token`
+- `inbox_name`, `inbox_id`, `inbox_identifier`
+- `callback_secret` (minimum 16 characters)
+
+### Test Chatwoot Connection
+```
+POST /integrations/chatwoot/test
+```
+
+**Request Body:**
+```json
+{
+  "chatwoot_base_url": "https://chatwoot.example.com",
+  "account_id": 1,
+  "api_token": "your-chatwoot-token"
+}
+```
+
+### Create or Update Chatwoot Inbox
+```
+POST /integrations/chatwoot/inbox
+```
+
+Creates or updates the Chatwoot API inbox and returns `inbox_id` and `inbox_identifier`.
+
+**Request Body:**
+```json
+{
+  "chatwoot_base_url": "https://chatwoot.example.com",
+  "account_id": 1,
+  "api_token": "your-chatwoot-token",
+  "inbox_name": "WuzAPI",
+  "inbox_id": 10,
+  "inbox_identifier": "inbox-1",
+  "callback_secret": "secret-1234567890",
+  "callback_url": "https://wuzapi.example.com/integrations/chatwoot/callback?token=secret-1234567890"
+}
+```
+
 # S3 Storage Integration for WuzAPI
 
 ## Overview

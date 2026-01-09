@@ -151,6 +151,12 @@
           <div class="description">Configure HMAC key for webhook security.</div>
         </div>
       </div>
+      <div class="purple card hidden widget" style="cursor: pointer;" id="chatwootConfig">
+        <div class="content"><a class="ui purple right ribbon label">Config</a>
+          <div class="header">Chatwoot Integration</div>
+          <div class="description">Configure Chatwoot API inbox and callback.</div>
+        </div>
+      </div>
     </div>
 
     <div class="ui horizontal divider widget"> User </div>
@@ -557,6 +563,121 @@
       <div class="ui cancel button secondary">Cancel</div>
       <div class="ui red button" id="deleteHmacConfig">Delete Configuration</div>
       <div class="ui positive right labeled icon button" id="saveHmacConfig">Save<i class="checkmark icon"></i></div>
+    </div>
+  </div>
+
+  <!-- Chatwoot Integration Modal -->
+  <div class="ui modal" id="modalChatwootConfig"><i class="close icon"></i>
+    <div class="header"> Chatwoot Integration </div>
+    <div class="content">
+      <div class="ui info message">
+        <div class="header">Chatwoot API Inbox</div>
+        <p>Configure Chatwoot credentials, provision the API inbox, and enable callbacks to send outbound messages to WhatsApp.</p>
+      </div>
+      <div class="ui form">
+        <div class="two fields">
+          <div class="field">
+            <label>Chatwoot Base URL</label>
+            <input id="chatwootBaseURL" type="text" placeholder="https://chatwoot.example.com">
+          </div>
+          <div class="field">
+            <label>Account ID</label>
+            <input id="chatwootAccountID" type="number" min="1" placeholder="1">
+          </div>
+        </div>
+        <div class="two fields">
+          <div class="field">
+            <label>API Token</label>
+            <input id="chatwootAPIToken" type="password" placeholder="Chatwoot API token">
+          </div>
+          <div class="field">
+            <label>Callback Secret</label>
+            <input id="chatwootCallbackSecret" type="text" minlength="16" placeholder="Secret used to secure callbacks">
+            <small>Minimum 16 characters.</small>
+          </div>
+        </div>
+        <div class="two fields">
+          <div class="field">
+            <label>HMAC Secret (Optional)</label>
+            <input id="chatwootHmacSecret" type="text" placeholder="HMAC secret for identifier hash">
+          </div>
+          <div class="field">
+            <label>Inbox Name</label>
+            <input id="chatwootInboxName" type="text" placeholder="WuzAPI Inbox">
+          </div>
+        </div>
+        <div class="two fields">
+          <div class="field">
+            <label>Inbox ID</label>
+            <input id="chatwootInboxID" type="number" min="1" placeholder="Generated after create">
+          </div>
+          <div class="field">
+            <label>Inbox Identifier</label>
+            <input id="chatwootInboxIdentifier" type="text" placeholder="Generated after create">
+          </div>
+        </div>
+        <div class="field">
+          <label>Callback URL</label>
+          <input id="chatwootCallbackURL" type="text" readonly>
+          <small>Use this URL when creating the API inbox webhook.</small>
+        </div>
+        <div class="field" id="chatwootSignatureField">
+          <label>Signature Text</label>
+          <textarea id="chatwootSignatureText" rows="2" placeholder="Signature appended to outbound messages"></textarea>
+        </div>
+        <div class="field">
+          <label>Ignored Numbers</label>
+          <textarea id="chatwootIgnoredNumbers" rows="2" placeholder="Comma, space, or JSON array (e.g. 5511999999999, 5511888888888)"></textarea>
+        </div>
+        <div class="two fields">
+          <div class="field">
+            <div class="ui toggle checkbox">
+              <input type="checkbox" id="chatwootEnabled">
+              <label>Enable Integration</label>
+            </div>
+          </div>
+          <div class="field">
+            <div class="ui toggle checkbox" id="chatwootSignMessagesToggle">
+              <input type="checkbox" id="chatwootSignMessages">
+              <label>Sign Messages</label>
+            </div>
+          </div>
+        </div>
+        <div class="two fields">
+          <div class="field">
+            <div class="ui toggle checkbox">
+              <input type="checkbox" id="chatwootReopenConversations">
+              <label>Reopen Conversations</label>
+            </div>
+          </div>
+          <div class="field">
+            <div class="ui toggle checkbox">
+              <input type="checkbox" id="chatwootSetPending">
+              <label>Set Conversations Pending</label>
+            </div>
+          </div>
+        </div>
+        <div class="two fields">
+          <div class="field">
+            <div class="ui toggle checkbox">
+              <input type="checkbox" id="chatwootIgnoreGroups">
+              <label>Ignore Groups</label>
+            </div>
+          </div>
+          <div class="field">
+            <div class="ui toggle checkbox">
+              <input type="checkbox" id="chatwootTypingIndicator">
+              <label>Enable Typing Indicator</label>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="actions">
+      <div class="ui cancel button secondary">Cancel</div>
+      <div class="ui button" id="testChatwootConnection">Test Connection</div>
+      <div class="ui button" id="provisionChatwootInbox">Create Inbox</div>
+      <div class="ui positive right labeled icon button" id="saveChatwootConfig">Save<i class="checkmark icon"></i></div>
     </div>
   </div>
 
