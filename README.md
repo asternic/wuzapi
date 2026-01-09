@@ -207,6 +207,18 @@ RABBITMQ_QUEUE=whatsapp_events
 
 If you use an external Postgres, set `DB_HOST` and `DB_SSLMODE` accordingly.
 
+#### Deploy Smoke Test Checklist
+After deploying the stack, validate the basics in this order:
+
+* Confirm containers are healthy and the API is reachable (`/health`).
+* Log in to the dashboard and verify the Chatwoot modal loads.
+* Use **Test Connection** and **Create/Update Inbox** in the Chatwoot modal.
+* Save the Chatwoot config and confirm onboarding message appears.
+* Send `#qrcode` in the system conversation and scan it to connect WhatsApp.
+* From Chatwoot, send a message to a WhatsApp contact and confirm delivery.
+* From WhatsApp, reply and confirm the message arrives in Chatwoot.
+* Enable the Chatwoot account webhook for `conversation_typing_on/off` and confirm typing presence (toggle must be enabled).
+
 #### Optional Settings
 ```
 TZ=America/New_York
