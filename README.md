@@ -179,6 +179,34 @@ DB_SSLMODE=false
 **For SQLite (default):**
 No database configuration needed - SQLite is used by default if no PostgreSQL settings are provided.
 
+#### VPS Stack (Docker Compose)
+For VPS deployment with Docker Compose, define a `.env` with at least:
+
+```
+WUZAPI_ADMIN_TOKEN=your_admin_token_here
+WUZAPI_GLOBAL_ENCRYPTION_KEY=your_32_byte_encryption_key_here
+DB_USER=wuzapi
+DB_PASSWORD=strong_password
+DB_NAME=wuzapi
+DB_HOST=db
+DB_PORT=5432
+WUZAPI_PORT=8080
+```
+
+Optional, depending on your stack:
+```
+WUZAPI_GLOBAL_HMAC_KEY=your_global_hmac_key_here
+WUZAPI_GLOBAL_WEBHOOK=https://your-global-webhook.url
+WEBHOOK_FORMAT=json
+SESSION_DEVICE_NAME=WuzAPI
+TZ=America/Sao_Paulo
+DB_SSLMODE=false
+RABBITMQ_URL=amqp://wuzapi:wuzapi@rabbitmq:5672/
+RABBITMQ_QUEUE=whatsapp_events
+```
+
+If you use an external Postgres, set `DB_HOST` and `DB_SSLMODE` accordingly.
+
 #### Optional Settings
 ```
 TZ=America/New_York
