@@ -34,7 +34,7 @@ Garantir que o Codex execute mudanças pequenas, testáveis, com rastreabilidade
 
 - **Status (last completed milestone):** M5
 - **Last review:** 2026-01-05 — avaliação de adequação do specs para integração Chatwoot (pendências registradas fora do tracker)
-- **Last update:** 2026-01-09 — M6 onboarding contato/mensagem (go test ./...)
+- **Last update:** 2026-01-09 — M6 comandos parciais (#help/#status/#qrcode/#disconnect) (go test ./...)
 - **Next up:** **Milestone M6: Onboarding e comandos operacionais**
 
 ---
@@ -440,6 +440,7 @@ Critério de aceite M7:
 9) Resolvido: API inbox usa `channel.type=api` e `channel.webhook_url` (confirmado via rails runner/curl).
 10) Resolvido: `identifier_hash` = HMAC-SHA256(hex) do identifier usando `hmac_token` do inbox (confirmado em Chatwoot local).
 11) Decisao: grupos continuam fora de escopo (Chatwoot retorna 500 para identifier com @g.us em API inbox local).
-12) Comandos via Chatwoot: por enquanto detectados e ignorados no callback; respostas serão implementadas no M6.
+12) Comandos via Chatwoot: #help/#status/#qrcode/#disconnect respondem; #attid/#updateavatar pendentes (ver itens 6 e 13).
+13) Semantica exata do comando `#updateavatar` (origem da foto e destino no Chatwoot).
 
 (Manter esta seção sempre atualizada quando surgir uma nova pendência.)

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -190,6 +191,65 @@ func TestChatwootCallbackPrivateIgnored(t *testing.T) {
 	}
 	if len(stub.calls) != 0 {
 		t.Fatalf("expected no sends, got %d", len(stub.calls))
+	}
+}
+
+func TestChatwootCallbackCommandResponds(t *testing.T) {
+	s := makeTestServer(t)
+	insertChatwootConfig(t, s, &ChatwootConfig{
+		WuzapiUserID:            "user-1",
+		CallbackSecret:          "secret-1",
+		Enabled:                 true,
+		ChatwootBaseURL:         "https://chatwoot.local",
+		AccountID:               1,
+		APIToken:                "account-token",
+		InboxIdentifier:         "inbox-1",
+		SystemContactIdentifier: "system-contact-1",
+	})
+
+	var capture requestCapture
+	stubTransport := roundTripperFunc(func(req *http.Request) (*http.Response, error) {
+		capture = captureRequest(req)
+		return jsonResponse(http.StatusOK, map[string]any{"id": "msg-1"})
+	})
+	useChatwootHTTPClient(t, stubTransport)
+
+	stub := &chatwootSendStub{}
+	handler := s.chatwootCallbackHandler(stub.Send)
+
+	payload := map[string]any{
+		"event":        "message_created",
+		"message_type": "outgoing",
+		"content":      "#help",
+		"conversation": map[string]any{
+			"id": 123,
+			"contact_inbox": map[string]any{
+				"source_id": "system-contact-1",
+			},
+		},
+	}
+	req := newChatwootCallbackRequest(t, payload, "secret-1")
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+	if len(stub.calls) != 0 {
+		t.Fatalf("expected no sends, got %d", len(stub.calls))
+	}
+	if capture.Path != "/public/api/v1/inboxes/inbox-1/contacts/system-contact-1/conversations/123/messages" {
+		t.Fatalf("unexpected chatwoot path: %s", capture.Path)
+	}
+
+	var body map[string]any
+	if err := json.Unmarshal(capture.Body, &body); err != nil {
+		t.Fatalf("decode chatwoot request: %v", err)
+	}
+	content, _ := body["content"].(string)
+	if !strings.Contains(content, "Comandos") {
+		t.Fatalf("expected help response, got %q", content)
 	}
 }
 
