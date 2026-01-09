@@ -34,7 +34,7 @@ Garantir que o Codex execute mudanças pequenas, testáveis, com rastreabilidade
 
 - **Status (last completed milestone):** M6
 - **Last review:** 2026-01-05 — avaliação de adequação do specs para integração Chatwoot (pendências registradas fora do tracker)
-- **Last update:** 2026-01-09 — M6 typing indicator via webhooks do Chatwoot (go test ./...)
+- **Last update:** 2026-01-09 — M7 docker build local OK (docker build .)
 - **Next up:** **Milestone M7: Build, imagem e deploy na VPS**
 
 ---
@@ -413,7 +413,7 @@ Critério de aceite M6:
 ---
 
 ### Milestone M7: Build, imagem e deploy na VPS
-- [ ] Garantir que `docker build` funciona local
+- [x] Garantir que `docker build` funciona local
 - [ ] Versionar/taggear imagem do fork (ex: `flownix/wuzapi-chatwoot:<tag>`)
 - [ ] Documentar variáveis necessárias no stack da VPS
 - [ ] Smoke test em staging (se existir) ou checklist de validação no deploy final
