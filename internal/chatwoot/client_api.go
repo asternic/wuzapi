@@ -17,6 +17,16 @@ type CreateContactRequest struct {
 	CustomAttributes map[string]any `json:"custom_attributes,omitempty"`
 }
 
+type UpdateContactRequest struct {
+	Identifier       string         `json:"identifier,omitempty"`
+	IdentifierHash   string         `json:"identifier_hash,omitempty"`
+	Email            string         `json:"email,omitempty"`
+	Name             string         `json:"name,omitempty"`
+	PhoneNumber      string         `json:"phone_number,omitempty"`
+	AvatarURL        string         `json:"avatar_url,omitempty"`
+	CustomAttributes map[string]any `json:"custom_attributes,omitempty"`
+}
+
 type createContactResponse struct {
 	SourceID string `json:"source_id"`
 }
@@ -57,6 +67,26 @@ func (c *Client) CreateContact(ctx context.Context, inboxIdentifier string, payl
 		return "", errors.New("chatwoot response missing source_id")
 	}
 	return resp.SourceID, nil
+}
+
+func (c *Client) UpdateContact(ctx context.Context, inboxIdentifier, contactIdentifier string, payload UpdateContactRequest) error {
+	if inboxIdentifier == "" {
+		return errors.New("inbox identifier is required")
+	}
+	if contactIdentifier == "" {
+		return errors.New("contact identifier is required")
+	}
+
+	path := fmt.Sprintf(
+		"/public/api/v1/inboxes/%s/contacts/%s",
+		url.PathEscape(inboxIdentifier),
+		url.PathEscape(contactIdentifier),
+	)
+	req, err := c.newRequest(ctx, "PATCH", path, payload)
+	if err != nil {
+		return err
+	}
+	return c.do(req, nil)
 }
 
 func (c *Client) CreateConversation(ctx context.Context, inboxIdentifier, contactIdentifier string, payload CreateConversationRequest) (int, error) {

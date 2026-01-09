@@ -93,8 +93,8 @@ func (s *server) chatwootCallbackHandler(send chatwootSendFunc) http.HandlerFunc
 			return
 		}
 
-		if cfg.SystemContactIdentifier != "" && contactIdentifier == cfg.SystemContactIdentifier {
-			if cmd, ok := chatwootCommandFromContent(msg.Content); ok {
+		if cmd, ok := chatwootCommandFromContent(msg.Content); ok {
+			if contactIdentifier == cfg.SystemContactIdentifier || cmd == "#attid" {
 				if err := s.handleChatwootCommand(r.Context(), cfg, &payload, cmd); err != nil {
 					log.Error().Err(err).Str("command", cmd).Msg("Chatwoot callback: command handling failed")
 					s.Respond(w, r, http.StatusInternalServerError, err)
@@ -103,6 +103,9 @@ func (s *server) chatwootCallbackHandler(send chatwootSendFunc) http.HandlerFunc
 				s.respondChatwootCallback(w, r, http.StatusOK, map[string]string{"status": "command_sent"})
 				return
 			}
+		}
+
+		if cfg.SystemContactIdentifier != "" && contactIdentifier == cfg.SystemContactIdentifier {
 			log.Info().Msg("Chatwoot callback: system contact message ignored")
 			s.respondChatwootCallback(w, r, http.StatusOK, map[string]string{"status": "ignored"})
 			return

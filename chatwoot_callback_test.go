@@ -253,6 +253,132 @@ func TestChatwootCallbackCommandResponds(t *testing.T) {
 	}
 }
 
+func TestChatwootCallbackCommandAttidUpdatesConfig(t *testing.T) {
+	s := makeTestServer(t)
+	insertChatwootConfig(t, s, &ChatwootConfig{
+		WuzapiUserID:            "user-1",
+		CallbackSecret:          "secret-1",
+		Enabled:                 true,
+		ChatwootBaseURL:         "https://chatwoot.local",
+		AccountID:               1,
+		APIToken:                "account-token",
+		InboxIdentifier:         "inbox-1",
+		SystemContactIdentifier: "old-contact",
+	})
+
+	stubTransport := roundTripperFunc(func(req *http.Request) (*http.Response, error) {
+		return jsonResponse(http.StatusOK, map[string]any{"id": "msg-1"})
+	})
+	useChatwootHTTPClient(t, stubTransport)
+
+	stub := &chatwootSendStub{}
+	handler := s.chatwootCallbackHandler(stub.Send)
+
+	payload := map[string]any{
+		"event":        "message_created",
+		"message_type": "outgoing",
+		"content":      "#attid",
+		"conversation": map[string]any{
+			"id": 321,
+			"contact_inbox": map[string]any{
+				"source_id": "system-contact-2",
+			},
+		},
+	}
+	req := newChatwootCallbackRequest(t, payload, "secret-1")
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+
+	cfg, err := s.GetChatwootConfigByUserID("user-1")
+	if err != nil {
+		t.Fatalf("get chatwoot config: %v", err)
+	}
+	if cfg.SystemContactIdentifier != "system-contact-2" {
+		t.Fatalf("expected system contact updated, got %q", cfg.SystemContactIdentifier)
+	}
+	if !cfg.SystemConversationID.Valid || cfg.SystemConversationID.Int64 != 321 {
+		t.Fatalf("expected system conversation 321, got %v", cfg.SystemConversationID)
+	}
+}
+
+func TestChatwootCallbackCommandUpdateAvatar(t *testing.T) {
+	s := makeTestServer(t)
+	insertChatwootConfig(t, s, &ChatwootConfig{
+		WuzapiUserID:            "user-1",
+		CallbackSecret:          "secret-1",
+		Enabled:                 true,
+		ChatwootBaseURL:         "https://chatwoot.local",
+		AccountID:               1,
+		APIToken:                "account-token",
+		InboxIdentifier:         "inbox-1",
+		SystemContactIdentifier: "system-contact-1",
+	})
+
+	previousAvatarFetch := fetchWhatsAppAvatarURL
+	fetchWhatsAppAvatarURL = func(ctx context.Context, userID string) (string, error) {
+		return "https://avatar.test/pic.jpg", nil
+	}
+	t.Cleanup(func() { fetchWhatsAppAvatarURL = previousAvatarFetch })
+
+	var captures []requestCapture
+	stubTransport := roundTripperFunc(func(req *http.Request) (*http.Response, error) {
+		captures = append(captures, captureRequest(req))
+		switch req.Method {
+		case http.MethodPatch:
+			return jsonResponse(http.StatusOK, map[string]any{})
+		default:
+			return jsonResponse(http.StatusOK, map[string]any{"id": "msg-1"})
+		}
+	})
+	useChatwootHTTPClient(t, stubTransport)
+
+	stub := &chatwootSendStub{}
+	handler := s.chatwootCallbackHandler(stub.Send)
+
+	payload := map[string]any{
+		"event":        "message_created",
+		"message_type": "outgoing",
+		"content":      "#updateavatar",
+		"conversation": map[string]any{
+			"id": 55,
+			"contact_inbox": map[string]any{
+				"source_id": "system-contact-1",
+			},
+		},
+	}
+	req := newChatwootCallbackRequest(t, payload, "secret-1")
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+
+	found := false
+	for _, capture := range captures {
+		if capture.Path == "/public/api/v1/inboxes/inbox-1/contacts/system-contact-1" {
+			var body map[string]any
+			if err := json.Unmarshal(capture.Body, &body); err != nil {
+				t.Fatalf("decode update contact: %v", err)
+			}
+			if body["avatar_url"] != "https://avatar.test/pic.jpg" {
+				t.Fatalf("expected avatar_url, got %#v", body["avatar_url"])
+			}
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected update contact request")
+	}
+}
+
 func newChatwootCallbackRequest(t *testing.T, payload any, token string) *http.Request {
 	t.Helper()
 

@@ -9,17 +9,21 @@ import (
 
 	"github.com/patrickmn/go-cache"
 	"github.com/rs/zerolog/log"
+	"go.mau.fi/whatsmeow"
+	"go.mau.fi/whatsmeow/types"
+	"wuzapi/internal/chatwoot"
 )
 
-const chatwootHelpMessage = "Comandos disponiveis:\n#qrcode\n#help\n#status\n#disconnect\n#attid (pendente)\n#updateavatar (pendente)"
+const chatwootHelpMessage = "Comandos disponiveis:\n#qrcode\n#help\n#status\n#disconnect\n#attid\n#updateavatar"
 
 var (
-	errChatwootCommandPending = errors.New("chatwoot command pending")
-	errChatwootNoSession      = errors.New("no session")
-	errChatwootNotConnected   = errors.New("not connected")
-	errChatwootAlreadyLinked  = errors.New("already logged in")
-	errChatwootQRCodeMissing  = errors.New("qrcode missing")
+	errChatwootNoSession     = errors.New("no session")
+	errChatwootNotConnected  = errors.New("not connected")
+	errChatwootAlreadyLinked = errors.New("already logged in")
+	errChatwootQRCodeMissing = errors.New("qrcode missing")
 )
+
+var fetchWhatsAppAvatarURL = fetchWhatsAppSelfAvatarURL
 
 func (s *server) handleChatwootCommand(ctx context.Context, cfg *ChatwootConfig, payload *chatwootCallbackPayload, cmd string) error {
 	if cfg == nil {
@@ -42,17 +46,13 @@ func (s *server) handleChatwootCommand(ctx context.Context, cfg *ChatwootConfig,
 		return errors.New("missing system contact context")
 	}
 
-	response, cmdErr := s.buildChatwootCommandResponse(ctx, cfg, cmd)
+	response, _ := s.buildChatwootCommandResponse(ctx, cfg, payload, cmd)
 	if response == "" {
 		response = "Comando nao suportado."
 	}
 
 	if err := s.sendChatwootCommandResponse(ctx, cfg, contactIdentifier, conversationID, response); err != nil {
 		return err
-	}
-
-	if cmdErr != nil {
-		log.Warn().Err(cmdErr).Str("command", cmd).Msg("Chatwoot command returned warning")
 	}
 
 	if cfg.SystemContactIdentifier == "" || !cfg.SystemConversationID.Valid ||
@@ -84,7 +84,7 @@ func (s *server) sendChatwootCommandResponse(ctx context.Context, cfg *ChatwootC
 	return nil
 }
 
-func (s *server) buildChatwootCommandResponse(ctx context.Context, cfg *ChatwootConfig, cmd string) (string, error) {
+func (s *server) buildChatwootCommandResponse(ctx context.Context, cfg *ChatwootConfig, payload *chatwootCallbackPayload, cmd string) (string, error) {
 	switch cmd {
 	case "#help":
 		return chatwootHelpMessage, nil
@@ -94,8 +94,10 @@ func (s *server) buildChatwootCommandResponse(ctx context.Context, cfg *Chatwoot
 		return s.chatwootQRCodeMessage(cfg.WuzapiUserID)
 	case "#disconnect":
 		return s.chatwootDisconnectMessage(cfg.WuzapiUserID)
-	case "#attid", "#updateavatar":
-		return fmt.Sprintf("Comando %s ainda esta pendente de definicao.", cmd), errChatwootCommandPending
+	case "#attid":
+		return s.chatwootUpdateSystemContact(cfg, payload)
+	case "#updateavatar":
+		return s.chatwootUpdateAvatar(ctx, cfg, payload)
 	default:
 		return "", nil
 	}
@@ -173,6 +175,55 @@ func (s *server) chatwootDisconnectMessage(userID string) (string, error) {
 	return "Sessao desconectada.", nil
 }
 
+func (s *server) chatwootUpdateSystemContact(cfg *ChatwootConfig, payload *chatwootCallbackPayload) (string, error) {
+	if cfg == nil || payload == nil {
+		return "Nao foi possivel atualizar o contato.", errors.New("missing chatwoot context")
+	}
+	contactIdentifier := payload.contactIdentifier()
+	conversationID := payload.Conversation.ID
+	if contactIdentifier == "" || conversationID == 0 {
+		return "Nao foi possivel identificar o contato.", errors.New("missing contact identifier")
+	}
+
+	cfg.SystemContactIdentifier = contactIdentifier
+	cfg.SystemConversationID = sql.NullInt64{Int64: int64(conversationID), Valid: true}
+	if err := s.UpsertChatwootConfig(cfg); err != nil {
+		return "Falha ao atualizar o contato.", err
+	}
+
+	return "Contato atualizado com sucesso.", nil
+}
+
+func (s *server) chatwootUpdateAvatar(ctx context.Context, cfg *ChatwootConfig, payload *chatwootCallbackPayload) (string, error) {
+	if cfg == nil || payload == nil {
+		return "Nao foi possivel atualizar a foto.", errors.New("missing chatwoot context")
+	}
+	contactIdentifier := payload.contactIdentifier()
+	if contactIdentifier == "" {
+		contactIdentifier = cfg.SystemContactIdentifier
+	}
+	if contactIdentifier == "" {
+		return "Nao foi possivel identificar o contato.", errors.New("missing contact identifier")
+	}
+
+	avatarURL, err := fetchWhatsAppAvatarURL(ctx, cfg.WuzapiUserID)
+	if err != nil {
+		return chatwootAvatarErrorMessage(err), err
+	}
+
+	client, err := newChatwootClient(cfg.ChatwootBaseURL, cfg.AccountID, cfg.APIToken)
+	if err != nil {
+		return "Falha ao conectar no Chatwoot.", err
+	}
+	if err := client.UpdateContact(ctx, cfg.InboxIdentifier, contactIdentifier, chatwoot.UpdateContactRequest{
+		AvatarURL: avatarURL,
+	}); err != nil {
+		return "Falha ao atualizar a foto no Chatwoot.", err
+	}
+
+	return "Foto de perfil atualizada com sucesso.", nil
+}
+
 func (s *server) disconnectChatwootSession(userID string) error {
 	client := clientManager.GetWhatsmeowClient(userID)
 	if client == nil {
@@ -218,4 +269,40 @@ func boolToYesNo(value bool) string {
 		return "sim"
 	}
 	return "nao"
+}
+
+func fetchWhatsAppSelfAvatarURL(ctx context.Context, userID string) (string, error) {
+	client := clientManager.GetWhatsmeowClient(userID)
+	if client == nil {
+		return "", errChatwootNoSession
+	}
+	if !client.IsConnected() {
+		return "", errChatwootNotConnected
+	}
+
+	var jid types.JID
+	if client.Store == nil || client.Store.ID == nil {
+		return "", errors.New("missing whatsapp jid")
+	}
+	jid = client.Store.ID.ToNonAD()
+
+	pic, err := client.GetProfilePictureInfo(ctx, jid, &whatsmeow.GetProfilePictureParams{})
+	if err != nil {
+		return "", fmt.Errorf("fetch avatar: %w", err)
+	}
+	if pic == nil || strings.TrimSpace(pic.URL) == "" {
+		return "", errors.New("avatar url not available")
+	}
+	return pic.URL, nil
+}
+
+func chatwootAvatarErrorMessage(err error) string {
+	switch {
+	case errors.Is(err, errChatwootNoSession):
+		return "Nenhuma sessao ativa."
+	case errors.Is(err, errChatwootNotConnected):
+		return "Sessao nao conectada."
+	default:
+		return "Nao foi possivel atualizar a foto agora."
+	}
 }

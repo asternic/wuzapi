@@ -34,7 +34,7 @@ Garantir que o Codex execute mudanças pequenas, testáveis, com rastreabilidade
 
 - **Status (last completed milestone):** M5
 - **Last review:** 2026-01-05 — avaliação de adequação do specs para integração Chatwoot (pendências registradas fora do tracker)
-- **Last update:** 2026-01-09 — M6 comandos parciais (#help/#status/#qrcode/#disconnect) (go test ./...)
+- **Last update:** 2026-01-09 — M6 comandos completos com ajuste de #attid/#updateavatar (go test ./...)
 - **Next up:** **Milestone M6: Onboarding e comandos operacionais**
 
 ---
@@ -401,8 +401,8 @@ Critério de aceite M5:
 ### Milestone M6: Onboarding e comandos operacionais
 - [x] Criar/atualizar contato "Flownix" e conversa de onboarding no Chatwoot
 - [x] Enviar mensagem de onboarding ao salvar configuração
-- [ ] Implementar parser/handler de comandos (#qrcode/#help/#status/#disconnect/#attid/#updateavatar)
-- [ ] Enviar resposta no Chatwoot para cada comando
+- [x] Implementar parser/handler de comandos (#qrcode/#help/#status/#disconnect/#attid/#updateavatar)
+- [x] Enviar resposta no Chatwoot para cada comando
 - [ ] Implementar "Enable Typing Indicator" via eventos `conversation_typing_on/off` (Account Webhooks)
 
 Critério de aceite M6:
@@ -434,13 +434,12 @@ Critério de aceite M7:
    - retornar 404 e logar (recomendado) ou tentar reconstruir pelo phone (se vier no payload)
 4) Qual será o texto da assinatura quando `Sign Messages` estiver habilitado?
 5) Formato de `ignored_numbers` (E.164, sem +, CSV ou JSON?)
-6) Semantica exata do comando `#attid` (quais IDs limpar/atualizar?)
-7) `Ignore Groups` desabilitado deve permitir grupos no MVP ou manter fora de escopo?
-8) Como registrar e validar account webhooks para typing indicator?
-9) Resolvido: API inbox usa `channel.type=api` e `channel.webhook_url` (confirmado via rails runner/curl).
-10) Resolvido: `identifier_hash` = HMAC-SHA256(hex) do identifier usando `hmac_token` do inbox (confirmado em Chatwoot local).
-11) Decisao: grupos continuam fora de escopo (Chatwoot retorna 500 para identifier com @g.us em API inbox local).
-12) Comandos via Chatwoot: #help/#status/#qrcode/#disconnect respondem; #attid/#updateavatar pendentes (ver itens 6 e 13).
-13) Semantica exata do comando `#updateavatar` (origem da foto e destino no Chatwoot).
+6) `Ignore Groups` desabilitado deve permitir grupos no MVP ou manter fora de escopo?
+7) Como registrar e validar account webhooks para typing indicator?
+8) Resolvido: API inbox usa `channel.type=api` e `channel.webhook_url` (confirmado via rails runner/curl).
+9) Resolvido: `identifier_hash` = HMAC-SHA256(hex) do identifier usando `hmac_token` do inbox (confirmado em Chatwoot local).
+10) Decisao: grupos continuam fora de escopo (Chatwoot retorna 500 para identifier com @g.us em API inbox local).
+11) Resolvido: `#attid` atualiza `system_contact_identifier`/`system_conversation_id` com base na conversa atual.
+12) Resolvido: `#updateavatar` atualiza o avatar do contato no Chatwoot usando a foto do WhatsApp da instancia.
 
 (Manter esta seção sempre atualizada quando surgir uma nova pendência.)

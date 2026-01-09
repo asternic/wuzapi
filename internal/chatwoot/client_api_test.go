@@ -89,6 +89,40 @@ func TestCreateConversation(t *testing.T) {
 	}
 }
 
+func TestUpdateContact(t *testing.T) {
+	client, err := NewClient("https://example.test", 1, "token", WithHTTPClient(&http.Client{
+		Transport: roundTripperFunc(func(r *http.Request) (*http.Response, error) {
+			if r.Method != http.MethodPatch {
+				t.Fatalf("expected PATCH, got %s", r.Method)
+			}
+			if r.URL.Path != "/public/api/v1/inboxes/inbox-123/contacts/contact-abc" {
+				t.Fatalf("unexpected path: %s", r.URL.Path)
+			}
+			var body map[string]any
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatalf("decode body: %v", err)
+			}
+			if body["avatar_url"].(string) != "https://avatar.test/pic.jpg" {
+				t.Fatalf("unexpected avatar_url: %v", body["avatar_url"])
+			}
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Header:     http.Header{"Content-Type": []string{"application/json"}},
+				Body:       io.NopCloser(strings.NewReader(`{}`)),
+			}, nil
+		}),
+	}))
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+
+	if err := client.UpdateContact(context.Background(), "inbox-123", "contact-abc", UpdateContactRequest{
+		AvatarURL: "https://avatar.test/pic.jpg",
+	}); err != nil {
+		t.Fatalf("UpdateContact: %v", err)
+	}
+}
+
 func TestCreateMessage(t *testing.T) {
 	client, err := NewClient("https://example.test", 1, "token", WithHTTPClient(&http.Client{
 		Transport: roundTripperFunc(func(r *http.Request) (*http.Response, error) {
