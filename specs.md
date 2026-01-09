@@ -32,10 +32,10 @@ Garantir que o Codex execute mudanças pequenas, testáveis, com rastreabilidade
 
 ### Progress Tracker (Checkpoint)
 
-- **Status (last completed milestone):** M3
+- **Status (last completed milestone):** M4
 - **Last review:** 2026-01-05 — avaliação de adequação do specs para integração Chatwoot (pendências registradas fora do tracker)
-- **Last update:** 2026-01-08 — M3 concluída
-- **Next up:** **Milestone M4: Outbound Chatwoot -> WhatsApp (callback do API inbox)**
+- **Last update:** 2026-01-09 — M4 concluída
+- **Next up:** **Milestone M5: Configuração via dashboard e provisionamento**
 
 ---
 
@@ -336,26 +336,26 @@ Critério de aceite M3:
 ---
 
 ### Milestone M4: Outbound Chatwoot -> WhatsApp (callback do API inbox)
-- [ ] Criar endpoint HTTP: `POST /integrations/chatwoot/callback`
-  - [ ] Validar `callback_secret` (query ou header)
-  - [ ] Aceitar apenas JSON
-- [ ] Resolver config/tenant via `callback_secret` OU `inbox_id` do payload
-- [ ] Implementar parser para payload do callback do API inbox:
-  - [ ] aceitar apenas `event == "message_created"`
-  - [ ] aceitar apenas `message_type == "outgoing"` (string top-level; int nas mensagens aninhadas)
-  - [ ] ignorar `private == true` (se presente no payload)
-- [ ] Resolver destinatário:
-  - [ ] extrair identificador do contato do payload (`conversation.contact_inbox.source_id`)
-  - [ ] buscar em `chatwoot_map` o `wa_jid`
-- [ ] Processar comandos `#qrcode/#help/#status/#disconnect/#attid/#updateavatar` quando a conversa for do contato "Flownix"
-- [ ] Aplicar `Sign Messages` e `ignored_numbers`
-- [ ] Enviar mensagem via função interna equivalente ao `/chat/send/text`
+- [x] Criar endpoint HTTP: `POST /integrations/chatwoot/callback`
+  - [x] Validar `callback_secret` (query ou header)
+  - [x] Aceitar apenas JSON
+- [x] Resolver config/tenant via `callback_secret` OU `inbox_id` do payload
+- [x] Implementar parser para payload do callback do API inbox:
+  - [x] aceitar apenas `event == "message_created"`
+  - [x] aceitar apenas `message_type == "outgoing"` (string top-level; int nas mensagens aninhadas)
+  - [x] ignorar `private == true` (se presente no payload)
+- [x] Resolver destinatário:
+  - [x] extrair identificador do contato do payload (`conversation.contact_inbox.source_id`)
+  - [x] buscar em `chatwoot_map` o `wa_jid`
+- [x] Processar comandos `#qrcode/#help/#status/#disconnect/#attid/#updateavatar` quando a conversa for do contato "Flownix"
+- [x] Aplicar `Sign Messages` e `ignored_numbers`
+- [x] Enviar mensagem via função interna equivalente ao `/chat/send/text`
 
 Testes:
-- [ ] Sem segredo => 401/403
-- [ ] Incoming => ignorar
-- [ ] Outgoing => chama função de envio WhatsApp
-- [ ] Sem mapeamento => 404 controlado OU log + ignore (definir comportamento)
+- [x] Sem segredo => 401/403
+- [x] Incoming => ignorar
+- [x] Outgoing => chama função de envio WhatsApp
+- [x] Sem mapeamento => 404 controlado OU log + ignore (definir comportamento)
 
 Critério de aceite M4:
 - Mensagem enviada pelo agente no Chatwoot vira mensagem no WhatsApp (via mock)
@@ -432,5 +432,6 @@ Critério de aceite M7:
 9) Resolvido: API inbox usa `channel.type=api` e `channel.webhook_url` (confirmado via rails runner/curl).
 10) Resolvido: `identifier_hash` = HMAC-SHA256(hex) do identifier usando `hmac_token` do inbox (confirmado em Chatwoot local).
 11) Decisao: grupos continuam fora de escopo (Chatwoot retorna 500 para identifier com @g.us em API inbox local).
+12) Comandos via Chatwoot: por enquanto detectados e ignorados no callback; respostas serão implementadas no M6.
 
 (Manter esta seção sempre atualizada quando surgir uma nova pendência.)

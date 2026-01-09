@@ -48,6 +48,7 @@ func (s *server) routes() {
 	}
 
 	s.router.Handle("/health", s.GetHealth()).Methods("GET")
+	s.router.Handle("/integrations/chatwoot/callback", s.ChatwootCallback()).Methods("POST")
 
 	adminRoutes := s.router.PathPrefix("/admin").Subrouter()
 	adminRoutes.Use(s.authadmin)

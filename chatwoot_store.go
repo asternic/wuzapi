@@ -98,6 +98,24 @@ func (s *server) GetChatwootConfigByUserID(userID string) (*ChatwootConfig, erro
 	return &cfg, nil
 }
 
+func (s *server) GetChatwootConfigByCallbackSecret(secret string) (*ChatwootConfig, error) {
+	var cfg ChatwootConfig
+	query := `SELECT * FROM chatwoot_config WHERE callback_secret = ? LIMIT 1`
+	if err := s.db.Get(&cfg, s.db.Rebind(query), secret); err != nil {
+		return nil, fmt.Errorf("get chatwoot config by callback secret: %w", err)
+	}
+	return &cfg, nil
+}
+
+func (s *server) GetChatwootConfigByInboxID(inboxID int) (*ChatwootConfig, error) {
+	var cfg ChatwootConfig
+	query := `SELECT * FROM chatwoot_config WHERE inbox_id = ? LIMIT 1`
+	if err := s.db.Get(&cfg, s.db.Rebind(query), inboxID); err != nil {
+		return nil, fmt.Errorf("get chatwoot config by inbox id: %w", err)
+	}
+	return &cfg, nil
+}
+
 func (s *server) UpsertChatwootMap(entry *ChatwootMap) error {
 	if entry == nil {
 		return errors.New("chatwoot map is nil")

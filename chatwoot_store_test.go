@@ -75,6 +75,49 @@ func TestChatwootConfigUpsertAndGet(t *testing.T) {
 	}
 }
 
+func TestChatwootConfigLookupBySecretAndInboxID(t *testing.T) {
+	s := makeTestServer(t)
+
+	cfg := &ChatwootConfig{
+		WuzapiUserID:    "user-2",
+		ChatwootBaseURL: "https://chat.example",
+		AccountID:       44,
+		APIToken:        "token-def",
+		InboxIdentifier: "inbox-identifier-2",
+		InboxName:       "Inbox C",
+		InboxID:         123,
+		CallbackSecret:  "secret-xyz",
+		Enabled:         true,
+	}
+
+	if err := s.UpsertChatwootConfig(cfg); err != nil {
+		t.Fatalf("upsert chatwoot config: %v", err)
+	}
+
+	bySecret, err := s.GetChatwootConfigByCallbackSecret(cfg.CallbackSecret)
+	if err != nil {
+		t.Fatalf("get chatwoot config by callback secret: %v", err)
+	}
+	if bySecret.WuzapiUserID != cfg.WuzapiUserID {
+		t.Fatalf("expected user id %q, got %q", cfg.WuzapiUserID, bySecret.WuzapiUserID)
+	}
+
+	byInbox, err := s.GetChatwootConfigByInboxID(cfg.InboxID)
+	if err != nil {
+		t.Fatalf("get chatwoot config by inbox id: %v", err)
+	}
+	if byInbox.CallbackSecret != cfg.CallbackSecret {
+		t.Fatalf("expected callback secret %q, got %q", cfg.CallbackSecret, byInbox.CallbackSecret)
+	}
+
+	if _, err := s.GetChatwootConfigByCallbackSecret("missing"); !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("expected sql.ErrNoRows, got %v", err)
+	}
+	if _, err := s.GetChatwootConfigByInboxID(999); !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("expected sql.ErrNoRows, got %v", err)
+	}
+}
+
 func TestChatwootMapUpsertAndGet(t *testing.T) {
 	s := makeTestServer(t)
 
