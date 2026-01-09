@@ -1356,6 +1356,12 @@ Creates or updates the Chatwoot API inbox and returns `inbox_id` and `inbox_iden
 }
 ```
 
+## Typing Indicator (Chatwoot Webhooks)
+
+To enable typing indicators, configure a Chatwoot account webhook (Settings -> Integrations -> Webhooks)
+pointing to the same callback URL and subscribe to `conversation_typing_on` and `conversation_typing_off`.
+The WuzAPI will only forward typing presence when `enable_typing_indicator` is true and `is_private` is false.
+
 # S3 Storage Integration for WuzAPI
 
 ## Overview

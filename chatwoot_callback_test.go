@@ -8,6 +8,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"go.mau.fi/whatsmeow/types"
 )
 
 type chatwootSendCall struct {
@@ -376,6 +378,148 @@ func TestChatwootCallbackCommandUpdateAvatar(t *testing.T) {
 	}
 	if !found {
 		t.Fatalf("expected update contact request")
+	}
+}
+
+func TestChatwootCallbackTypingIndicatorSendsPresence(t *testing.T) {
+	cases := []struct {
+		name     string
+		event    string
+		expected types.ChatPresence
+	}{
+		{
+			name:     "typing_on",
+			event:    "conversation_typing_on",
+			expected: types.ChatPresenceComposing,
+		},
+		{
+			name:     "typing_off",
+			event:    "conversation_typing_off",
+			expected: types.ChatPresencePaused,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			s := makeTestServer(t)
+			insertChatwootConfig(t, s, &ChatwootConfig{
+				WuzapiUserID:          "user-1",
+				CallbackSecret:        "secret-1",
+				Enabled:               true,
+				EnableTypingIndicator: true,
+			})
+			if err := s.UpsertChatwootMap(&ChatwootMap{
+				WuzapiUserID:              "user-1",
+				WaJID:                     "5511999999999@s.whatsapp.net",
+				WaPhone:                   "5511999999999",
+				ChatwootContactIdentifier: "contact-1",
+			}); err != nil {
+				t.Fatalf("upsert chatwoot map: %v", err)
+			}
+
+			var gotUserID string
+			var gotJID string
+			var gotPresence types.ChatPresence
+			called := false
+
+			prev := sendChatwootTypingPresence
+			sendChatwootTypingPresence = func(ctx context.Context, userID, waJID string, presence types.ChatPresence) error {
+				called = true
+				gotUserID = userID
+				gotJID = waJID
+				gotPresence = presence
+				return nil
+			}
+			t.Cleanup(func() { sendChatwootTypingPresence = prev })
+
+			payload := map[string]any{
+				"event": tc.event,
+				"conversation": map[string]any{
+					"id":       321,
+					"inbox_id": 10,
+					"contact_inbox": map[string]any{
+						"source_id": "contact-1",
+					},
+				},
+			}
+			req := newChatwootCallbackRequest(t, payload, "secret-1")
+			rec := httptest.NewRecorder()
+
+			handler := s.chatwootCallbackHandler((&chatwootSendStub{}).Send)
+			handler.ServeHTTP(rec, req)
+
+			if rec.Code != http.StatusOK {
+				t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+			}
+			if !called {
+				t.Fatalf("expected typing presence call")
+			}
+			if gotUserID != "user-1" || gotJID != "5511999999999@s.whatsapp.net" || gotPresence != tc.expected {
+				t.Fatalf("unexpected typing presence args: user=%q jid=%q presence=%q", gotUserID, gotJID, gotPresence)
+			}
+		})
+	}
+}
+
+func TestChatwootCallbackTypingIndicatorIgnored(t *testing.T) {
+	cases := []struct {
+		name      string
+		enabled   bool
+		isPrivate bool
+	}{
+		{
+			name:      "disabled",
+			enabled:   false,
+			isPrivate: false,
+		},
+		{
+			name:      "private",
+			enabled:   true,
+			isPrivate: true,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			s := makeTestServer(t)
+			insertChatwootConfig(t, s, &ChatwootConfig{
+				WuzapiUserID:          "user-1",
+				CallbackSecret:        "secret-1",
+				Enabled:               true,
+				EnableTypingIndicator: tc.enabled,
+			})
+
+			called := false
+			prev := sendChatwootTypingPresence
+			sendChatwootTypingPresence = func(ctx context.Context, userID, waJID string, presence types.ChatPresence) error {
+				called = true
+				return nil
+			}
+			t.Cleanup(func() { sendChatwootTypingPresence = prev })
+
+			payload := map[string]any{
+				"event":      "conversation_typing_on",
+				"is_private": tc.isPrivate,
+				"conversation": map[string]any{
+					"id": 321,
+					"contact_inbox": map[string]any{
+						"source_id": "contact-1",
+					},
+				},
+			}
+			req := newChatwootCallbackRequest(t, payload, "secret-1")
+			rec := httptest.NewRecorder()
+
+			handler := s.chatwootCallbackHandler((&chatwootSendStub{}).Send)
+			handler.ServeHTTP(rec, req)
+
+			if rec.Code != http.StatusOK {
+				t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+			}
+			if called {
+				t.Fatalf("expected typing presence not to be sent")
+			}
+		})
 	}
 }
 

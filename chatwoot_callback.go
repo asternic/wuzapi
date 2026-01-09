@@ -12,6 +12,7 @@ import (
 	"github.com/rs/zerolog/log"
 	"go.mau.fi/whatsmeow"
 	"go.mau.fi/whatsmeow/proto/waE2E"
+	"go.mau.fi/whatsmeow/types"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -68,7 +69,34 @@ func (s *server) chatwootCallbackHandler(send chatwootSendFunc) http.HandlerFunc
 			return
 		}
 
-		if strings.TrimSpace(payload.Event) != "message_created" {
+		event := strings.TrimSpace(payload.Event)
+		if event == "conversation_typing_on" || event == "conversation_typing_off" {
+			if !cfg.EnableTypingIndicator {
+				s.respondChatwootCallback(w, r, http.StatusOK, map[string]string{"status": "ignored"})
+				return
+			}
+
+			presence := types.ChatPresenceComposing
+			if event == "conversation_typing_off" {
+				presence = types.ChatPresencePaused
+			}
+
+			sent, err := s.handleChatwootTypingEvent(r.Context(), cfg, &payload, presence)
+			if err != nil {
+				log.Warn().Err(err).Msg("Chatwoot typing: failed to send presence")
+				s.respondChatwootCallback(w, r, http.StatusOK, map[string]string{"status": "typing_failed"})
+				return
+			}
+
+			status := "typing_ignored"
+			if sent {
+				status = "typing_sent"
+			}
+			s.respondChatwootCallback(w, r, http.StatusOK, map[string]string{"status": status})
+			return
+		}
+
+		if event != "message_created" {
 			s.respondChatwootCallback(w, r, http.StatusOK, map[string]string{"status": "ignored"})
 			return
 		}
@@ -264,6 +292,7 @@ type chatwootCallbackPayload struct {
 	Event        string                       `json:"event"`
 	MessageType  chatwootMessageType          `json:"message_type"`
 	Private      bool                         `json:"private"`
+	IsPrivate    bool                         `json:"is_private"`
 	Content      string                       `json:"content"`
 	Conversation chatwootCallbackConversation `json:"conversation"`
 	Inbox        chatwootCallbackInbox        `json:"inbox"`
