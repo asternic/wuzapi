@@ -430,6 +430,7 @@ Critério de aceite M7:
 7) `Ignore Groups` desabilitado deve permitir grupos no MVP ou manter fora de escopo?
 8) Como registrar e validar account webhooks para typing indicator?
 9) Resolvido: API inbox usa `channel.type=api` e `channel.webhook_url` (confirmado via rails runner/curl).
-10) Confirmar algoritmo do `identifier_hash` quando `hmac_secret` for usado no Create Contact (docs nao especificam).
+10) Resolvido: `identifier_hash` = HMAC-SHA256(hex) do identifier usando `hmac_token` do inbox (confirmado em Chatwoot local).
+11) Decisao: grupos continuam fora de escopo (Chatwoot retorna 500 para identifier com @g.us em API inbox local).
 
 (Manter esta seção sempre atualizada quando surgir uma nova pendência.)
