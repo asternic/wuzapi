@@ -34,7 +34,7 @@ Garantir que o Codex execute mudanças pequenas, testáveis, com rastreabilidade
 
 - **Status (last completed milestone):** M7
 - **Last review:** 2026-01-05 — avaliação de adequação do specs para integração Chatwoot (pendências registradas fora do tracker)
-- **Last update:** 2026-01-09 — M7 checklist de deploy documentado (README)
+- **Last update:** 2026-01-09 — Pendências 1-6 resolvidas (specs)
 - **Next up:** Deploy na VPS usando a imagem `flownix/wuzapi-chatwoot:1.0.0`
 
 ---
@@ -425,20 +425,16 @@ Critério de aceite M7:
 ---
 
 ## 8) Pendências e decisões (não bloquear desenvolvimento)
-1) Qual será a normalização do “contact key” no Chatwoot?
-   - opção A: `identifier = phone puro (E.164 sem +)`
-   - opção B: `identifier = wa_jid completo`
-2) Como lidar com conversa resolvida no Chatwoot:
-   - criar nova conversation sempre que a atual estiver resolved
-3) Comportamento quando webhook outbound chega sem mapeamento:
-   - retornar 404 e logar (recomendado) ou tentar reconstruir pelo phone (se vier no payload)
-4) Qual será o texto da assinatura quando `Sign Messages` estiver habilitado?
-5) Formato de `ignored_numbers` (E.164, sem +, CSV ou JSON?)
-6) `Ignore Groups` desabilitado deve permitir grupos no MVP ou manter fora de escopo?
+1) Resolvido: `identifier` usa phone normalizado (E.164 sem +); `PhoneNumber` enviado com `+`.
+2) Resolvido: se a conversa estiver `resolved`, reabre quando `reopen_conversations` estiver true; caso contrario cria nova.
+3) Resolvido: callback outbound retorna 404 quando nao ha mapping local.
+4) Resolvido: usa `signature_text` da configuracao; se vazio, nao assina.
+5) Resolvido: `ignored_numbers` aceita JSON array ou lista separada por virgula/espacos/`;` e normaliza para digitos.
+6) Resolvido: grupos continuam fora de escopo; manter `ignore_groups` habilitado (Chatwoot retorna 500 para `@g.us`).
 7) Resolvido: webhook de conta do Chatwoot configurado com callback URL (token) e eventos `conversation_typing_on/off`.
 8) Resolvido: API inbox usa `channel.type=api` e `channel.webhook_url` (confirmado via rails runner/curl).
 9) Resolvido: `identifier_hash` = HMAC-SHA256(hex) do identifier usando `hmac_token` do inbox (confirmado em Chatwoot local).
-10) Decisao: grupos continuam fora de escopo (Chatwoot retorna 500 para identifier com @g.us em API inbox local).
+10) Resolvido: grupos continuam fora de escopo (Chatwoot retorna 500 para identifier com @g.us em API inbox local).
 11) Resolvido: `#attid` atualiza `system_contact_identifier`/`system_conversation_id` com base na conversa atual.
 12) Resolvido: `#updateavatar` atualiza o avatar do contato no Chatwoot usando a foto do WhatsApp da instancia.
 
