@@ -26,10 +26,15 @@ jobs:
           else
             echo "has_changes=true" >> $GITHUB_OUTPUT
           fi
-      - name: Commit changes
+      - name: Create Pull Request
         if: steps.changes.outputs.has_changes == 'true'
-        run: |
-          git config --global user.name 'GitHub Actions'
-          git config --global user.email 'actions@github.com'
-          git commit -am "$COMMIT_MESSAGE"
-          git push
+        uses: peter-evans/create-pull-request@v5
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: 'docs(README): update contributors'
+          title: 'docs: Update contributors list'
+          body: 'Automated update of contributors list'
+          labels: |
+            automated-pr
+            documentation
+          branch: update/contributors-list
