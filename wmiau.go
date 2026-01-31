@@ -290,7 +290,7 @@ func (s *server) connectOnStartup() {
 			}
 			eventstring := strings.Join(subscribedEvents, ",")
 			log.Info().Str("events", eventstring).Str("jid", jid).Msg("Attempt to connect")
-			killchannel[txtid] = make(chan bool)
+			killchannel[txtid] = make(chan bool, 1)
 			go s.startClient(txtid, jid, token, subscribedEvents)
 
 			// Initialize S3 client if configured
@@ -532,7 +532,10 @@ func (s *server) startClient(userID string, textjid string, token string, subscr
 					clientManager.DeleteWhatsmeowClient(userID)
 					clientManager.DeleteMyClient(userID)
 					clientManager.DeleteHTTPClient(userID)
-					killchannel[userID] <- true
+					select {
+					case killchannel[userID] <- true:
+					default:
+					}
 				} else if evt.Event == "success" {
 					log.Info().Msg("QR pairing ok!")
 					// Clear QR code after pairing
@@ -630,6 +633,7 @@ func (s *server) startClient(userID string, textjid string, token string, subscr
 			if err != nil {
 				log.Error().Err(err).Msg(sqlStmt)
 			}
+			delete(killchannel, userID)
 			return
 		default:
 			time.Sleep(1000 * time.Millisecond)
@@ -1312,8 +1316,8 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 				} else if ext := evt.Message.GetExtendedTextMessage(); ext != nil {
 					textContent = ext.GetText()
 					// Check if this is a reply to another message
-					if contextInfo := ext.GetContextInfo(); contextInfo != nil && contextInfo.GetStanzaId() != "" {
-						replyToMessageID = contextInfo.GetStanzaId()
+					if contextInfo := ext.GetContextInfo(); contextInfo != nil && contextInfo.GetStanzaID() != "" {
+						replyToMessageID = contextInfo.GetStanzaID()
 					}
 				} else {
 					textContent = caption
@@ -1465,7 +1469,7 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 							continue
 						}
 
-						messageID := messageKey.GetId()
+						messageID := messageKey.GetID()
 						if messageID == "" {
 							continue
 						}
@@ -1521,7 +1525,7 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 							messageType = "text"
 							textContent = ext.GetText()
 							if contextInfo := ext.GetContextInfo(); contextInfo != nil {
-								quotedMessageID = contextInfo.GetStanzaId()
+								quotedMessageID = contextInfo.GetStanzaID()
 							}
 						} else if img := message.GetImageMessage(); img != nil {
 							messageType = "image"
@@ -1552,7 +1556,7 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 							messageType = "reaction"
 							textContent = reaction.GetText()
 							if key := reaction.GetKey(); key != nil {
-								quotedMessageID = key.GetId()
+								quotedMessageID = key.GetID()
 							}
 						}
 

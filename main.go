@@ -180,6 +180,22 @@ func main() {
 
 	flag.Parse()
 
+	// Check for address in environment variable if flag is default or empty
+	if *address == "0.0.0.0" || *address == "" {
+		if v := os.Getenv("WUZAPI_ADDRESS"); v != "" {
+			*address = v
+			log.Info().Str("address", v).Msg("Address configured from environment variable")
+		}
+	}
+
+	// Check for port in environment variable if flag is default or empty
+	if *port == "8080" || *port == "" {
+		if v := os.Getenv("WUZAPI_PORT"); v != "" {
+			*port = v
+			log.Info().Str("port", v).Msg("Port configured from environment variable")
+		}
+	}
+
 	if v := os.Getenv("WEBHOOK_RETRY_ENABLED"); v != "" {
 		*webhookRetryEnabled = strings.ToLower(v) == "true" || v == "1"
 	}

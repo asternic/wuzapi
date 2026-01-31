@@ -29,6 +29,25 @@
           "response": []
         },
         {
+          "name": "Get User",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{admin_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin/users/1",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "users", "1"]
+            },
+            "description": "Get user by id"
+          },
+          "response": []
+        },
+        {
           "name": "Add User",
           "request": {
             "method": "POST",
@@ -44,7 +63,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"test_user\",\n  \"token\": \"user_token\",\n  \"webhook\": \"https://webhook.site/1234567890\",\n  \"events\": \"All\",\n  \"proxyConfig\": {\n    \"enabled\": true,\n    \"proxyURL\": \"socks5://user:pass@host:port\"\n  }, \n  \"s3Config\": {\n    \"enabled\": true,\n    \"endpoint\": \"https://s3.amazonaws.com\",\n    \"region\": \"us-east-1\",\n    \"bucket\": \"my-bucket\",\n    \"accessKey\": \"AKIAIOSFODNN7EXAMPLE\",\n    \"secretKey\": \"wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY\",\n    \"pathStyle\": false,\n    \"publicURL\": \"https://cdn.meusite.com\",\n    \"mediaDelivery\": \"both\",\n    \"retentionDays\": 30\n  }\n}"
+              "raw": "{\n  \"name\": \"test_user\",\n  \"token\": \"user_token\",\n  \"webhook\": \"https://webhook.site/1234567890\",\n  \"events\": \"All\",\n  \"history\": 50,\n  \"hmacKey\": \"your_hmac_key_minimum_32_characters_long_here\",\n  \"proxyConfig\": {\n    \"enabled\": true,\n    \"proxyURL\": \"socks5://user:pass@host:port\"\n  }, \n  \"s3Config\": {\n    \"enabled\": true,\n    \"endpoint\": \"https://s3.amazonaws.com\",\n    \"region\": \"us-east-1\",\n    \"bucket\": \"my-bucket\",\n    \"accessKey\": \"AKIAIOSFODNN7EXAMPLE\",\n    \"secretKey\": \"wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY\",\n    \"pathStyle\": false,\n    \"publicURL\": \"https://cdn.meusite.com\",\n    \"mediaDelivery\": \"both\",\n    \"retentionDays\": 30\n  }\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/admin/users",
@@ -52,6 +71,33 @@
               "path": ["admin", "users"]
             },
             "description": "Add user"
+          },
+          "response": []
+        },
+        {
+          "name": "Edit User",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{admin_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"updated_user\",\n  \"webhook\": \"https://webhook.site/1234567890\",\n  \"events\": \"All\",\n  \"history\": 50,\n  \"proxyConfig\": {\n    \"enabled\": false,\n    \"proxyURL\": \"\"\n  },\n  \"s3Config\": {\n    \"enabled\": false,\n    \"endpoint\": \"\",\n    \"region\": \"\",\n    \"bucket\": \"\",\n    \"accessKey\": \"\",\n    \"secretKey\": \"\",\n    \"pathStyle\": false,\n    \"publicURL\": \"\",\n    \"mediaDelivery\": \"base64\",\n    \"retentionDays\": 30\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/admin/users/1",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "users", "1"]
+            },
+            "description": "Edit user"
           },
           "response": []
         },
@@ -71,6 +117,25 @@
               "path": ["admin", "users", "1"]
             },
             "description": "Delete user"
+          },
+          "response": []
+        },
+        {
+          "name": "Delete User Complete",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{admin_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin/users/1/full",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "users", "1", "full"]
+            },
+            "description": "Delete user and related data"
           },
           "response": []
         }
@@ -206,6 +271,58 @@
               "path": ["session", "pairphone"]
             },
             "description": "Pair by phone"
+          },
+          "response": []
+        },
+        {
+          "name": "Request History Sync",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/session/history?count=50",
+              "host": ["{{baseUrl}}"],
+              "path": ["session", "history"],
+              "query": [
+                {
+                  "key": "count",
+                  "value": "50"
+                }
+              ]
+            },
+            "description": "Request history sync (count is optional)"
+          },
+          "response": []
+        },
+        {
+          "name": "Set History",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"history\": 50\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/session/history",
+              "host": ["{{baseUrl}}"],
+              "path": ["session", "history"]
+            },
+            "description": "Configure history storage per user"
           },
           "response": []
         },
@@ -430,7 +547,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"WebhookURL\": \"https://example.net/webhook\",\n  \"Events\": [\"Message\", \"ReadReceipt\"]\n}"
+              "raw": "{\n  \"webhookurl\": \"https://example.net/webhook\",\n  \"events\": [\"Message\", \"ReadReceipt\"]\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/webhook",
@@ -476,12 +593,12 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"WebhookURL\": \"https://example.net/webhook\",\n  \"Events\": [\"Message\", \"ReadReceipt\"],\n  \"active\": true\n}"
+              "raw": "{\n  \"webhook\": \"https://example.net/webhook\",\n  \"events\": [\"Message\", \"ReadReceipt\"],\n  \"active\": true\n}"
             },
             "url": {
-              "raw": "{{baseUrl}}/webhook/update",
+              "raw": "{{baseUrl}}/webhook",
               "host": ["{{baseUrl}}"],
-              "path": ["webhook", "update"]
+              "path": ["webhook"]
             },
             "description": "Update webhook"
           },
@@ -865,6 +982,235 @@
           "response": []
         },
         {
+          "name": "Send Buttons (Interactive)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "token", "value": "{{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Phone\": \"5511999999999\",\n  \"Title\": \"Pagamento\",\n  \"Body\": \"Escolha uma opcao\",\n  \"Footer\": \"Obrigado\",\n  \"Buttons\": [\n    {\n      \"ButtonId\": \"pix-1\",\n      \"ButtonText\": \"Pagar com PIX\",\n      \"PixPayment\": {\n        \"MerchantName\": \"Minha Loja\",\n        \"Key\": \"minha-chave-pix\",\n        \"KeyType\": \"EMAIL\"\n      }\n    },\n    {\n      \"ButtonId\": \"copy-1\",\n      \"ButtonText\": \"Copiar cupom\",\n      \"ButtonCopy\": \"CUPOM10\"\n    },\n    {\n      \"ButtonId\": \"call-1\",\n      \"ButtonText\": \"Ligar\",\n      \"ButtonUrl\": \"tel:+5511999999999\"\n    },\n    {\n      \"ButtonId\": \"site-1\",\n      \"ButtonText\": \"Abrir site\",\n      \"ButtonUrl\": \"https://example.com\"\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/chat/send/buttons",
+              "host": ["{{baseUrl}}"],
+              "path": ["chat", "send", "buttons"]
+            },
+            "description": "Send interactive buttons (PIX/Copy/Call/URL)"
+          },
+          "response": []
+        },
+        {
+          "name": "Send List (Interactive)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "token", "value": "{{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Phone\": \"5511999999999\",\n  \"ButtonText\": \"Ver opcoes\",\n  \"Desc\": \"Escolha uma opcao\",\n  \"TopText\": \"Menu principal\",\n  \"Sections\": [\n    {\n      \"title\": \"Planos\",\n      \"rows\": [\n        { \"title\": \"Basico\", \"desc\": \"Plano basico\", \"RowId\": \"plano_basico\" },\n        { \"title\": \"Premium\", \"desc\": \"Plano premium\", \"RowId\": \"plano_premium\" }\n      ]\n    }\n  ],\n  \"FooterText\": \"Obrigado\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/chat/send/list",
+              "host": ["{{baseUrl}}"],
+              "path": ["chat", "send", "list"]
+            },
+            "description": "Send interactive list"
+          },
+          "response": []
+        },
+        {
+          "name": "Send Poll",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "token", "value": "{{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"group\": \"120363313346913103@g.us\",\n  \"header\": \"Qual plano voce prefere?\",\n  \"options\": [\"Basico\", \"Premium\", \"Pro\"]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/chat/send/poll",
+              "host": ["{{baseUrl}}"],
+              "path": ["chat", "send", "poll"]
+            },
+            "description": "Send poll to a group"
+          },
+          "response": []
+        },
+        {
+          "name": "Chat History",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "token", "value": "{{token}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/chat/history?chat_jid=5511999999999@s.whatsapp.net",
+              "host": ["{{baseUrl}}"],
+              "path": ["chat", "history"],
+              "query": [
+                { "key": "chat_jid", "value": "5511999999999@s.whatsapp.net" }
+              ]
+            },
+            "description": "Get chat history (use chat_jid=index for list)"
+          },
+          "response": []
+        },
+        {
+          "name": "Request Unavailable Message",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "token", "value": "{{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"chat\": \"5511999999999@s.whatsapp.net\",\n  \"sender\": \"5511999999999@s.whatsapp.net\",\n  \"id\": \"ABCD1234\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/chat/request-unavailable-message",
+              "host": ["{{baseUrl}}"],
+              "path": ["chat", "request-unavailable-message"]
+            },
+            "description": "Request a copy of a message that couldn't be decrypted"
+          },
+          "response": []
+        },
+        {
+          "name": "Archive Chat",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "token", "value": "{{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jid\": \"5511999999999@s.whatsapp.net\",\n  \"archive\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/chat/archive",
+              "host": ["{{baseUrl}}"],
+              "path": ["chat", "archive"]
+            },
+            "description": "Archive or unarchive a chat"
+          },
+          "response": []
+        },
+        {
+          "name": "Download Image",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "token", "value": "{{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Url\": \"https://mmg.whatsapp.net/d/f/abc\",\n  \"DirectPath\": \"/v/t62.7118-24/abc\",\n  \"MediaKey\": \"BASE64_MEDIA_KEY==\",\n  \"Mimetype\": \"image/jpeg\",\n  \"FileEncSHA256\": \"BASE64_FILE_ENC_SHA256==\",\n  \"FileSHA256\": \"BASE64_FILE_SHA256==\",\n  \"FileLength\": 12345\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/chat/downloadimage",
+              "host": ["{{baseUrl}}"],
+              "path": ["chat", "downloadimage"]
+            },
+            "description": "Download image and return base64"
+          },
+          "response": []
+        },
+        {
+          "name": "Download Audio",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "token", "value": "{{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Url\": \"https://mmg.whatsapp.net/d/f/abc\",\n  \"DirectPath\": \"/v/t62.7118-24/abc\",\n  \"MediaKey\": \"BASE64_MEDIA_KEY==\",\n  \"Mimetype\": \"audio/ogg\",\n  \"FileEncSHA256\": \"BASE64_FILE_ENC_SHA256==\",\n  \"FileSHA256\": \"BASE64_FILE_SHA256==\",\n  \"FileLength\": 12345\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/chat/downloadaudio",
+              "host": ["{{baseUrl}}"],
+              "path": ["chat", "downloadaudio"]
+            },
+            "description": "Download audio and return base64"
+          },
+          "response": []
+        },
+        {
+          "name": "Download Document",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "token", "value": "{{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Url\": \"https://mmg.whatsapp.net/d/f/abc\",\n  \"DirectPath\": \"/v/t62.7118-24/abc\",\n  \"MediaKey\": \"BASE64_MEDIA_KEY==\",\n  \"Mimetype\": \"application/pdf\",\n  \"FileEncSHA256\": \"BASE64_FILE_ENC_SHA256==\",\n  \"FileSHA256\": \"BASE64_FILE_SHA256==\",\n  \"FileLength\": 12345\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/chat/downloaddocument",
+              "host": ["{{baseUrl}}"],
+              "path": ["chat", "downloaddocument"]
+            },
+            "description": "Download document and return base64"
+          },
+          "response": []
+        },
+        {
+          "name": "Download Video",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "token", "value": "{{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Url\": \"https://mmg.whatsapp.net/d/f/abc\",\n  \"DirectPath\": \"/v/t62.7118-24/abc\",\n  \"MediaKey\": \"BASE64_MEDIA_KEY==\",\n  \"Mimetype\": \"video/mp4\",\n  \"FileEncSHA256\": \"BASE64_FILE_ENC_SHA256==\",\n  \"FileSHA256\": \"BASE64_FILE_SHA256==\",\n  \"FileLength\": 12345\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/chat/downloadvideo",
+              "host": ["{{baseUrl}}"],
+              "path": ["chat", "downloadvideo"]
+            },
+            "description": "Download video and return base64"
+          },
+          "response": []
+        },
+        {
+          "name": "Download Sticker",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "token", "value": "{{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Url\": \"https://mmg.whatsapp.net/d/f/abc\",\n  \"DirectPath\": \"/v/t62.7118-24/abc\",\n  \"MediaKey\": \"BASE64_MEDIA_KEY==\",\n  \"Mimetype\": \"image/webp\",\n  \"FileEncSHA256\": \"BASE64_FILE_ENC_SHA256==\",\n  \"FileSHA256\": \"BASE64_FILE_SHA256==\",\n  \"FileLength\": 12345\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/chat/downloadsticker",
+              "host": ["{{baseUrl}}"],
+              "path": ["chat", "downloadsticker"]
+            },
+            "description": "Download sticker and return base64"
+          },
+          "response": []
+        },
+        {
           "name": "Chat Presence",
           "request": {
             "method": "POST",
@@ -909,6 +1255,58 @@
               "path": ["chat", "delete"]
             },
             "description": "Delete a message from a chat."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Status",
+      "item": [
+        {
+          "name": "Set Status Text",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "token", "value": "{{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Body\": \"Status atualizado\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/status/set/text",
+              "host": ["{{baseUrl}}"],
+              "path": ["status", "set", "text"]
+            },
+            "description": "Set status text message"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Call",
+      "item": [
+        {
+          "name": "Reject Call",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "token", "value": "{{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"call_from\": \"5511999999999\",\n  \"call_id\": \"CALL_ID_EXAMPLE\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/call/reject",
+              "host": ["{{baseUrl}}"],
+              "path": ["call", "reject"]
+            },
+            "description": "Reject an incoming call"
           },
           "response": []
         }
@@ -1043,6 +1441,25 @@
             "description": "List contacts"
           },
           "response": []
+        },
+        {
+          "name": "Get User LID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/user/lid/5511999999999",
+              "host": ["{{baseUrl}}"],
+              "path": ["user", "lid", "5511999999999"]
+            },
+            "description": "Get LID from phone/JID"
+          },
+          "response": []
         }
       ]
     },
@@ -1130,6 +1547,27 @@
               "path": ["group", "photo", "remove"]
             },
             "description": "Remove the current photo from a WhatsApp group"
+          },
+          "response": []
+        },
+        {
+          "name": "Leave Group",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "token", "value": "{{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"GroupJID\": \"120362023605733675@g.us\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/group/leave",
+              "host": ["{{baseUrl}}"],
+              "path": ["group", "leave"]
+            },
+            "description": "Leave a group"
           },
           "response": []
         },
