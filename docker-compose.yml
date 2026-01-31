@@ -72,6 +72,24 @@ services:
       retries: 5
     restart: always
 
+  rabbitmq-init:
+    image: curlimages/curl:latest
+    container_name: wuzapi-rabbitmq-init
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      RABBITMQ_DEFAULT_USER: wuzapi
+      RABBITMQ_DEFAULT_PASS: wuzapi
+      RABBITMQ_DEFAULT_VHOST: /
+      RABBITMQ_HOST: rabbitmq
+    networks:
+      - wuzapi-network
+    volumes:
+      - ./rabbitmq-init.sh:/rabbitmq-init.sh:ro
+    entrypoint: ["/bin/sh", "/rabbitmq-init.sh"]
+    restart: "no"
+
 networks:
   wuzapi-network:
     driver: bridge
