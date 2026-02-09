@@ -11,11 +11,12 @@ import (
 )
 
 var (
-	rabbitConn    *amqp091.Connection
-	rabbitChannel *amqp091.Channel
-	rabbitEnabled bool
-	rabbitOnce    sync.Once
-	rabbitQueue   string
+	rabbitConn     *amqp091.Connection
+	rabbitChannel  *amqp091.Channel
+	rabbitEnabled  bool
+	rabbitOnce     sync.Once
+	rabbitQueue    string
+	lastRabbitErr  error // último erro de conexão, para log quando evento não é publicado
 )
 
 const (
@@ -62,6 +63,7 @@ func InitRabbitMQ() {
 			}
 
 			// Last attempt failed
+			lastRabbitErr = err
 			rabbitEnabled = false
 			log.Error().
 				Err(err).
@@ -87,6 +89,7 @@ func InitRabbitMQ() {
 			}
 
 			// Last attempt failed
+			lastRabbitErr = err
 			rabbitEnabled = false
 			log.Error().
 				Err(err).
@@ -95,6 +98,7 @@ func InitRabbitMQ() {
 		}
 
 		// Success!
+		lastRabbitErr = nil
 		rabbitConn = conn
 		rabbitChannel = channel
 		rabbitEnabled = true
@@ -119,9 +123,11 @@ func handleConnectionErrors() {
 			Err(err).
 			Msg("RabbitMQ connection closed unexpectedly. Attempting reconnection...")
 
+		lastRabbitErr = err
 		rabbitEnabled = false
 
 		// Attempt to reconnect
+		var reconnErr error
 		for attempt := 1; attempt <= maxRetries; attempt++ {
 			log.Info().
 				Int("attempt", attempt).
@@ -130,26 +136,29 @@ func handleConnectionErrors() {
 			time.Sleep(retryInterval)
 
 			rabbitURL := os.Getenv("RABBITMQ_URL")
-			conn, err := amqp091.Dial(rabbitURL)
-			if err != nil {
+			conn, dialErr := amqp091.Dial(rabbitURL)
+			if dialErr != nil {
+				reconnErr = dialErr
 				log.Warn().
-					Err(err).
+					Err(dialErr).
 					Int("attempt", attempt).
 					Msg("Reconnection failed")
 				continue
 			}
 
-			channel, err := conn.Channel()
-			if err != nil {
+			channel, chErr := conn.Channel()
+			if chErr != nil {
 				conn.Close()
+				reconnErr = chErr
 				log.Warn().
-					Err(err).
+					Err(chErr).
 					Int("attempt", attempt).
 					Msg("Failed to open channel on reconnection")
 				continue
 			}
 
 			// Reconnection successful
+			lastRabbitErr = nil
 			rabbitConn = conn
 			rabbitChannel = channel
 			rabbitEnabled = true
@@ -161,6 +170,9 @@ func handleConnectionErrors() {
 			return
 		}
 
+		if reconnErr != nil {
+			lastRabbitErr = reconnErr
+		}
 		log.Error().Msg("Failed to reconnect to RabbitMQ after all retries")
 		return
 	}
@@ -222,10 +234,13 @@ func sendToGlobalRabbit(jsonData []byte, token string, userID string, queueName 
 			if rabbitQueueEnv != "" {
 				queueSet = "yes"
 			}
-			log.Error().
+			ev := log.Error().
 				Str("rabbitmq_url_set", urlSet).
-				Str("rabbitmq_queue_set", queueSet).
-				Msg("RabbitMQ is configured but disabled due to connection failure. Event not published to queue.")
+				Str("rabbitmq_queue_set", queueSet)
+			if lastRabbitErr != nil {
+				ev = ev.Err(lastRabbitErr)
+			}
+			ev.Msg("RabbitMQ is configured but disabled due to connection failure. Event not published to queue.")
 		} else {
 			log.Debug().Msg("RabbitMQ not configured. Event not published to queue.")
 		}
