@@ -89,17 +89,12 @@ func sendToUserWebHookWithHmac(webhookurl string, path string, jsonData []byte, 
 		if path == "" {
 			go callHookWithHmac(webhookurl, data, userID, encryptedHmacKey)
 		} else {
-			// Create a channel to capture the error from the goroutine
-			errChan := make(chan error, 1)
+			// Chamar em background para não bloquear o handler (ex.: grupos com muita mídia)
 			go func() {
-				err := callHookFileWithHmac(webhookurl, data, userID, path, encryptedHmacKey)
-				errChan <- err
+				if err := callHookFileWithHmac(webhookurl, data, userID, path, encryptedHmacKey); err != nil {
+					log.Error().Err(err).Msg("Error calling hook file")
+				}
 			}()
-
-			// Optionally handle the error from the channel (if needed)
-			if err := <-errChan; err != nil {
-				log.Error().Err(err).Msg("Error calling hook file")
-			}
 		}
 	} else {
 		log.Warn().Str("userid", userID).Msg("No webhook set for user")
@@ -797,14 +792,21 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 		log.Info().Msg("Received StreamReplaced event")
 		return
 	case *events.Message:
-
-		var s3Config struct {
-			Enabled       string `db:"s3_enabled"`
-			MediaDelivery string `db:"media_delivery"`
-		}
-
+		// Processar mensagens em goroutine para não bloquear a fila de eventos:
+		// em grupos grandes muitas mensagens chegam em sequência e o processamento
+		// (download de mídia, S3, history, webhook) deixava tudo lento.
 		lastMessageCache.Set(mycli.userID, &evt.Info, cache.DefaultExpiration)
-		myuserinfo, found := userinfocache.Get(mycli.token)
+		go func(evt *events.Message) {
+			postmap := make(map[string]interface{})
+			postmap["event"] = evt
+			path := ""
+
+			var s3Config struct {
+				Enabled       string `db:"s3_enabled"`
+				MediaDelivery string `db:"media_delivery"`
+			}
+
+			myuserinfo, found := userinfocache.Get(mycli.token)
 		if !found {
 			err := mycli.db.Get(&s3Config, "SELECT CASE WHEN s3_enabled = 1 THEN 'true' ELSE 'false' END AS s3_enabled, media_delivery FROM users WHERE id = $1", txtid)
 			if err != nil {
@@ -1397,6 +1399,9 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 				log.Debug().Str("messageType", messageType).Str("messageID", evt.Info.ID).Msg("Skipping empty message from history")
 			}
 		}
+			sendEventWithWebHook(mycli, postmap, path)
+		}(evt)
+		return
 	case *events.Receipt:
 		postmap["type"] = "ReadReceipt"
 		dowebhook = 1
