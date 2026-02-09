@@ -1436,9 +1436,15 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 		postmap["type"] = "HistorySync"
 		dowebhook = 1
 
-		// Save HistorySync messages to message_history table
-		if evt.Data != nil && evt.Data.Conversations != nil {
+		// Save HistorySync messages to message_history table only if user has history enabled
+		var historyLimitSync int
+		if userinfoSync, foundSync := userinfocache.Get(mycli.token); foundSync {
+			historyStrSync := userinfoSync.(Values).Get("History")
+			historyLimitSync, _ = strconv.Atoi(historyStrSync)
+		}
+		if evt.Data != nil && evt.Data.Conversations != nil && historyLimitSync > 0 {
 			go func() {
+				historyLimit := historyLimitSync // capture for goroutine
 
 				// Get the account owner's JID for messages sent by the instance
 				accountOwnerJID := ""
@@ -1689,6 +1695,10 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 								savedCount++
 							}
 						}
+					}
+					// Trim this chat's history to user's limit
+					if err := mycli.s.trimMessageHistory(mycli.userID, chatJID.String(), historyLimit); err != nil {
+						log.Warn().Err(err).Str("chatJID", chatJID.String()).Msg("Failed to trim message history after HistorySync")
 					}
 				}
 
