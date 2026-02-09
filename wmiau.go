@@ -1257,8 +1257,7 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 
 		}
 
-		// Save message to history regardless of skipMedia setting
-		// Get user's history setting from cache
+		// Save message to history only when user.history > 0 (never save when <= 0)
 		var historyLimit int
 		userinfo, found := userinfocache.Get(mycli.token)
 		if found {
@@ -1268,8 +1267,9 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 			log.Warn().Str("userID", mycli.userID).Msg("User info not found in cache, skipping history")
 			historyLimit = 0
 		}
-
-		if historyLimit > 0 {
+		if historyLimit <= 0 {
+			// Do not save to history when user.history is disabled or invalid
+		} else {
 			messageType := "text"
 			textContent := ""
 			mediaLink := ""
@@ -1397,7 +1397,6 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 				log.Debug().Str("messageType", messageType).Str("messageID", evt.Info.ID).Msg("Skipping empty message from history")
 			}
 		}
-
 	case *events.Receipt:
 		postmap["type"] = "ReadReceipt"
 		dowebhook = 1
@@ -1436,8 +1435,8 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 		postmap["type"] = "HistorySync"
 		dowebhook = 1
 
-		// Save HistorySync messages to message_history table only if user has history enabled
-		var historyLimitSync int
+		// Save HistorySync to message_history only when user.history > 0; never save when <= 0
+		historyLimitSync := 0
 		if userinfoSync, foundSync := userinfocache.Get(mycli.token); foundSync {
 			historyStrSync := userinfoSync.(Values).Get("History")
 			historyLimitSync, _ = strconv.Atoi(historyStrSync)
