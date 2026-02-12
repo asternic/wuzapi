@@ -28,6 +28,7 @@ func (s *server) routes() {
 	}
 	if *logType == "json" {
 		routerLog = zerolog.New(logOutput).
+			Level(zerolog.ErrorLevel).
 			With().
 			Timestamp().
 			Str("role", filepath.Base(os.Args[0])).
@@ -40,6 +41,7 @@ func (s *server) routes() {
 			NoColor:    !*colorOutput,
 		}
 		routerLog = zerolog.New(output).
+			Level(zerolog.ErrorLevel).
 			With().
 			Timestamp().
 			Str("role", filepath.Base(os.Args[0])).

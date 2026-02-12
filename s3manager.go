@@ -214,7 +214,6 @@ func (m *S3Manager) UploadToS3(ctx context.Context, userID string, key string, d
 		Body:         bytes.NewReader(data),
 		ContentType:  aws.String(contentType),
 		CacheControl: aws.String("public, max-age=3600"),
-		ACL:          types.ObjectCannedACLPublicRead,
 	}
 
 	if expires != nil {
@@ -241,9 +240,10 @@ func (m *S3Manager) GetPublicURL(userID, key string) string {
 		return ""
 	}
 
-	// Use custom public URL if configured
+	// Use custom public URL if configured (e.g. CloudFront). Bucket is not appended;
+	// for backends that need it (e.g. MinIO), include the bucket in s3_public_url.
 	if config.PublicURL != "" {
-		return fmt.Sprintf("%s/%s/%s", strings.TrimRight(config.PublicURL, "/"), config.Bucket, key)
+		return fmt.Sprintf("%s/%s", strings.TrimRight(config.PublicURL, "/"), key)
 	}
 
 	// Generate standard S3 URL

@@ -238,6 +238,7 @@ func main() {
 
 	if *logType == "json" {
 		log.Logger = zerolog.New(logOutput).
+			Level(zerolog.ErrorLevel).
 			With().
 			Timestamp().
 			Str("role", filepath.Base(os.Args[0])).
@@ -269,6 +270,7 @@ func main() {
 		}
 
 		log.Logger = zerolog.New(output).
+			Level(zerolog.ErrorLevel).
 			With().
 			Timestamp().
 			Str("role", filepath.Base(os.Args[0])).
