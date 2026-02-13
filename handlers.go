@@ -4590,10 +4590,17 @@ func (s *server) SetGroupPhoto() http.HandlerFunc {
 			return
 		}
 
-		group, ok := parseJID(t.GroupJID)
-		if !ok {
-			s.Respond(w, r, http.StatusBadRequest, errors.New("could not parse Group JID"))
-			return
+		var group types.JID
+		if strings.TrimSpace(t.GroupJID) == "" {
+			// JID vazio = alterar foto do perfil do usuário (conforme whatsmeow: SetGroupPhoto com empty jid)
+			group = types.EmptyJID
+		} else {
+			var ok bool
+			group, ok = parseJID(t.GroupJID)
+			if !ok {
+				s.Respond(w, r, http.StatusBadRequest, errors.New("could not parse Group JID"))
+				return
+			}
 		}
 
 		if t.Image == "" {
@@ -4638,7 +4645,11 @@ func (s *server) SetGroupPhoto() http.HandlerFunc {
 			return
 		}
 
-		response := map[string]interface{}{"Details": "Group Photo set successfully", "PictureID": picture_id}
+		detailMsg := "Group Photo set successfully"
+		if group == types.EmptyJID {
+			detailMsg = "Profile photo set successfully"
+		}
+		response := map[string]interface{}{"Details": detailMsg, "PictureID": picture_id}
 		responseJson, err := json.Marshal(response)
 
 		if err != nil {
