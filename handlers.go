@@ -4396,10 +4396,17 @@ func (s *server) RemoveGroupPhoto() http.HandlerFunc {
 			return
 		}
 
-		group, ok := parseJID(t.GroupJID)
-		if !ok {
-			s.Respond(w, r, http.StatusBadRequest, errors.New("could not parse Group JID"))
-			return
+		var group types.JID
+		if strings.TrimSpace(t.GroupJID) == "" {
+			// JID vazio = remover foto do perfil do usuário (conforme whatsmeow: SetGroupPhoto com empty jid e nil)
+			group = types.EmptyJID
+		} else {
+			var ok bool
+			group, ok = parseJID(t.GroupJID)
+			if !ok {
+				s.Respond(w, r, http.StatusBadRequest, errors.New("could not parse Group JID"))
+				return
+			}
 		}
 
 		_, err = clientManager.GetWhatsmeowClient(txtid).SetGroupPhoto(context.Background(), group, nil)
@@ -4411,7 +4418,11 @@ func (s *server) RemoveGroupPhoto() http.HandlerFunc {
 			return
 		}
 
-		response := map[string]interface{}{"Details": "Group Photo removed successfully"}
+		detailMsg := "Group Photo removed successfully"
+		if group == types.EmptyJID {
+			detailMsg = "Profile photo removed successfully"
+		}
+		response := map[string]interface{}{"Details": detailMsg}
 		responseJson, err := json.Marshal(response)
 
 		if err != nil {
