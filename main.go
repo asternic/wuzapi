@@ -379,6 +379,9 @@ func main() {
 		}
 	}()
 
+	// Set DB reference in S3Manager for lazy client initialization
+	GetS3Manager().SetDB(db)
+
 	// Initialize the schema
 	if err = initializeSchema(db); err != nil {
 		log.Fatal().Err(err).Msg("Failed to initialize schema")
