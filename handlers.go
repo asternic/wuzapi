@@ -2508,11 +2508,16 @@ func (s *server) SendMessage() http.HandlerFunc {
 		QuotedMessage *waE2E.Message  `json:"QuotedMessage,omitempty"`
 	}
 	return func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+		log.Info().Str("elapsed_ms", "0").Msg("SendMessage: início do handler")
+
 		txtid := r.Context().Value("userinfo").(Values).Get("Id")
 		if clientManager.GetWhatsmeowClient(txtid) == nil {
 			s.Respond(w, r, http.StatusInternalServerError, errors.New("no session"))
 			return
 		}
+		log.Info().Int64("elapsed_ms", time.Since(start).Milliseconds()).Msg("SendMessage: client obtido")
+
 		msgid := ""
 		var resp whatsmeow.SendResponse
 		decoder := json.NewDecoder(r.Body)
@@ -2522,6 +2527,8 @@ func (s *server) SendMessage() http.HandlerFunc {
 			s.Respond(w, r, http.StatusBadRequest, errors.New("could not decode Payload"))
 			return
 		}
+		log.Info().Int64("elapsed_ms", time.Since(start).Milliseconds()).Msg("SendMessage: payload JSON decodificado")
+
 		if t.Phone == "" {
 			s.Respond(w, r, http.StatusBadRequest, errors.New("missing Phone in Payload"))
 			return
@@ -2536,11 +2543,15 @@ func (s *server) SendMessage() http.HandlerFunc {
 			s.Respond(w, r, http.StatusBadRequest, err)
 			return
 		}
+		log.Info().Int64("elapsed_ms", time.Since(start).Milliseconds()).Str("phone", t.Phone).Msg("SendMessage: campos validados")
+
 		if t.Id == "" {
 			msgid = clientManager.GetWhatsmeowClient(txtid).GenerateMessageID()
 		} else {
 			msgid = t.Id
 		}
+		log.Info().Int64("elapsed_ms", time.Since(start).Milliseconds()).Str("msgid", msgid).Msg("SendMessage: message ID definido")
+
 		var (
 			url         string
 			title       string
@@ -2550,8 +2561,12 @@ func (s *server) SendMessage() http.HandlerFunc {
 		if t.LinkPreview {
 			url = extractFirstURL(t.Body)
 			if url != "" {
+				linkPreviewStart := time.Now()
 				title, description, imageData = getOpenGraphData(r.Context(), url, txtid)
+				log.Info().Int64("elapsed_ms", time.Since(start).Milliseconds()).Int64("link_preview_ms", time.Since(linkPreviewStart).Milliseconds()).Str("url", url).Msg("SendMessage: OpenGraph/link preview obtido")
 			}
+		} else {
+			log.Info().Int64("elapsed_ms", time.Since(start).Milliseconds()).Msg("SendMessage: link preview desabilitado, montando mensagem")
 		}
 		msg := &waE2E.Message{
 			ExtendedTextMessage: &waE2E.ExtendedTextMessage{
@@ -2598,22 +2613,29 @@ func (s *server) SendMessage() http.HandlerFunc {
 			}
 			msg.ExtendedTextMessage.ContextInfo.IsForwarded = proto.Bool(true)
 		}
+		log.Info().Int64("elapsed_ms", time.Since(start).Milliseconds()).Str("msgid", msgid).Msg("SendMessage: chamando whatsmeow.SendMessage")
+		sendStart := time.Now()
 		resp, err = clientManager.GetWhatsmeowClient(txtid).SendMessage(context.Background(), recipient, msg, whatsmeow.SendRequestExtra{ID: msgid})
 		if err != nil {
 			s.Respond(w, r, http.StatusInternalServerError, errors.New(fmt.Sprintf("error sending message: %v", err)))
 			return
 		}
+		log.Info().Int64("elapsed_ms", time.Since(start).Milliseconds()).Int64("send_ms", time.Since(sendStart).Milliseconds()).Str("msgid", msgid).Msg("SendMessage: mensagem enviada ao WhatsApp")
+
 		historyStr := r.Context().Value("userinfo").(Values).Get("History")
 		historyLimit, _ := strconv.Atoi(historyStr)
 		if historyLimit > 0 {
+			historyStart := time.Now()
 			s.saveOutgoingMessageToHistory(txtid, recipient.String(), msgid, "text", t.Body, "", historyLimit)
+			log.Info().Int64("elapsed_ms", time.Since(start).Milliseconds()).Int64("history_ms", time.Since(historyStart).Milliseconds()).Msg("SendMessage: histórico salvo")
 		}
-		log.Info().Str("timestamp", fmt.Sprintf("%v", resp.Timestamp)).Str("id", msgid).Msg("Message sent")
+		log.Info().Int64("elapsed_ms", time.Since(start).Milliseconds()).Str("timestamp", fmt.Sprintf("%v", resp.Timestamp)).Str("id", msgid).Msg("SendMessage: Message sent")
 		response := map[string]interface{}{"Details": "Sent", "Timestamp": resp.Timestamp.Unix(), "Id": msgid}
 		responseJson, err := json.Marshal(response)
 		if err != nil {
 			s.Respond(w, r, http.StatusInternalServerError, err)
 		} else {
+			log.Info().Int64("elapsed_ms", time.Since(start).Milliseconds()).Msg("SendMessage: respondendo ao cliente")
 			s.Respond(w, r, http.StatusOK, string(responseJson))
 		}
 		return

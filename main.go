@@ -81,6 +81,24 @@ var privateIPBlocks []*net.IPNet
 
 const version = "1.0.6"
 
+// parseLogLevel interpreta WUZAPI_LOG_LEVEL (trace, debug, info, warn, error). Padrão: error.
+func parseLogLevel(s string) zerolog.Level {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "trace":
+		return zerolog.TraceLevel
+	case "debug":
+		return zerolog.DebugLevel
+	case "info":
+		return zerolog.InfoLevel
+	case "warn", "warning":
+		return zerolog.WarnLevel
+	case "error", "":
+		return zerolog.ErrorLevel
+	default:
+		return zerolog.ErrorLevel
+	}
+}
+
 func newSafeHTTPClient() *http.Client {
 	return &http.Client{
 		Timeout: 60 * time.Second,
@@ -236,9 +254,11 @@ func main() {
 		logOutput = os.Stderr
 	}
 
+	logLevel := parseLogLevel(os.Getenv("WUZAPI_LOG_LEVEL"))
+
 	if *logType == "json" {
 		log.Logger = zerolog.New(logOutput).
-			Level(zerolog.ErrorLevel).
+			Level(logLevel).
 			With().
 			Timestamp().
 			Str("role", filepath.Base(os.Args[0])).
@@ -270,7 +290,7 @@ func main() {
 		}
 
 		log.Logger = zerolog.New(output).
-			Level(zerolog.ErrorLevel).
+			Level(logLevel).
 			With().
 			Timestamp().
 			Str("role", filepath.Base(os.Args[0])).
