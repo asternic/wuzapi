@@ -72,5 +72,3 @@ require (
 	golang.org/x/sys v0.41.0 // indirect
 	rsc.io/qr v0.2.0 // indirect
 )
-
-replace go.mau.fi/whatsmeow => github.com/zapperapi/whatsmeow v0.0.0-20260211193157-7b33f6289f98
