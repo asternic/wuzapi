@@ -1484,6 +1484,9 @@ func (s *server) SendVideo() http.HandlerFunc {
 		Id            string
 		JPEGThumbnail []byte
 		MimeType      string
+		Seconds       uint32 `json:"Seconds,omitempty"`
+		Width         uint32 `json:"Width,omitempty"`
+		Height        uint32 `json:"Height,omitempty"`
 		ContextInfo   waE2E.ContextInfo
 		QuotedMessage *waE2E.Message `json:"QuotedMessage,omitempty"`
 	}
@@ -1571,6 +1574,19 @@ func (s *server) SendVideo() http.HandlerFunc {
 			return
 		}
 
+		// Extract video metadata (duration, dimensions) via ffprobe.
+		// If caller provided Seconds/Width/Height in payload, those take priority.
+		videoMeta := getVideoMetadata(filedata)
+		if t.Seconds > 0 {
+			videoMeta.DurationSeconds = t.Seconds
+		}
+		if t.Width > 0 {
+			videoMeta.Width = t.Width
+		}
+		if t.Height > 0 {
+			videoMeta.Height = t.Height
+		}
+
 		msg := &waE2E.Message{VideoMessage: &waE2E.VideoMessage{
 			Caption:    proto.String(t.Caption),
 			URL:        proto.String(uploaded.URL),
@@ -1586,6 +1602,9 @@ func (s *server) SendVideo() http.HandlerFunc {
 			FileSHA256:    uploaded.FileSHA256,
 			FileLength:    proto.Uint64(uint64(len(filedata))),
 			JPEGThumbnail: t.JPEGThumbnail,
+			Seconds:       proto.Uint32(videoMeta.DurationSeconds),
+			Width:         proto.Uint32(videoMeta.Width),
+			Height:        proto.Uint32(videoMeta.Height),
 		}}
 
 		if t.ContextInfo.StanzaID != nil {
