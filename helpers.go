@@ -23,6 +23,7 @@ import (
 	"os/exec"
 	"regexp"
 	"runtime/debug"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -770,6 +771,81 @@ func runFFmpegConversion(input []byte, inputExt string, ffmpegArgs func(inPath, 
 	}
 
 	return os.ReadFile(outPath)
+}
+
+// VideoMetadata holds extracted video properties (duration, dimensions).
+type VideoMetadata struct {
+	DurationSeconds uint32
+	Width           uint32
+	Height          uint32
+}
+
+// getVideoMetadata uses ffprobe to extract duration, width, and height from video data.
+// Returns zero values if extraction fails (graceful degradation).
+func getVideoMetadata(filedata []byte) VideoMetadata {
+	meta := VideoMetadata{}
+
+	cmd := exec.Command("ffprobe",
+		"-v", "quiet",
+		"-print_format", "json",
+		"-show_format",
+		"-show_streams",
+		"-select_streams", "v:0",
+		"-i", "-",
+	)
+	cmd.Stdin = bytes.NewReader(filedata)
+
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	if err := cmd.Run(); err != nil {
+		log.Warn().Err(err).Str("stderr", stderr.String()).Msg("getVideoMetadata: ffprobe failed")
+		return meta
+	}
+
+	var probeResult struct {
+		Streams []struct {
+			Width    int    `json:"width"`
+			Height   int    `json:"height"`
+			Duration string `json:"duration"`
+		} `json:"streams"`
+		Format struct {
+			Duration string `json:"duration"`
+		} `json:"format"`
+	}
+
+	if err := json.Unmarshal(stdout.Bytes(), &probeResult); err != nil {
+		log.Warn().Err(err).Msg("getVideoMetadata: failed to parse ffprobe output")
+		return meta
+	}
+
+	var durationStr string
+	if len(probeResult.Streams) > 0 {
+		stream := probeResult.Streams[0]
+		meta.Width = uint32(stream.Width)
+		meta.Height = uint32(stream.Height)
+		durationStr = stream.Duration
+	}
+
+	// Fallback to format-level duration if stream duration was not available
+	if durationStr == "" && probeResult.Format.Duration != "" {
+		durationStr = probeResult.Format.Duration
+	}
+
+	if durationStr != "" {
+		if dur, err := strconv.ParseFloat(durationStr, 64); err == nil && dur > 0 {
+			meta.DurationSeconds = uint32(dur + 0.5)
+		}
+	}
+
+	log.Debug().
+		Uint32("duration", meta.DurationSeconds).
+		Uint32("width", meta.Width).
+		Uint32("height", meta.Height).
+		Msg("getVideoMetadata: extracted video metadata")
+
+	return meta
 }
 
 func convertVideoStickerToWebP(input []byte) ([]byte, error) {
