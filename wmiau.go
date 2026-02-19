@@ -839,6 +839,7 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 			// try to get Image if any
 			img := evt.Message.GetImageMessage()
 			if img != nil {
+				func() {
 				// Create a temporary directory in /tmp
 				tmpDirectory := filepath.Join("/tmp", "user_"+txtid)
 				errDir := os.MkdirAll(tmpDirectory, 0751)
@@ -916,11 +917,13 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 				} else {
 					log.Info().Str("path", tmpPath).Msg("Temporary file deleted")
 				}
+				}()
 			}
 
 			// try to get Audio if any
 			audio := evt.Message.GetAudioMessage()
 			if audio != nil {
+				func() {
 				// Create a temporary directory in /tmp
 				tmpDirectory := filepath.Join("/tmp", "user_"+txtid)
 				errDir := os.MkdirAll(tmpDirectory, 0751)
@@ -1004,11 +1007,13 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 				} else {
 					log.Info().Str("path", tmpPath).Msg("Temporary file deleted")
 				}
+				}()
 			}
 
 			// try to get Document if any
 			document := evt.Message.GetDocumentMessage()
 			if document != nil {
+				func() {
 				// Create a temporary directory in /tmp
 				tmpDirectory := filepath.Join("/tmp", "user_"+txtid)
 				errDir := os.MkdirAll(tmpDirectory, 0751)
@@ -1097,11 +1102,13 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 				} else {
 					log.Info().Str("path", tmpPath).Msg("Temporary file deleted")
 				}
+				}()
 			}
 
 			// try to get Video if any
 			video := evt.Message.GetVideoMessage()
 			if video != nil {
+				func() {
 				// Create a temporary directory in /tmp
 				tmpDirectory := filepath.Join("/tmp", "user_"+txtid)
 				errDir := os.MkdirAll(tmpDirectory, 0751)
@@ -1179,10 +1186,12 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 				} else {
 					log.Info().Str("path", tmpPath).Msg("Temporary file deleted")
 				}
+				}()
 			}
 
 			sticker := evt.Message.GetStickerMessage()
 			if sticker != nil {
+				func() {
 				tmpDirectory := filepath.Join("/tmp", "user_"+txtid)
 				errDir := os.MkdirAll(tmpDirectory, 0751)
 				if errDir != nil {
@@ -1253,6 +1262,7 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 				if err := os.Remove(tmpPath); err != nil {
 					log.Error().Err(err).Msg("Failed to delete temporary file")
 				}
+				}()
 			}
 
 		}
