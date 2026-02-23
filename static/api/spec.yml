@@ -841,6 +841,49 @@ paths:
             application/json:
               schema:
                 example: { "code": 200, "data": { "5491122223333@s.whatsapp.net": { "BusinessName": "", "FirstName": "", "Found": true, "FullName": "", "PushName": "FOP2" }, "549113334444@s.whatsapp.net": { "BusinessName": "", "FirstName": "", "Found": true, "FullName": "", "PushName": "Asternic" } } }
+  /user/parse-lid:
+    post:
+      tags:
+        - User
+      summary: Resolve PN from LID
+      description: |
+        Receives a **LID** in the format `1234567890@lid`, looks it up in the internal `whatsmeow_lid_map` table,
+        and returns the corresponding phone number (**PN**) in WhatsApp JID format (`551234567890@s.whatsapp.net`).
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                lid:
+                  type: string
+                  example: "1234567890@lid"
+                  description: LID to be resolved. The `@lid` suffix is optional.
+              required:
+                - lid
+      responses:
+        200:
+          description: PN successfully resolved from LID
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  pn:
+                    type: string
+                    example: "551234567890@s.whatsapp.net"
+                    description: Phone number in WhatsApp JID format
+        400:
+          description: Invalid payload or missing `lid`
+        401:
+          description: Invalid or missing token
+        404:
+          description: No mapping found for the provided LID
+        500:
+          description: Internal error when querying the mapping table
   /user/lid/{phone}:
     get:
       tags:

@@ -6686,6 +6686,62 @@ func (s *server) GetUserLID() http.HandlerFunc {
 	}
 }
 
+// ParseLID recebe um LID completo e retorna o PN correspondente
+func (s *server) ParseLID() http.HandlerFunc {
+	type parseLIDRequest struct {
+		LID string `json:"lid"`
+	}
+
+	return func(w http.ResponseWriter, r *http.Request) {
+		var payload parseLIDRequest
+
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			s.Respond(w, r, http.StatusBadRequest, errors.New("could not decode payload"))
+			return
+		}
+
+		lidValue := strings.TrimSpace(payload.LID)
+		if lidValue == "" {
+			s.Respond(w, r, http.StatusBadRequest, errors.New("missing lid in payload"))
+			return
+		}
+
+		// Remove o sufixo @lid, se presente
+		lidNoSuffix := strings.TrimSuffix(lidValue, "@lid")
+
+		// Monta a query levando em conta o driver (Postgres/SQLite)
+		query := "SELECT pn FROM whatsmeow_lid_map WHERE lid = $1"
+		if s.db.DriverName() == "sqlite" {
+			query = "SELECT pn FROM whatsmeow_lid_map WHERE lid = ?"
+		}
+
+		var pn string
+		err := s.db.QueryRow(query, lidNoSuffix).Scan(&pn)
+		if err != nil {
+			if err == sql.ErrNoRows {
+				s.Respond(w, r, http.StatusNotFound, errors.New("no mapping found for provided lid"))
+				return
+			}
+			s.Respond(w, r, http.StatusInternalServerError, errors.New(fmt.Sprintf("failed to query lid map: %v", err)))
+			return
+		}
+
+		pnWithSuffix := pn + "@s.whatsapp.net"
+
+		response := map[string]interface{}{
+			"pn": pnWithSuffix,
+		}
+
+		responseJson, err := json.Marshal(response)
+		if err != nil {
+			s.Respond(w, r, http.StatusInternalServerError, err)
+			return
+		}
+
+		s.Respond(w, r, http.StatusOK, string(responseJson))
+	}
+}
+
 // RequestUnavailableMessage requests a copy of a message that couldn't be decrypted
 func (s *server) RequestUnavailableMessage() http.HandlerFunc {
 
