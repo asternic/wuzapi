@@ -15,7 +15,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 COPY go.mod go.sum ./
-ENV GOTOOLCHAIN=auto
 RUN go mod download
 
 COPY . .
