@@ -901,7 +901,11 @@ func (s *server) SendDocument() http.HandlerFunc {
 				return
 			} else {
 				filedata = dataURL.Data
-				uploaded, err = clientManager.GetWhatsmeowClient(txtid).Upload(context.Background(), filedata, whatsmeow.MediaDocument)
+				if isNewsletterJID(recipient) {
+					uploaded, err = clientManager.GetWhatsmeowClient(txtid).UploadNewsletter(context.Background(), filedata, whatsmeow.MediaDocument)
+				} else {
+					uploaded, err = clientManager.GetWhatsmeowClient(txtid).Upload(context.Background(), filedata, whatsmeow.MediaDocument)
+				}
 				if err != nil {
 					s.Respond(w, r, http.StatusInternalServerError, errors.New(fmt.Sprintf("failed to upload file: %v", err)))
 					return
@@ -912,22 +916,25 @@ func (s *server) SendDocument() http.HandlerFunc {
 			return
 		}
 
-		msg := &waE2E.Message{DocumentMessage: &waE2E.DocumentMessage{
+		docMsg := &waE2E.DocumentMessage{
 			URL:        proto.String(uploaded.URL),
 			FileName:   &t.FileName,
 			DirectPath: proto.String(uploaded.DirectPath),
-			MediaKey:   uploaded.MediaKey,
 			Mimetype: proto.String(func() string {
 				if t.MimeType != "" {
 					return t.MimeType
 				}
 				return http.DetectContentType(filedata)
 			}()),
-			FileEncSHA256: uploaded.FileEncSHA256,
-			FileSHA256:    uploaded.FileSHA256,
-			FileLength:    proto.Uint64(uint64(len(filedata))),
-			Caption:       proto.String(t.Caption),
-		}}
+			FileSHA256: uploaded.FileSHA256,
+			FileLength: proto.Uint64(uint64(len(filedata))),
+			Caption:    proto.String(t.Caption),
+		}
+		if !isNewsletterJID(recipient) {
+			docMsg.MediaKey = uploaded.MediaKey
+			docMsg.FileEncSHA256 = uploaded.FileEncSHA256
+		}
+		msg := &waE2E.Message{DocumentMessage: docMsg}
 
 		if t.ContextInfo.StanzaID != nil {
 			var qm *waE2E.Message
@@ -962,7 +969,11 @@ func (s *server) SendDocument() http.HandlerFunc {
 			msg.DocumentMessage.ContextInfo.IsForwarded = proto.Bool(true)
 		}
 
-		resp, err = clientManager.GetWhatsmeowClient(txtid).SendMessage(context.Background(), recipient, msg, whatsmeow.SendRequestExtra{ID: msgid})
+		sendExtra := whatsmeow.SendRequestExtra{ID: msgid}
+		if isNewsletterJID(recipient) {
+			sendExtra.MediaHandle = uploaded.Handle
+		}
+		resp, err = clientManager.GetWhatsmeowClient(txtid).SendMessage(context.Background(), recipient, msg, sendExtra)
 		if err != nil {
 			s.Respond(w, r, http.StatusInternalServerError, errors.New(fmt.Sprintf("Error sending message: %v", err)))
 			return
@@ -1054,7 +1065,11 @@ func (s *server) SendAudio() http.HandlerFunc {
 				return
 			} else {
 				filedata = dataURL.Data
-				uploaded, err = clientManager.GetWhatsmeowClient(txtid).Upload(context.Background(), filedata, whatsmeow.MediaAudio)
+				if isNewsletterJID(recipient) {
+					uploaded, err = clientManager.GetWhatsmeowClient(txtid).UploadNewsletter(context.Background(), filedata, whatsmeow.MediaAudio)
+				} else {
+					uploaded, err = clientManager.GetWhatsmeowClient(txtid).Upload(context.Background(), filedata, whatsmeow.MediaAudio)
+				}
 				if err != nil {
 					s.Respond(w, r, http.StatusInternalServerError, errors.New(fmt.Sprintf("failed to upload file: %v", err)))
 					return
@@ -1084,18 +1099,21 @@ func (s *server) SendAudio() http.HandlerFunc {
 			}
 		}
 
-		msg := &waE2E.Message{AudioMessage: &waE2E.AudioMessage{
-			URL:           proto.String(uploaded.URL),
-			DirectPath:    proto.String(uploaded.DirectPath),
-			MediaKey:      uploaded.MediaKey,
-			Mimetype:      &mime,
-			FileEncSHA256: uploaded.FileEncSHA256,
-			FileSHA256:    uploaded.FileSHA256,
-			FileLength:    proto.Uint64(uint64(len(filedata))),
-			PTT:           &ptt,
-			Seconds:       proto.Uint32(t.Seconds),
-			Waveform:      t.Waveform,
-		}}
+		audioMsg := &waE2E.AudioMessage{
+			URL:        proto.String(uploaded.URL),
+			DirectPath: proto.String(uploaded.DirectPath),
+			Mimetype:   &mime,
+			FileSHA256: uploaded.FileSHA256,
+			FileLength: proto.Uint64(uint64(len(filedata))),
+			PTT:        &ptt,
+			Seconds:    proto.Uint32(t.Seconds),
+			Waveform:   t.Waveform,
+		}
+		if !isNewsletterJID(recipient) {
+			audioMsg.MediaKey = uploaded.MediaKey
+			audioMsg.FileEncSHA256 = uploaded.FileEncSHA256
+		}
+		msg := &waE2E.Message{AudioMessage: audioMsg}
 
 		if t.ContextInfo.StanzaID != nil {
 			var qm *waE2E.Message
@@ -1130,7 +1148,11 @@ func (s *server) SendAudio() http.HandlerFunc {
 			msg.AudioMessage.ContextInfo.IsForwarded = proto.Bool(true)
 		}
 
-		resp, err = clientManager.GetWhatsmeowClient(txtid).SendMessage(context.Background(), recipient, msg, whatsmeow.SendRequestExtra{ID: msgid})
+		sendExtra := whatsmeow.SendRequestExtra{ID: msgid}
+		if isNewsletterJID(recipient) {
+			sendExtra.MediaHandle = uploaded.Handle
+		}
+		resp, err = clientManager.GetWhatsmeowClient(txtid).SendMessage(context.Background(), recipient, msg, sendExtra)
 		if err != nil {
 			s.Respond(w, r, http.StatusInternalServerError, errors.New(fmt.Sprintf("Error sending message: %v", err)))
 			return
@@ -1243,7 +1265,11 @@ func (s *server) SendImage() http.HandlerFunc {
 			return
 		}
 
-		uploaded, err = clientManager.GetWhatsmeowClient(txtid).Upload(context.Background(), filedata, whatsmeow.MediaImage)
+		if isNewsletterJID(recipient) {
+			uploaded, err = clientManager.GetWhatsmeowClient(txtid).UploadNewsletter(context.Background(), filedata, whatsmeow.MediaImage)
+		} else {
+			uploaded, err = clientManager.GetWhatsmeowClient(txtid).Upload(context.Background(), filedata, whatsmeow.MediaImage)
+		}
 		if err != nil {
 			s.Respond(w, r, http.StatusInternalServerError, errors.New(fmt.Sprintf("failed to upload file: %v", err)))
 			return
@@ -1279,22 +1305,25 @@ func (s *server) SendImage() http.HandlerFunc {
 			return
 		}
 
-		msg := &waE2E.Message{ImageMessage: &waE2E.ImageMessage{
-			Caption:    proto.String(t.Caption),
-			URL:        proto.String(uploaded.URL),
-			DirectPath: proto.String(uploaded.DirectPath),
-			MediaKey:   uploaded.MediaKey,
+		imageMsg := &waE2E.ImageMessage{
+			Caption:       proto.String(t.Caption),
+			URL:           proto.String(uploaded.URL),
+			DirectPath:    proto.String(uploaded.DirectPath),
 			Mimetype: proto.String(func() string {
 				if t.MimeType != "" {
 					return t.MimeType
 				}
 				return http.DetectContentType(filedata)
 			}()),
-			FileEncSHA256: uploaded.FileEncSHA256,
 			FileSHA256:    uploaded.FileSHA256,
 			FileLength:    proto.Uint64(uint64(len(filedata))),
 			JPEGThumbnail: thumbnailBytes,
-		}}
+		}
+		if !isNewsletterJID(recipient) {
+			imageMsg.MediaKey = uploaded.MediaKey
+			imageMsg.FileEncSHA256 = uploaded.FileEncSHA256
+		}
+		msg := &waE2E.Message{ImageMessage: imageMsg}
 
 		if t.ContextInfo.StanzaID != nil {
 			var qm *waE2E.Message
@@ -1330,7 +1359,11 @@ func (s *server) SendImage() http.HandlerFunc {
 			msg.ImageMessage.ContextInfo.IsForwarded = proto.Bool(true)
 		}
 
-		resp, err = clientManager.GetWhatsmeowClient(txtid).SendMessage(context.Background(), recipient, msg, whatsmeow.SendRequestExtra{ID: msgid})
+		sendExtra := whatsmeow.SendRequestExtra{ID: msgid}
+		if isNewsletterJID(recipient) {
+			sendExtra.MediaHandle = uploaded.Handle
+		}
+		resp, err = clientManager.GetWhatsmeowClient(txtid).SendMessage(context.Background(), recipient, msg, sendExtra)
 		if err != nil {
 			s.Respond(w, r, http.StatusInternalServerError, errors.New(fmt.Sprintf("Error sending message: %v", err)))
 			return
@@ -1527,22 +1560,30 @@ func (s *server) SendSticker() http.HandlerFunc {
 			return
 		}
 
-		uploaded, err := clientManager.GetWhatsmeowClient(txtid).Upload(context.Background(), processedData, whatsmeow.MediaImage)
+		var uploaded whatsmeow.UploadResponse
+		if isNewsletterJID(recipient) {
+			uploaded, err = clientManager.GetWhatsmeowClient(txtid).UploadNewsletter(context.Background(), processedData, whatsmeow.MediaImage)
+		} else {
+			uploaded, err = clientManager.GetWhatsmeowClient(txtid).Upload(context.Background(), processedData, whatsmeow.MediaImage)
+		}
 		if err != nil {
 			s.Respond(w, r, http.StatusInternalServerError, errors.New(fmt.Sprintf("Failed to upload file: %v", err)))
 			return
 		}
 
-		msg := &waE2E.Message{StickerMessage: &waE2E.StickerMessage{
+		stickerMsg := &waE2E.StickerMessage{
 			URL:           proto.String(uploaded.URL),
 			DirectPath:    proto.String(uploaded.DirectPath),
-			MediaKey:      uploaded.MediaKey,
 			Mimetype:      proto.String(detectedMimeType),
-			FileEncSHA256: uploaded.FileEncSHA256,
 			FileSHA256:    uploaded.FileSHA256,
 			FileLength:    proto.Uint64(uint64(len(processedData))),
 			PngThumbnail:  t.PngThumbnail,
-		}}
+		}
+		if !isNewsletterJID(recipient) {
+			stickerMsg.MediaKey = uploaded.MediaKey
+			stickerMsg.FileEncSHA256 = uploaded.FileEncSHA256
+		}
+		msg := &waE2E.Message{StickerMessage: stickerMsg}
 
 		if t.ContextInfo.StanzaID != nil {
 			var qm *waE2E.Message
@@ -1577,7 +1618,11 @@ func (s *server) SendSticker() http.HandlerFunc {
 			msg.StickerMessage.ContextInfo.IsForwarded = proto.Bool(true)
 		}
 
-		resp, err = clientManager.GetWhatsmeowClient(txtid).SendMessage(context.Background(), recipient, msg, whatsmeow.SendRequestExtra{ID: msgid})
+		sendExtra := whatsmeow.SendRequestExtra{ID: msgid}
+		if isNewsletterJID(recipient) {
+			sendExtra.MediaHandle = uploaded.Handle
+		}
+		resp, err = clientManager.GetWhatsmeowClient(txtid).SendMessage(context.Background(), recipient, msg, sendExtra)
 		if err != nil {
 			s.Respond(w, r, http.StatusInternalServerError, errors.New(fmt.Sprintf("Error sending message: %v", err)))
 			return
@@ -1692,28 +1737,35 @@ func (s *server) SendVideo() http.HandlerFunc {
 			return
 		}
 
-		uploaded, err = clientManager.GetWhatsmeowClient(txtid).Upload(context.Background(), filedata, whatsmeow.MediaVideo)
+		if isNewsletterJID(recipient) {
+			uploaded, err = clientManager.GetWhatsmeowClient(txtid).UploadNewsletter(context.Background(), filedata, whatsmeow.MediaVideo)
+		} else {
+			uploaded, err = clientManager.GetWhatsmeowClient(txtid).Upload(context.Background(), filedata, whatsmeow.MediaVideo)
+		}
 		if err != nil {
 			s.Respond(w, r, http.StatusInternalServerError, errors.New(fmt.Sprintf("failed to upload file: %v", err)))
 			return
 		}
 
-		msg := &waE2E.Message{VideoMessage: &waE2E.VideoMessage{
+		videoMsg := &waE2E.VideoMessage{
 			Caption:    proto.String(t.Caption),
 			URL:        proto.String(uploaded.URL),
 			DirectPath: proto.String(uploaded.DirectPath),
-			MediaKey:   uploaded.MediaKey,
 			Mimetype: proto.String(func() string {
 				if t.MimeType != "" {
 					return t.MimeType
 				}
 				return http.DetectContentType(filedata)
 			}()),
-			FileEncSHA256: uploaded.FileEncSHA256,
 			FileSHA256:    uploaded.FileSHA256,
 			FileLength:    proto.Uint64(uint64(len(filedata))),
 			JPEGThumbnail: t.JPEGThumbnail,
-		}}
+		}
+		if !isNewsletterJID(recipient) {
+			videoMsg.MediaKey = uploaded.MediaKey
+			videoMsg.FileEncSHA256 = uploaded.FileEncSHA256
+		}
+		msg := &waE2E.Message{VideoMessage: videoMsg}
 
 		if t.ContextInfo.StanzaID != nil {
 			var qm *waE2E.Message
@@ -1748,7 +1800,11 @@ func (s *server) SendVideo() http.HandlerFunc {
 			msg.VideoMessage.ContextInfo.IsForwarded = proto.Bool(true)
 		}
 
-		resp, err = clientManager.GetWhatsmeowClient(txtid).SendMessage(context.Background(), recipient, msg, whatsmeow.SendRequestExtra{ID: msgid})
+		sendExtra := whatsmeow.SendRequestExtra{ID: msgid}
+		if isNewsletterJID(recipient) {
+			sendExtra.MediaHandle = uploaded.Handle
+		}
+		resp, err = clientManager.GetWhatsmeowClient(txtid).SendMessage(context.Background(), recipient, msg, sendExtra)
 		if err != nil {
 			s.Respond(w, r, http.StatusInternalServerError, errors.New(fmt.Sprintf("error sending message: %v", err)))
 			return
@@ -5702,6 +5758,12 @@ func (s *server) Respond(w http.ResponseWriter, r *http.Request, status int, dat
 	if err := json.NewEncoder(w).Encode(dataenvelope); err != nil {
 		panic("respond: " + err.Error())
 	}
+}
+
+// isNewsletterJID retorna true se o JID for de um canal (newsletter).
+// Em canais a mídia é enviada via UploadNewsletter (não criptografada) e SendRequestExtra.MediaHandle.
+func isNewsletterJID(j types.JID) bool {
+	return j.Server == types.NewsletterServer
 }
 
 // Validate message fields
