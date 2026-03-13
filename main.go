@@ -51,6 +51,7 @@ var (
 	logType             = flag.String("logtype", "console", "Type of log output (console or json)")
 	skipMedia           = flag.Bool("skipmedia", false, "Do not attempt to download media in messages")
 	osName              = flag.String("osname", "Actuar Group", "Connection OSName in Whatsapp")
+	platformType        = flag.String("platformtype", "DESKTOP", "Device platform type (DESKTOP, IPAD, ANDROID_TABLET, IOS_PHONE, ANDROID_PHONE, etc.)")
 	colorOutput         = flag.Bool("color", false, "Enable colored output for console logs")
 	sslcert             = flag.String("sslcertificate", "", "SSL Certificate File")
 	sslprivkey          = flag.String("sslprivatekey", "", "SSL Certificate Private Key File")
@@ -60,6 +61,7 @@ var (
 	globalWebhook       = flag.String("globalwebhook", "", "Global webhook URL to receive all events from all users")
 	versionFlag         = flag.Bool("version", false, "Display version information and exit")
 	mode                = flag.String("mode", "http", "Server mode: http or stdio")
+	dataDir             = flag.String("datadir", "", "Data directory for database and session files (defaults to executable directory)")
 
 	globalHMACKeyEncrypted []byte
 
@@ -78,7 +80,7 @@ var (
 
 var privateIPBlocks []*net.IPNet
 
-const version = "1.0.5"
+const version = "1.0.6"
 
 func newSafeHTTPClient() *http.Client {
 	return &http.Client{
@@ -179,6 +181,22 @@ func main() {
 
 	flag.Parse()
 
+	// Check for address in environment variable if flag is default or empty
+	if *address == "0.0.0.0" || *address == "" {
+		if v := os.Getenv("WUZAPI_ADDRESS"); v != "" {
+			*address = v
+			log.Info().Str("address", v).Msg("Address configured from environment variable")
+		}
+	}
+
+	// Check for port in environment variable if flag is default or empty
+	if *port == "8080" || *port == "" {
+		if v := os.Getenv("WUZAPI_PORT"); v != "" {
+			*port = v
+			log.Info().Str("port", v).Msg("Port configured from environment variable")
+		}
+	}
+
 	if v := os.Getenv("WEBHOOK_RETRY_ENABLED"); v != "" {
 		*webhookRetryEnabled = strings.ToLower(v) == "true" || v == "1"
 	}
@@ -206,6 +224,11 @@ func main() {
 	// Novo bloco para sobrescrever o osName pelo ENV, se existir
 	if v := os.Getenv("SESSION_DEVICE_NAME"); v != "" {
 		*osName = v
+	}
+
+	// Override platformType from environment variable if set
+	if v := os.Getenv("SESSION_PLATFORM_TYPE"); v != "" {
+		*platformType = v
 	}
 
 	if *versionFlag {
@@ -348,7 +371,7 @@ func main() {
 	}
 	exPath := filepath.Dir(ex)
 
-	db, err := InitializeDatabase(exPath)
+	db, err := InitializeDatabase(exPath, *dataDir)
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to initialize database")
 		os.Exit(1)
@@ -359,6 +382,9 @@ func main() {
 			log.Error().Err(err).Msg("Failed to close database connection")
 		}
 	}()
+
+	// Set DB reference in S3Manager for lazy client initialization
+	GetS3Manager().SetDB(db)
 
 	// Initialize the schema
 	if err = initializeSchema(db); err != nil {
@@ -376,7 +402,7 @@ func main() {
 	}
 
 	// Get database configuration
-	config := getDatabaseConfig(exPath)
+	config := getDatabaseConfig(exPath, *dataDir)
 	var storeConnStr string
 	if config.Type == "postgres" {
 		storeConnStr = fmt.Sprintf(

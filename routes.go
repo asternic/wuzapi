@@ -139,6 +139,7 @@ func (s *server) routes() {
 	s.router.Handle("/chat/downloadvideo", c.Then(s.DownloadVideo())).Methods("POST")
 	s.router.Handle("/chat/downloadaudio", c.Then(s.DownloadAudio())).Methods("POST")
 	s.router.Handle("/chat/downloaddocument", c.Then(s.DownloadDocument())).Methods("POST")
+	s.router.Handle("/chat/downloadsticker", c.Then(s.DownloadSticker())).Methods("POST")
 
 	s.router.Handle("/group/create", c.Then(s.CreateGroup())).Methods("POST")
 	s.router.Handle("/group/list", c.Then(s.ListGroups())).Methods("GET")

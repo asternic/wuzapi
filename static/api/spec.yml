@@ -1416,6 +1416,28 @@ paths:
             application/json:
               schema:
                 example: {"code":200,"data":{"Data":"data:image/jpeg;base64,iVBORw0KGgoA5CYII...=","Mimetype":"image/jpeg"},"success":true}
+  /chat/downloadsticker:
+    post:
+      tags:
+        - Chat
+      summary: Downloads Sticker from message
+      description: Downloads a Sticker from a message and returns it Base64 media encoded
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/definitions/DownloadMedia'
+
+      responses:
+        200:
+          description: Response
+          content:
+            application/json:
+              schema:
+                example: {"code":200,"data":{"Data":"data:image/webp;base64,iVBORw0KGgoA5CYII...=","Mimetype":"image/webp"},"success":true}
   /chat/downloadvideo:
     post:
       tags:

@@ -224,6 +224,22 @@ func (ss *stdioServer) routeRequest(req *jsonRpcRequest) {
 			return
 		}
 		httpPath = "/admin/users/" + userId
+	case "admin.users.edit":
+		httpMethod = "PUT"
+		userId, ok := ss.getUserIdParam(req)
+		if !ok {
+			// Error sent by getUserIdParam.
+			return
+		}
+		httpPath = "/admin/users/" + userId
+	case "admin.users.delete.full":
+		httpMethod = "DELETE"
+		userId, ok := ss.getUserIdParam(req)
+		if !ok {
+			// Error sent by getUserIdParam.
+			return
+		}
+		httpPath = "/admin/users/" + userId + "/full"
 
 	// Session management
 	case "session.connect":
@@ -241,17 +257,95 @@ func (ss *stdioServer) routeRequest(req *jsonRpcRequest) {
 	case "session.logout":
 		httpMethod = "POST"
 		httpPath = "/session/logout"
+	case "session.pairphone":
+		httpMethod = "POST"
+		httpPath = "/session/pairphone"
+	case "session.history":
+		httpMethod = "GET"
+		httpPath = "/session/history"
+	case "session.history.set":
+		httpMethod = "POST"
+		httpPath = "/session/history"
+	case "session.proxy":
+		httpMethod = "POST"
+		httpPath = "/session/proxy"
+	case "session.hmac.config":
+		httpMethod = "POST"
+		httpPath = "/session/hmac/config"
+	case "session.hmac.config.get":
+		httpMethod = "GET"
+		httpPath = "/session/hmac/config"
+	case "session.hmac.config.delete":
+		httpMethod = "DELETE"
+		httpPath = "/session/hmac/config"
 
 	// Messaging
 	case "chat.send.text":
 		httpMethod = "POST"
 		httpPath = "/chat/send/text"
+	case "chat.send.image":
+		httpMethod = "POST"
+		httpPath = "/chat/send/image"
+	case "chat.send.video":
+		httpMethod = "POST"
+		httpPath = "/chat/send/video"
+	case "chat.send.document":
+		httpMethod = "POST"
+		httpPath = "/chat/send/document"
+	case "chat.send.audio":
+		httpMethod = "POST"
+		httpPath = "/chat/send/audio"
+	case "chat.send.sticker":
+		httpMethod = "POST"
+		httpPath = "/chat/send/sticker"
+	case "chat.send.location":
+		httpMethod = "POST"
+		httpPath = "/chat/send/location"
+	case "chat.send.contact":
+		httpMethod = "POST"
+		httpPath = "/chat/send/contact"
+	case "chat.send.poll":
+		httpMethod = "POST"
+		httpPath = "/chat/send/poll"
+	case "chat.send.buttons":
+		httpMethod = "POST"
+		httpPath = "/chat/send/buttons"
+	case "chat.send.list":
+		httpMethod = "POST"
+		httpPath = "/chat/send/list"
+	case "chat.send.edit":
+		httpMethod = "POST"
+		httpPath = "/chat/send/edit"
+	case "chat.delete":
+		httpMethod = "POST"
+		httpPath = "/chat/delete"
+	case "chat.react":
+		httpMethod = "POST"
+		httpPath = "/chat/react"
+	case "chat.archive":
+		httpMethod = "POST"
+		httpPath = "/chat/archive"
+	case "chat.presence":
+		httpMethod = "POST"
+		httpPath = "/chat/presence"
+	case "chat.markread":
+		httpMethod = "POST"
+		httpPath = "/chat/markread"
+	case "chat.request-unavailable-message":
+		httpMethod = "POST"
+		httpPath = "/chat/request-unavailable-message"
 	case "chat.download.image":
 		httpMethod = "POST"
 		httpPath = "/chat/downloadimage"
 	case "chat.download.video":
 		httpMethod = "POST"
 		httpPath = "/chat/downloadvideo"
+	case "chat.download.audio":
+		httpMethod = "POST"
+		httpPath = "/chat/downloadaudio"
+	case "chat.download.document":
+		httpMethod = "POST"
+		httpPath = "/chat/downloaddocument"
 	case "chat.history":
 		httpMethod = "GET"
 		chatJID, ok := req.Params["chat_jid"].(string)
@@ -269,11 +363,88 @@ func (ss *stdioServer) routeRequest(req *jsonRpcRequest) {
 	case "user.contacts":
 		httpMethod = "GET"
 		httpPath = "/user/contacts"
+	case "user.presence":
+		httpMethod = "POST"
+		httpPath = "/user/presence"
+	case "user.info":
+		httpMethod = "POST"
+		httpPath = "/user/info"
+	case "user.check":
+		httpMethod = "POST"
+		httpPath = "/user/check"
+	case "user.avatar":
+		httpMethod = "POST"
+		httpPath = "/user/avatar"
+	case "user.lid":
+		httpMethod = "GET"
+		jid, ok := req.Params["jid"].(string)
+		if !ok || jid == "" {
+			ss.sendError(req.ID, 400, "missing or invalid jid parameter")
+			return
+		}
+		httpPath = "/user/lid/" + jid
+
+	// Status
+	case "status.set.text":
+		httpMethod = "POST"
+		httpPath = "/status/set/text"
+
+	// Calls
+	case "call.reject":
+		httpMethod = "POST"
+		httpPath = "/call/reject"
 
 	// Group management
 	case "group.list":
 		httpMethod = "GET"
 		httpPath = "/group/list"
+	case "group.create":
+		httpMethod = "POST"
+		httpPath = "/group/create"
+	case "group.info":
+		httpMethod = "GET"
+		httpPath = "/group/info"
+	case "group.invitelink":
+		httpMethod = "GET"
+		httpPath = "/group/invitelink"
+	case "group.photo":
+		httpMethod = "POST"
+		httpPath = "/group/photo"
+	case "group.photo.remove":
+		httpMethod = "POST"
+		httpPath = "/group/photo/remove"
+	case "group.leave":
+		httpMethod = "POST"
+		httpPath = "/group/leave"
+	case "group.name":
+		httpMethod = "POST"
+		httpPath = "/group/name"
+	case "group.topic":
+		httpMethod = "POST"
+		httpPath = "/group/topic"
+	case "group.announce":
+		httpMethod = "POST"
+		httpPath = "/group/announce"
+	case "group.locked":
+		httpMethod = "POST"
+		httpPath = "/group/locked"
+	case "group.ephemeral":
+		httpMethod = "POST"
+		httpPath = "/group/ephemeral"
+	case "group.join":
+		httpMethod = "POST"
+		httpPath = "/group/join"
+	case "group.inviteinfo":
+		httpMethod = "POST"
+		httpPath = "/group/inviteinfo"
+	case "group.updateparticipants":
+		httpMethod = "POST"
+		httpPath = "/group/updateparticipants"
+
+	// Newsletter
+	case "newsletter.list":
+		httpMethod = "GET"
+		httpPath = "/newsletter/list"
 
 	// Webhook management
 	case "webhook.get":
