@@ -177,18 +177,18 @@ func (s *server) authalice(next http.Handler) http.Handler {
 				log.Debug().Str("userId", txtid).Bool("historyValid", history.Valid).Int64("historyValue", history.Int64).Str("historyStr", historyStr).Msg("User authentication - history debug")
 
 				v := Values{map[string]string{
-					"Id":             txtid,
-					"Name":           name,
-					"Jid":            jid,
-					"Webhook":        webhook,
-					"Token":          token,
-					"Proxy":          proxy_url,
-					"Events":         events,
-					"Qrcode":         qrcode,
-					"History":        historyStr,
-					"HasHmac":        strconv.FormatBool(hasHmac),
-					"S3Enabled":      s3Enabled,
-					"MediaDelivery":  mediaDelivery,
+					"Id":            txtid,
+					"Name":          name,
+					"Jid":           jid,
+					"Webhook":       webhook,
+					"Token":         token,
+					"Proxy":         proxy_url,
+					"Events":        events,
+					"Qrcode":        qrcode,
+					"History":       historyStr,
+					"HasHmac":       strconv.FormatBool(hasHmac),
+					"S3Enabled":     s3Enabled,
+					"MediaDelivery": mediaDelivery,
 				}}
 
 				userinfocache.Set(token, v, cache.NoExpiration)
@@ -813,13 +813,13 @@ func (s *server) GetStatus() http.HandlerFunc {
 func (s *server) SendDocument() http.HandlerFunc {
 
 	type documentStruct struct {
-		Caption     string
-		Phone       string
-		Document    string
-		FileName    string
-		Id          string
-		MimeType    string
-		ContextInfo waE2E.ContextInfo
+		Caption       string
+		Phone         string
+		Document      string
+		FileName      string
+		Id            string
+		MimeType      string
+		ContextInfo   waE2E.ContextInfo
 		QuotedMessage *waE2E.Message `json:"QuotedMessage,omitempty"`
 	}
 
@@ -973,15 +973,15 @@ func (s *server) SendDocument() http.HandlerFunc {
 func (s *server) SendAudio() http.HandlerFunc {
 
 	type audioStruct struct {
-		Phone       string
-		Audio       string
-		Caption     string
-		Id          string
-		PTT         *bool  `json:"ptt,omitempty"`
-		MimeType    string `json:"mimetype,omitempty"`
-		Seconds     uint32
-		Waveform    []byte
-		ContextInfo waE2E.ContextInfo
+		Phone         string
+		Audio         string
+		Caption       string
+		Id            string
+		PTT           *bool  `json:"ptt,omitempty"`
+		MimeType      string `json:"mimetype,omitempty"`
+		Seconds       uint32
+		Waveform      []byte
+		ContextInfo   waE2E.ContextInfo
 		QuotedMessage *waE2E.Message `json:"QuotedMessage,omitempty"`
 	}
 
@@ -1675,11 +1675,11 @@ func (s *server) SendVideo() http.HandlerFunc {
 func (s *server) SendContact() http.HandlerFunc {
 
 	type contactStruct struct {
-		Phone       string
-		Id          string
-		Name        string
-		Vcard       string
-		ContextInfo waE2E.ContextInfo
+		Phone         string
+		Id            string
+		Name          string
+		Vcard         string
+		ContextInfo   waE2E.ContextInfo
 		QuotedMessage *waE2E.Message `json:"QuotedMessage,omitempty"`
 	}
 
@@ -1797,12 +1797,12 @@ func (s *server) SendContact() http.HandlerFunc {
 func (s *server) SendLocation() http.HandlerFunc {
 
 	type locationStruct struct {
-		Phone       string
-		Id          string
-		Name        string
-		Latitude    float64
-		Longitude   float64
-		ContextInfo waE2E.ContextInfo
+		Phone         string
+		Id            string
+		Name          string
+		Latitude      float64
+		Longitude     float64
+		ContextInfo   waE2E.ContextInfo
 		QuotedMessage *waE2E.Message `json:"QuotedMessage,omitempty"`
 	}
 
@@ -2244,8 +2244,8 @@ func (s *server) SendMessage() http.HandlerFunc {
 		LinkPreview   bool
 		Id            string
 		ContextInfo   waE2E.ContextInfo
-		QuotedText    string          `json:"QuotedText,omitempty"`
-		QuotedMessage *waE2E.Message  `json:"QuotedMessage,omitempty"`
+		QuotedText    string         `json:"QuotedText,omitempty"`
+		QuotedMessage *waE2E.Message `json:"QuotedMessage,omitempty"`
 	}
 	return func(w http.ResponseWriter, r *http.Request) {
 		txtid := r.Context().Value("userinfo").(Values).Get("Id")
@@ -6148,6 +6148,23 @@ func (s *server) syncHistoryForChat(ctx context.Context, userID string, chatJID 
 
 // save outgoing message to history
 func (s *server) saveOutgoingMessageToHistory(userID, chatJID, messageID, messageType, textContent, mediaLink string, historyLimit int) {
+	// Detect new chat before saving to history (query happens before insert)
+	// Only fires for individual chats (1-to-1), not groups (@g.us)
+	if mycli := clientManager.GetMyClient(userID); mycli != nil {
+		if !strings.HasSuffix(chatJID, "@g.us") && isNewChat(mycli, chatJID) {
+			// Extract phone number from JID (e.g. "5215518426237" from "5215518426237@s.whatsapp.net")
+			phone := strings.Split(chatJID, "@")[0]
+			extraData := map[string]interface{}{
+				"phone":       phone,
+				"isFromMe":    true,
+				"isGroup":     false,
+				"messageID":   messageID,
+				"messageType": messageType,
+			}
+			go fireChatNewEvent(mycli, chatJID, "message", extraData)
+		}
+	}
+
 	if historyLimit > 0 {
 		err := s.saveMessageToHistory(userID, chatJID, "me", messageID, messageType, textContent, mediaLink, "", "")
 		if err != nil {
@@ -6701,14 +6718,14 @@ func (s *server) publishSentMessageEvent(token, userID, txtid string, recipient 
 	var recipientLID types.JID
 	if client.Store != nil && client.Store.LIDs != nil {
 		ctx := context.Background()
-		
+
 		// Get sender LID
 		if !senderJID.IsEmpty() {
 			if lid, err := client.Store.LIDs.GetLIDForPN(ctx, senderJID); err == nil && !lid.IsEmpty() {
 				senderLID = lid
 			}
 		}
-		
+
 		// Get recipient LID (only for non-group chats)
 		if !isGroup && !recipient.IsEmpty() {
 			if lid, err := client.Store.LIDs.GetLIDForPN(ctx, recipient); err == nil && !lid.IsEmpty() {

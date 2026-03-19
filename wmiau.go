@@ -156,6 +156,80 @@ func getUserWebhookUrl(token string) string {
 	return webhookurl
 }
 
+// preloadKnownChats loads all distinct chat JIDs from message_history into the
+// knownChatsCache so that existing chats are not incorrectly flagged as new.
+func preloadKnownChats(s *server, userID string) {
+	var chatJIDs []string
+	var query string
+	if s.db.DriverName() == "sqlite" {
+		query = `SELECT DISTINCT chat_jid FROM message_history WHERE user_id = ?`
+	} else {
+		query = `SELECT DISTINCT chat_jid FROM message_history WHERE user_id = $1`
+	}
+	err := s.db.Select(&chatJIDs, query, userID)
+	if err != nil {
+		log.Error().Err(err).Str("userID", userID).Msg("Failed to preload known chats from message_history")
+		return
+	}
+	for _, chatJID := range chatJIDs {
+		knownChatsCache.Set(userID+":"+chatJID, true, cache.NoExpiration)
+	}
+	log.Info().Str("userID", userID).Int("count", len(chatJIDs)).Msg("Preloaded known chats into cache")
+}
+
+// isNewChat checks if a chat JID has been seen before for a given user.
+// It first checks the in-memory cache, then falls back to querying message_history in the DB.
+// If the chat is new (not seen before), it registers it in the cache and returns true.
+func isNewChat(mycli *MyClient, chatJID string) bool {
+	cacheKey := mycli.userID + ":" + chatJID
+
+	// Check if already known in cache
+	if _, found := knownChatsCache.Get(cacheKey); found {
+		return false
+	}
+
+	// Check if chat exists in message_history (persistent storage)
+	var count int
+	var query string
+	if mycli.db.DriverName() == "sqlite" {
+		query = `SELECT COUNT(*) FROM message_history WHERE user_id = ? AND chat_jid = ? LIMIT 1`
+	} else {
+		query = `SELECT COUNT(*) FROM message_history WHERE user_id = $1 AND chat_jid = $2 LIMIT 1`
+	}
+	err := mycli.db.Get(&count, query, mycli.userID, chatJID)
+	if err != nil {
+		log.Error().Err(err).Str("userID", mycli.userID).Str("chatJID", chatJID).Msg("Failed to check if chat exists in history")
+		// On error, register it and don't fire the event to avoid false positives
+		knownChatsCache.Set(cacheKey, true, cache.NoExpiration)
+		return false
+	}
+
+	if count > 0 {
+		// Chat already exists in DB, register in cache and return false
+		knownChatsCache.Set(cacheKey, true, cache.NoExpiration)
+		return false
+	}
+
+	// Chat is new! Register it in cache
+	knownChatsCache.Set(cacheKey, true, cache.NoExpiration)
+	return true
+}
+
+// fireChatNewEvent dispatches a ChatNew webhook event when a new chat is detected.
+// The triggerEvent parameter describes what triggered the new chat (e.g. "message", "call").
+func fireChatNewEvent(mycli *MyClient, chatJID string, triggerEvent string, extraData map[string]interface{}) {
+	chatNewPostmap := make(map[string]interface{})
+	chatNewPostmap["type"] = "ChatNew"
+	chatNewPostmap["chat"] = chatJID
+	chatNewPostmap["trigger"] = triggerEvent
+	for k, v := range extraData {
+		chatNewPostmap[k] = v
+	}
+
+	log.Info().Str("userID", mycli.userID).Str("chatJID", chatJID).Str("trigger", triggerEvent).Msg("New chat detected, firing ChatNew event")
+	sendEventWithWebHook(mycli, chatNewPostmap, "")
+}
+
 func sendEventWithWebHook(mycli *MyClient, postmap map[string]interface{}, path string) {
 	webhookurl := getUserWebhookUrl(mycli.token)
 
@@ -333,7 +407,7 @@ func parseJID(arg string) (types.JID, bool) {
 // Returns DESKTOP as default if the string doesn't match any known type
 func getPlatformTypeEnum(platformType string) *waCompanionReg.DeviceProps_PlatformType {
 	platformType = strings.ToUpper(strings.TrimSpace(platformType))
-	
+
 	switch platformType {
 	case "UNKNOWN":
 		return waCompanionReg.DeviceProps_UNKNOWN.Enum()
@@ -436,6 +510,9 @@ func (s *server) startClient(userID string, textjid string, token string, subscr
 
 	// Store the MyClient in clientManager
 	clientManager.SetMyClient(userID, &mycli)
+
+	// Pre-load known chats from message_history into cache for ChatNew event detection
+	go preloadKnownChats(s, userID)
 
 	httpClient := resty.New()
 	httpClient.SetRedirectPolicy(resty.FlexibleRedirectPolicy(15))
@@ -848,6 +925,23 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 
 		postmap["type"] = "Message"
 		dowebhook = 1
+
+		// Detect new chat (must be checked BEFORE saving to history, as isNewChat queries message_history)
+		// Only fires for individual chats (1-to-1) with real phone numbers (@s.whatsapp.net), not groups or LIDs
+		chatJIDStr := evt.Info.Chat.String()
+		if !evt.Info.IsGroup && strings.HasSuffix(chatJIDStr, "@s.whatsapp.net") && isNewChat(mycli, chatJIDStr) {
+			extraData := map[string]interface{}{
+				"phone":     evt.Info.Chat.User,
+				"sender":    evt.Info.Sender.String(),
+				"pushName":  evt.Info.PushName,
+				"isGroup":   false,
+				"isFromMe":  evt.Info.IsFromMe,
+				"timestamp": evt.Info.Timestamp,
+				"messageID": evt.Info.ID,
+			}
+			go fireChatNewEvent(mycli, chatJIDStr, "message", extraData)
+		}
+
 		metaParts := []string{fmt.Sprintf("pushname: %s", evt.Info.PushName), fmt.Sprintf("timestamp: %s", evt.Info.Timestamp)}
 		if evt.Info.Type != "" {
 			metaParts = append(metaParts, fmt.Sprintf("type: %s", evt.Info.Type))
@@ -1492,6 +1586,9 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 						continue
 					}
 
+					// Register this chat as known so it does not trigger a ChatNew event later
+					knownChatsCache.Set(mycli.userID+":"+chatJID.String(), true, cache.NoExpiration)
+
 					for _, msg := range conv.Messages {
 						if msg == nil || msg.Message == nil {
 							continue
@@ -1762,6 +1859,18 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 		postmap["type"] = "CallOffer"
 		dowebhook = 1
 		log.Info().Str("event", fmt.Sprintf("%+v", evt)).Msg("Got call offer")
+
+		// Detect new chat from incoming call (only real phone numbers @s.whatsapp.net)
+		callChatJID := evt.CallCreator.String()
+		if callChatJID != "" && strings.HasSuffix(callChatJID, "@s.whatsapp.net") && isNewChat(mycli, callChatJID) {
+			extraData := map[string]interface{}{
+				"phone":     evt.CallCreator.User,
+				"caller":    evt.CallCreator.String(),
+				"callID":    evt.CallID,
+				"timestamp": evt.Timestamp,
+			}
+			go fireChatNewEvent(mycli, callChatJID, "call", extraData)
+		}
 	case *events.CallAccept:
 		postmap["type"] = "CallAccept"
 		dowebhook = 1
@@ -1774,6 +1883,18 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 		postmap["type"] = "CallOfferNotice"
 		dowebhook = 1
 		log.Info().Str("event", fmt.Sprintf("%+v", evt)).Msg("Got call offer notice")
+
+		// Detect new chat from incoming call notice (only real phone numbers @s.whatsapp.net)
+		callNoticeChatJID := evt.CallCreator.String()
+		if callNoticeChatJID != "" && strings.HasSuffix(callNoticeChatJID, "@s.whatsapp.net") && isNewChat(mycli, callNoticeChatJID) {
+			extraData := map[string]interface{}{
+				"phone":     evt.CallCreator.User,
+				"caller":    evt.CallCreator.String(),
+				"callID":    evt.CallID,
+				"timestamp": evt.Timestamp,
+			}
+			go fireChatNewEvent(mycli, callNoticeChatJID, "call", extraData)
+		}
 	case *events.CallRelayLatency:
 		postmap["type"] = "CallRelayLatency"
 		dowebhook = 1

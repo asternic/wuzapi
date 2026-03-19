@@ -75,6 +75,7 @@ var (
 	killchannel      = make(map[string](chan bool))
 	userinfocache    = cache.New(5*time.Minute, 10*time.Minute)
 	lastMessageCache = cache.New(24*time.Hour, 24*time.Hour)
+	knownChatsCache  = cache.New(cache.NoExpiration, cache.NoExpiration) // Tracks known chat JIDs per user for ChatNew event detection
 	globalHTTPClient = newSafeHTTPClient()
 )
 

@@ -71,6 +71,9 @@ var supportedEventTypes = []string{
 	// Facebook/Meta Bridge
 	"FBMessage",
 
+	// Chat lifecycle
+	"ChatNew",
+
 	// Special - receives all events
 	"All",
 }
