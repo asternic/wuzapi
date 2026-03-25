@@ -360,15 +360,6 @@ func main() {
 		}
 	}()
 
-	// Initialize the schema
-	if err = initializeSchema(db); err != nil {
-		log.Fatal().Err(err).Msg("Failed to initialize schema")
-		// Perform cleanup before exiting
-		if err := db.Close(); err != nil {
-			log.Error().Err(err).Msg("Failed to close database connection during cleanup")
-		}
-		os.Exit(1)
-	}
 
 	var dbLog waLog.Logger
 	if *waDebug != "" {
@@ -391,6 +382,17 @@ func main() {
 
 	if err != nil {
 		log.Fatal().Err(err).Msg("Error creating sqlstore")
+		os.Exit(1)
+	}
+
+
+	// Initialize the schema
+	if err = initializeSchema(db); err != nil {
+		log.Fatal().Err(err).Msg("Failed to initialize schema")
+		// Perform cleanup before exiting
+		if err := db.Close(); err != nil {
+			log.Error().Err(err).Msg("Failed to close database connection during cleanup")
+		}
 		os.Exit(1)
 	}
 

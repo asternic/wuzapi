@@ -220,8 +220,12 @@ END $$;
 `
 
 const addWhatsmeowMessageSecretsMessageIDIndexSQL = `
-CREATE INDEX CONCURRENTLY IF NOT EXISTS whatsmeow_message_secrets_message_id_idx
-ON public.whatsmeow_message_secrets (message_id);
+-- PostgreSQL version
+DO $$
+BEGIN
+    CREATE INDEX IF NOT EXISTS whatsmeow_message_secrets_message_id_idx
+    ON whatsmeow_message_secrets (message_id);
+END $$;
 
 -- SQLite version (handled in code)
 `
