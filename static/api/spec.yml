@@ -2383,26 +2383,48 @@ definitions:
     type: object
     required:
       - Phone
-      - ButtonText
       - Desc
-      - TopText
-      - List
     properties:
       Phone:
         type: string
         example: "5521971532700"
       ButtonText:
         type: string
-        example: Click Here
+        example: "Click Here"
       Desc:
         type: string
-        example: This is a list
+        example: "This is a list"
       TopText:
         type: string
-        example: This is a list
+        example: "This is a list"
       FooterText:
         type: string
-        example: This is a footer text
+        example: "This is a footer text"
+      Id:
+        type: string
+        example: "ABCDABCD1234"
+      Sections:
+        type: array
+        items:
+          type: object
+          properties:
+            title:
+              type: string
+              example: "Menu"
+            rows:
+              type: array
+              items:
+                type: object
+                properties:
+                  title:
+                    type: string
+                    example: "menu option 1"
+                  desc:
+                    type: string
+                    example: "long description"
+                  RowId:
+                    type: string
+                    example: "1"
       List:
         type: array
         items:
@@ -2410,39 +2432,86 @@ definitions:
           properties:
             title:
               type: string
-              example: menu button 1
+              example: "menu option 1"
             desc:
               type: string
-              example: long description
+              example: "long description"
             RowId:
               type: string
-              example: 1
+              example: "1"
+      ContextInfo:
+        type: object
+        required:
+          - StanzaID
+          - Participant
+        properties:
+          StanzaID:
+            type: string
+            example: "3EB06F9067F80BAB89FF"
+          Participant:
+            type: string
+            example: "5491155553935@s.whatsapp.net"
 
   MessageButtons:
     type: object
     required:
       - Phone
       - Body
+      - Buttons
     properties:
       Phone:
         type: string
         example: "5521971532700"
       Body:
         type: string
-        example: How you doin
+        example: "How you doin"
+      Title:
+        type: string
+        example: "Main menu"
+      Footer:
+        type: string
+        example: "Choose an option"
+      Image:
+        type: string
+        example: "https://example.com/image.jpg"
       Id:
         type: string
         example: "ABCDABCD1234"
+      Buttons:
+        type: array
+        minItems: 1
+        maxItems: 5
+        items:
+          type: object
+          properties:
+            type:
+              type: string
+              example: "reply" # reply | cta_url | cta_call | copy
+            title:
+              type: string
+              example: "Confirm"
+            id:
+              type: string
+              example: "btn_confirm"
+            url:
+              type: string
+              example: "https://example.com"
+            phone_number:
+              type: string
+              example: "+5511999999999"
+            copy_code:
+              type: string
+              example: "PROMO2024"
       ContextInfo:
         type: object
         required:
-          - StanzaId
+          - StanzaID
           - Participant
         properties:
-          StanzaId: 
+          StanzaID:
             type: string
-            example: "3EB06F9067F80BAB89FF" 
-          Participant: 
+            example: "3EB06F9067F80BAB89FF"
+          Participant:
             type: string
             example: "5491155553935@s.whatsapp.net"
 

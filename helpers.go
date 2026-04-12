@@ -44,8 +44,12 @@ import (
 
 const (
 	openGraphFetchTimeout    = 5 * time.Second
-	openGraphPageMaxBytes    = 2 * 1024 * 1024  // 2MB
-	openGraphImageMaxBytes   = 10 * 1024 * 1024 // 10MB
+	fetchImageMaxBytes       = 16 * 1024 * 1024  // 16MB
+	fetchVideoMaxBytes       = 100 * 1024 * 1024 // 100MB
+	fetchAudioMaxBytes       = 16 * 1024 * 1024  // 16MB
+	fetchDocumentMaxBytes    = 100 * 1024 * 1024 // 100MB
+	openGraphPageMaxBytes    = 2 * 1024 * 1024   // 2MB
+	openGraphImageMaxBytes   = 10 * 1024 * 1024  // 10MB
 	openGraphThumbnailWidth  = 100
 	openGraphThumbnailHeight = 100
 	openGraphJpegQuality     = 80
@@ -136,6 +140,7 @@ func isHTTPURL(input string) bool {
 	}
 	return parsed.Host != ""
 }
+
 func fetchURLBytes(ctx context.Context, resourceURL string, limit int64) ([]byte, string, error) {
 	req, err := http.NewRequestWithContext(ctx, "GET", resourceURL, nil)
 	if err != nil {
