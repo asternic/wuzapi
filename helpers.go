@@ -248,6 +248,23 @@ func webhookLogUserName(userID string, payload map[string]string) string {
 	return ""
 }
 
+const maxWebhookPayloadLogBytes = 65536
+
+// webhookRequestPayloadForLog JSON-serializes the outbound webhook body for logging (truncated if very large).
+func webhookRequestPayloadForLog(body interface{}) string {
+	if body == nil {
+		return ""
+	}
+	b, err := json.Marshal(body)
+	if err != nil {
+		return fmt.Sprintf("<json marshal error: %v>", err)
+	}
+	if len(b) > maxWebhookPayloadLogBytes {
+		return string(b[:maxWebhookPayloadLogBytes]) + fmt.Sprintf("...(truncated, %d bytes total)", len(b))
+	}
+	return string(b)
+}
+
 // webhook for regular messages
 func callHook(myurl string, payload map[string]string, userID string) {
 	callHookWithHmac(myurl, payload, userID, nil)
@@ -360,6 +377,7 @@ func callHookWithHmac(myurl string, payload map[string]string, userID string, en
 			log.Error().
 				Str("userID", userID).
 				Str("userName", webhookLogUserName(userID, payload)).
+				Str("requestPayload", webhookRequestPayloadForLog(body)).
 				Int("status", resp.StatusCode()).
 				Int("attempt", attempt+1).
 				Str("url", myurl).
@@ -482,6 +500,7 @@ func callHookFileWithHmac(myurl string, payload map[string]string, userID string
 			log.Error().
 				Str("userID", userID).
 				Str("userName", webhookLogUserName(userID, finalPayload)).
+				Str("requestPayload", webhookRequestPayloadForLog(finalPayload)).
 				Int("status", resp.StatusCode()).
 				Int("attempt", attempt+1).
 				Str("url", myurl).
