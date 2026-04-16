@@ -151,7 +151,54 @@ func getUserWebhookUrl(token string) string {
 	return webhookurl
 }
 
+const statusBroadcastJID = "status@broadcast"
+
+func isStatusBroadcastChat(chat types.JID) bool {
+	if chat.IsEmpty() {
+		return false
+	}
+	return strings.EqualFold(chat.String(), statusBroadcastJID)
+}
+
+// shouldOmitWebhookForEvent drops noisy or unwanted webhook payloads before send (user webhook, global, Rabbit, stdio).
+func shouldOmitWebhookForEvent(postmap map[string]interface{}) bool {
+	raw, ok := postmap["event"]
+	if !ok || raw == nil {
+		return false
+	}
+	switch evt := raw.(type) {
+	case *events.Message:
+		return isStatusBroadcastChat(evt.Info.Chat)
+	case *events.Receipt:
+		if isStatusBroadcastChat(evt.Chat) {
+			return true
+		}
+		if !evt.IsGroup {
+			return false
+		}
+		et, _ := postmap["type"].(string)
+		if et != "ReadReceipt" {
+			return false
+		}
+		state, _ := postmap["state"].(string)
+		switch strings.ToLower(strings.TrimSpace(state)) {
+		case "delivered", "read", "readself", "sent":
+			return true
+		default:
+			return false
+		}
+	default:
+		return false
+	}
+}
+
 func sendEventWithWebHook(mycli *MyClient, postmap map[string]interface{}, path string) {
+	if shouldOmitWebhookForEvent(postmap) {
+		et, _ := postmap["type"].(string)
+		log.Debug().Str("userID", mycli.userID).Str("eventType", et).Msg("Skipping webhook (status broadcast or group receipt filter)")
+		return
+	}
+
 	webhookurl := getUserWebhookUrl(mycli.token)
 
 	// Get updated events from cache/database
