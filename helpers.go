@@ -234,6 +234,20 @@ func updateUserInfo(values interface{}, field string, value string) interface{} 
 	return values
 }
 
+// webhookLogUserName returns users.name for webhook error logs; falls back to payload instanceName.
+func webhookLogUserName(userID string, payload map[string]string) string {
+	if my := clientManager.GetMyClient(userID); my != nil && my.db != nil {
+		var name string
+		if err := my.db.Get(&name, "SELECT name FROM users WHERE id = $1", userID); err == nil {
+			return strings.TrimSpace(name)
+		}
+	}
+	if payload != nil {
+		return strings.TrimSpace(payload["instanceName"])
+	}
+	return ""
+}
+
 // webhook for regular messages
 func callHook(myurl string, payload map[string]string, userID string) {
 	callHookWithHmac(myurl, payload, userID, nil)
@@ -344,6 +358,8 @@ func callHookWithHmac(myurl string, payload map[string]string, userID string, en
 		if resp.StatusCode() < 200 || resp.StatusCode() >= 300 {
 			lastError = fmt.Errorf("unexpected status code: %d. Body: %s", resp.StatusCode(), string(resp.Body()))
 			log.Error().
+				Str("userID", userID).
+				Str("userName", webhookLogUserName(userID, payload)).
 				Int("status", resp.StatusCode()).
 				Int("attempt", attempt+1).
 				Str("url", myurl).
@@ -464,6 +480,8 @@ func callHookFileWithHmac(myurl string, payload map[string]string, userID string
 		if resp.StatusCode() < 200 || resp.StatusCode() >= 300 {
 			lastError = fmt.Errorf("unexpected status code: %d. Body: %s", resp.StatusCode(), string(resp.Body()))
 			log.Error().
+				Str("userID", userID).
+				Str("userName", webhookLogUserName(userID, finalPayload)).
 				Int("status", resp.StatusCode()).
 				Int("attempt", attempt+1).
 				Str("url", myurl).
