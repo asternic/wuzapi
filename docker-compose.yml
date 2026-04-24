@@ -58,6 +58,7 @@ services:
       RABBITMQ_DEFAULT_USER: wuzapi
       RABBITMQ_DEFAULT_PASS: wuzapi
       RABBITMQ_DEFAULT_VHOST: /
+      RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS: "+sbwt none +sbwtdcpu none +sbwtdio none"
     ports:
       - "127.0.0.1:5672:5672" # AMQP port
       - "127.0.0.1:15672:15672" # Management UI port
