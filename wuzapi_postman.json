@@ -981,48 +981,226 @@
           },
           "response": []
         },
-        {
-          "name": "Send Buttons (Interactive)",
-          "request": {
-            "method": "POST",
-            "header": [
-              { "key": "token", "value": "{{token}}" },
-              { "key": "Content-Type", "value": "application/json" }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"Phone\": \"5511999999999\",\n  \"Title\": \"Pagamento\",\n  \"Body\": \"Escolha uma opcao\",\n  \"Footer\": \"Obrigado\",\n  \"Buttons\": [\n    {\n      \"ButtonId\": \"pix-1\",\n      \"ButtonText\": \"Pagar com PIX\",\n      \"PixPayment\": {\n        \"MerchantName\": \"Minha Loja\",\n        \"Key\": \"minha-chave-pix\",\n        \"KeyType\": \"EMAIL\"\n      }\n    },\n    {\n      \"ButtonId\": \"copy-1\",\n      \"ButtonText\": \"Copiar cupom\",\n      \"ButtonCopy\": \"CUPOM10\"\n    },\n    {\n      \"ButtonId\": \"call-1\",\n      \"ButtonText\": \"Ligar\",\n      \"ButtonUrl\": \"tel:+5511999999999\"\n    },\n    {\n      \"ButtonId\": \"site-1\",\n      \"ButtonText\": \"Abrir site\",\n      \"ButtonUrl\": \"https://example.com\"\n    }\n  ]\n}"
+          {
+            "name": "Send Buttons - Reply Only (max 3)",
+            "request": {
+              "method": "POST",
+              "header": [
+                { "key": "token", "value": "{{token}}" },
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": {
+                "mode": "raw",
+                "raw": "{\n  \"Phone\": \"5511999999999\",\n  \"Body\": \"Escolha uma opcao abaixo\",\n  \"Title\": \"Menu\",\n  \"Footer\": \"Obrigado pelo contato\",\n  \"Buttons\": [\n    {\n      \"type\": \"reply\",\n      \"id\": \"btn_sim\",\n      \"title\": \"Sim\"\n    },\n    {\n      \"type\": \"reply\",\n      \"id\": \"btn_nao\",\n      \"title\": \"Nao\"\n    },\n    {\n      \"type\": \"reply\",\n      \"id\": \"btn_ajuda\",\n      \"title\": \"Preciso de ajuda\"\n    }\n  ]\n}",
+                "options": { "raw": { "language": "json" } }
+              },
+              "url": {
+                "raw": "{{baseUrl}}/chat/send/buttons",
+                "host": ["{{baseUrl}}"],
+                "path": ["chat", "send", "buttons"]
+              },
+              "description": "Reply-only buttons (Path A).\n\n- Max 3 buttons\n- type: \"reply\" (default se omitido)\n- Nao pode misturar reply com CTA\n\nCampos do botao:\n- type: \"reply\"\n- id: ID retornado no evento de resposta (default: title)\n- title: texto exibido (max 20 caracteres, truncado automaticamente)"
             },
-            "url": {
-              "raw": "{{baseUrl}}/chat/send/buttons",
-              "host": ["{{baseUrl}}"],
-              "path": ["chat", "send", "buttons"]
-            },
-            "description": "Send interactive buttons (PIX/Copy/Call/URL)"
+            "response": []
           },
-          "response": []
-        },
-        {
-          "name": "Send List (Interactive)",
-          "request": {
-            "method": "POST",
-            "header": [
-              { "key": "token", "value": "{{token}}" },
-              { "key": "Content-Type", "value": "application/json" }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"Phone\": \"5511999999999\",\n  \"ButtonText\": \"Ver opcoes\",\n  \"Desc\": \"Escolha uma opcao\",\n  \"TopText\": \"Menu principal\",\n  \"Sections\": [\n    {\n      \"title\": \"Planos\",\n      \"rows\": [\n        { \"title\": \"Basico\", \"desc\": \"Plano basico\", \"RowId\": \"plano_basico\" },\n        { \"title\": \"Premium\", \"desc\": \"Plano premium\", \"RowId\": \"plano_premium\" }\n      ]\n    }\n  ],\n  \"FooterText\": \"Obrigado\"\n}"
+          {
+            "name": "Send Buttons - CTA URL (max 5)",
+            "request": {
+              "method": "POST",
+              "header": [
+                { "key": "token", "value": "{{token}}" },
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": {
+                "mode": "raw",
+                "raw": "{\n  \"Phone\": \"5511999999999\",\n  \"Body\": \"Acesse nosso site ou entre em contato\",\n  \"Title\": \"Minha Loja\",\n  \"Footer\": \"Obrigado\",\n  \"Buttons\": [\n    {\n      \"type\": \"cta_url\",\n      \"title\": \"Abrir site\",\n      \"url\": \"https://example.com\"\n    }\n  ]\n}",
+                "options": { "raw": { "language": "json" } }
+              },
+              "url": {
+                "raw": "{{baseUrl}}/chat/send/buttons",
+                "host": ["{{baseUrl}}"],
+                "path": ["chat", "send", "buttons"]
+              },
+              "description": "CTA URL button (Path B).\n\n- Abre URL no navegador do usuario\n- type: \"cta_url\" — campo \"url\" obrigatorio\n- Max 5 botoes CTA (qualquer combinacao de cta_url, cta_call, copy)\n- NAO pode misturar com type \"reply\""
             },
-            "url": {
-              "raw": "{{baseUrl}}/chat/send/list",
-              "host": ["{{baseUrl}}"],
-              "path": ["chat", "send", "list"]
-            },
-            "description": "Send interactive list"
+            "response": []
           },
-          "response": []
-        },
+          {
+            "name": "Send Buttons - CTA Call",
+            "request": {
+              "method": "POST",
+              "header": [
+                { "key": "token", "value": "{{token}}" },
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": {
+                "mode": "raw",
+                "raw": "{\n  \"Phone\": \"5511999999999\",\n  \"Body\": \"Fale com a gente\",\n  \"Title\": \"Suporte\",\n  \"Footer\": \"Atendimento 24h\",\n  \"Buttons\": [\n    {\n      \"type\": \"cta_call\",\n      \"title\": \"Ligar agora\",\n      \"phone_number\": \"+5511999999999\"\n    }\n  ]\n}",
+                "options": { "raw": { "language": "json" } }
+              },
+              "url": {
+                "raw": "{{baseUrl}}/chat/send/buttons",
+                "host": ["{{baseUrl}}"],
+                "path": ["chat", "send", "buttons"]
+              },
+              "description": "CTA Call button (Path B).\n\n- Abre o discador do celular com o numero preenchido\n- type: \"cta_call\" — campo \"phone_number\" obrigatorio\n- Max 5 botoes CTA"
+            },
+            "response": []
+          },
+          {
+            "name": "Send Buttons - CTA Copy",
+            "request": {
+              "method": "POST",
+              "header": [
+                { "key": "token", "value": "{{token}}" },
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": {
+                "mode": "raw",
+                "raw": "{\n  \"Phone\": \"5511999999999\",\n  \"Body\": \"Use o cupom abaixo para 10% de desconto\",\n  \"Title\": \"Cupom exclusivo\",\n  \"Footer\": \"Valido ate 31/12\",\n  \"Buttons\": [\n    {\n      \"type\": \"copy\",\n      \"title\": \"Copiar cupom\",\n      \"copy_code\": \"DESCONTO10\"\n    }\n  ]\n}",
+                "options": { "raw": { "language": "json" } }
+              },
+              "url": {
+                "raw": "{{baseUrl}}/chat/send/buttons",
+                "host": ["{{baseUrl}}"],
+                "path": ["chat", "send", "buttons"]
+              },
+              "description": "CTA Copy button (Path B).\n\n- Copia um codigo para a area de transferencia do usuario\n- type: \"copy\" — campo \"copy_code\" obrigatorio\n- Max 5 botoes CTA"
+            },
+            "response": []
+          },
+          {
+            "name": "Send Buttons - CTA Misto (URL + Call + Copy)",
+            "request": {
+              "method": "POST",
+              "header": [
+                { "key": "token", "value": "{{token}}" },
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": {
+                "mode": "raw",
+                "raw": "{\n  \"Phone\": \"5511999999999\",\n  \"Body\": \"Escolha como deseja continuar\",\n  \"Title\": \"Minha Loja\",\n  \"Footer\": \"Obrigado pela preferencia\",\n  \"Buttons\": [\n    {\n      \"type\": \"cta_url\",\n      \"title\": \"Ver produtos\",\n      \"url\": \"https://example.com/produtos\"\n    },\n    {\n      \"type\": \"cta_call\",\n      \"title\": \"Falar com vendas\",\n      \"phone_number\": \"+5511999999999\"\n    },\n    {\n      \"type\": \"copy\",\n      \"title\": \"Copiar cupom\",\n      \"copy_code\": \"PROMO2024\"\n    }\n  ]\n}",
+                "options": { "raw": { "language": "json" } }
+              },
+              "url": {
+                "raw": "{{baseUrl}}/chat/send/buttons",
+                "host": ["{{baseUrl}}"],
+                "path": ["chat", "send", "buttons"]
+              },
+              "description": "Combinacao de CTA buttons (Path B).\n\n- Pode misturar cta_url, cta_call e copy livremente\n- Max 5 botoes no total\n- NAO pode incluir nenhum botao do tipo \"reply\" junto"
+            },
+            "response": []
+          },
+          {
+            "name": "Send Buttons - CTA com Imagem no Header",
+            "request": {
+              "method": "POST",
+              "header": [
+                { "key": "token", "value": "{{token}}" },
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": {
+                "mode": "raw",
+                "raw": "{\n  \"Phone\": \"5511999999999\",\n  \"Body\": \"Confira nossa oferta especial\",\n  \"Footer\": \"Oferta por tempo limitado\",\n  \"Image\": \"https://example.com/banner.jpg\",\n  \"Buttons\": [\n    {\n      \"type\": \"cta_url\",\n      \"title\": \"Comprar agora\",\n      \"url\": \"https://example.com/oferta\"\n    },\n    {\n      \"type\": \"copy\",\n      \"title\": \"Copiar cupom\",\n      \"copy_code\": \"OFERTA50\"\n    }\n  ]\n}",
+                "options": { "raw": { "language": "json" } }
+              },
+              "url": {
+                "raw": "{{baseUrl}}/chat/send/buttons",
+                "host": ["{{baseUrl}}"],
+                "path": ["chat", "send", "buttons"]
+              },
+              "description": "Botoes CTA com imagem no header.\n\n- Campo \"Image\": URL HTTP ou data:image/jpeg;base64,...\n- A imagem substitui o Title quando fornecida\n- Funciona tanto para Path A (reply) quanto Path B (CTA)"
+            },
+            "response": []
+          },
+          {
+            "name": "Send Buttons - Reply com Quoted Message",
+            "request": {
+              "method": "POST",
+              "header": [
+                { "key": "token", "value": "{{token}}" },
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": {
+                "mode": "raw",
+                "raw": "{\n  \"Phone\": \"5511999999999\",\n  \"Body\": \"Voce confirma o pedido?\",\n  \"Buttons\": [\n    { \"type\": \"reply\", \"id\": \"confirmar\", \"title\": \"Confirmar\" },\n    { \"type\": \"reply\", \"id\": \"cancelar\",  \"title\": \"Cancelar\" }\n  ],\n  \"ContextInfo\": {\n    \"StanzaID\":   \"ABCDEF1234567890\",\n    \"Participant\": \"5511999999999@s.whatsapp.net\"\n  }\n}",
+                "options": { "raw": { "language": "json" } }
+              },
+              "url": {
+                "raw": "{{baseUrl}}/chat/send/buttons",
+                "host": ["{{baseUrl}}"],
+                "path": ["chat", "send", "buttons"]
+              },
+              "description": "Reply buttons respondendo a uma mensagem especifica.\n\n- ContextInfo.StanzaID: ID da mensagem original\n- ContextInfo.Participant: JID do autor da mensagem original\n- Ambos obrigatorios quando um e informado"
+            },
+            "response": []
+          },
+          {
+            "name": "Send List - Multi-secao",
+            "request": {
+              "method": "POST",
+              "header": [
+                { "key": "token", "value": "{{token}}" },
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": {
+                "mode": "raw",
+                "raw": "{\n  \"Phone\": \"5511999999999\",\n  \"ButtonText\": \"Ver opcoes\",\n  \"Desc\": \"Escolha um plano abaixo\",\n  \"TopText\": \"Nossos planos\",\n  \"FooterText\": \"Obrigado pelo interesse\",\n  \"Sections\": [\n    {\n      \"title\": \"Planos Mensais\",\n      \"rows\": [\n        { \"title\": \"Basico\",   \"desc\": \"Ate 5 usuarios\",    \"RowId\": \"plano_basico\" },\n        { \"title\": \"Pro\",      \"desc\": \"Ate 20 usuarios\",   \"RowId\": \"plano_pro\" },\n        { \"title\": \"Enterprise\", \"desc\": \"Usuarios ilimitados\", \"RowId\": \"plano_enterprise\" }\n      ]\n    },\n    {\n      \"title\": \"Planos Anuais\",\n      \"rows\": [\n        { \"title\": \"Basico Anual\",     \"desc\": \"20% de desconto\", \"RowId\": \"plano_basico_anual\" },\n        { \"title\": \"Pro Anual\",        \"desc\": \"25% de desconto\", \"RowId\": \"plano_pro_anual\" }\n      ]\n    }\n  ]\n}",
+                "options": { "raw": { "language": "json" } }
+              },
+              "url": {
+                "raw": "{{baseUrl}}/chat/send/list",
+                "host": ["{{baseUrl}}"],
+                "path": ["chat", "send", "list"]
+              },
+              "description": "Lista interativa com multiplas secoes (modo preferido).\n\nCampos obrigatorios:\n- Phone, Desc (ou Body/body/text), Sections com pelo menos 1 row com title\n\nCampos opcionais:\n- ButtonText: texto do botao que abre a lista (default: \"Select\")\n- TopText: titulo do header da mensagem\n- FooterText: rodape\n- RowId: ID da linha retornado no evento de selecao (default: title da row)\n- desc: descricao opcional abaixo do titulo da row"
+            },
+            "response": []
+          },
+          {
+            "name": "Send List - Secao unica (legado)",
+            "request": {
+              "method": "POST",
+              "header": [
+                { "key": "token", "value": "{{token}}" },
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": {
+                "mode": "raw",
+                "raw": "{\n  \"Phone\": \"5511999999999\",\n  \"ButtonText\": \"Escolher\",\n  \"Desc\": \"Selecione uma opcao\",\n  \"TopText\": \"Menu\",\n  \"List\": [\n    { \"title\": \"Opcao 1\", \"desc\": \"Descricao da opcao 1\", \"RowId\": \"op1\" },\n    { \"title\": \"Opcao 2\", \"desc\": \"Descricao da opcao 2\", \"RowId\": \"op2\" },\n    { \"title\": \"Opcao 3\", \"desc\": \"Descricao da opcao 3\", \"RowId\": \"op3\" }\n  ]\n}",
+                "options": { "raw": { "language": "json" } }
+              },
+              "url": {
+                "raw": "{{baseUrl}}/chat/send/list",
+                "host": ["{{baseUrl}}"],
+                "path": ["chat", "send", "list"]
+              },
+              "description": "Lista interativa usando o campo legado \"List\" (lista flat).\n\n- Compatibilidade retroativa: campo \"List\" aceito alem de \"Sections\"\n- Todos os itens sao agrupados em uma unica secao com titulo = TopText (ou \"Menu\")\n- Prefira \"Sections\" para maior controle"
+            },
+            "response": []
+          },
+          {
+            "name": "Send List - Com Quoted Message",
+            "request": {
+              "method": "POST",
+              "header": [
+                { "key": "token", "value": "{{token}}" },
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": {
+                "mode": "raw",
+                "raw": "{\n  \"Phone\": \"5511999999999\",\n  \"ButtonText\": \"Ver opcoes\",\n  \"Desc\": \"Escolha o departamento\",\n  \"TopText\": \"Atendimento\",\n  \"Sections\": [\n    {\n      \"title\": \"Departamentos\",\n      \"rows\": [\n        { \"title\": \"Vendas\",    \"RowId\": \"vendas\" },\n        { \"title\": \"Suporte\",   \"RowId\": \"suporte\" },\n        { \"title\": \"Financeiro\", \"RowId\": \"financeiro\" }\n      ]\n    }\n  ],\n  \"ContextInfo\": {\n    \"StanzaID\":    \"ABCDEF1234567890\",\n    \"Participant\": \"5511999999999@s.whatsapp.net\"\n  }\n}",
+                "options": { "raw": { "language": "json" } }
+              },
+              "url": {
+                "raw": "{{baseUrl}}/chat/send/list",
+                "host": ["{{baseUrl}}"],
+                "path": ["chat", "send", "list"]
+              },
+              "description": "Lista interativa respondendo a uma mensagem especifica.\n\n- ContextInfo.StanzaID: ID da mensagem original\n- ContextInfo.Participant: JID do autor da mensagem original"
+            },
+            "response": []
+          },
         {
           "name": "Send Poll",
           "request": {
