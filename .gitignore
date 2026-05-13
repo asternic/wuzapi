@@ -3,6 +3,7 @@ files/
 wuzapi
 .env
 .tool-versions
+backup-before-upgrade-*.sql
 
 # Added by Claude Task Master
 # Logs
