@@ -864,6 +864,31 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 
 		log.Info().Str("id", evt.Info.ID).Str("source", evt.Info.SourceString()).Str("parts", strings.Join(metaParts, ", ")).Msg("Message Received")
 
+		// Mobile WhatsApp clients (since ~mid-2025) deliver edits, encrypted
+		// reactions and poll edits wrapped in secretEncryptedMessage. Without
+		// decryption the webhook only sees the ciphertext and downstream
+		// consumers cannot read the edited text. whatsmeow's
+		// DecryptSecretEncryptedMessage handles every step (HKDF from the
+		// original message's secret + AES-GCM); we swap the decrypted body
+		// in so the rest of this handler (and every downstream consumer)
+		// sees the legacy protocolMessage shape, identical to a desktop edit.
+		if encMessage := evt.Message.GetSecretEncryptedMessage(); encMessage != nil {
+			decrypted, derr := mycli.WAClient.DecryptSecretEncryptedMessage(context.Background(), evt)
+			if derr != nil {
+				log.Warn().
+					Err(derr).
+					Str("messageID", evt.Info.ID).
+					Str("secretEncType", encMessage.GetSecretEncType().String()).
+					Msg("DecryptSecretEncryptedMessage failed")
+			} else if decrypted != nil {
+				log.Info().
+					Str("messageID", evt.Info.ID).
+					Str("secretEncType", encMessage.GetSecretEncType().String()).
+					Msg("Decrypted secretEncryptedMessage; swapping evt.Message")
+				evt.Message = decrypted
+			}
+		}
+
 		// If this is a poll vote, decrypt the E2E-encrypted payload so the
 		// webhook can expose which options were selected. Votes arrive as
 		// SHA-256 hashes of the option text; we match those back to the
