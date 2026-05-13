@@ -29,7 +29,7 @@ services:
         condition: service_healthy
     networks:
       - wuzapi-network
-    restart: on-failure
+    restart: unless-stopped
 
   db:
     container_name: wuzapi-jack-ai-main-db
