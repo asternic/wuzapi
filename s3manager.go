@@ -9,10 +9,10 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/jmoiron/sqlx"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+	"github.com/jmoiron/sqlx"
 	"github.com/rs/zerolog/log"
 )
 
@@ -216,6 +216,10 @@ func (m *S3Manager) GenerateS3Key(userID, contactJID, messageID string, mimeType
 		ext = ".opus"
 	case strings.Contains(mimeType, "pdf"):
 		ext = ".pdf"
+	case strings.Contains(mimeType, "spreadsheetml"):
+		ext = ".xlsx"
+	case strings.Contains(mimeType, "excel"):
+		ext = ".xls"
 	case strings.Contains(mimeType, "doc"):
 		if strings.Contains(mimeType, "docx") {
 			ext = ".docx"

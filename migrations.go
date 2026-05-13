@@ -70,6 +70,11 @@ var migrations = []Migration{
 		Name:  "add_data_json",
 		UpSQL: addDataJsonSQL,
 	},
+	{
+		ID:    9,
+		Name:  "add_whatsmeow_message_secrets_message_id_idx",
+		UpSQL: addWhatsmeowMessageSecretsMessageIDIndexSQL,
+	},
 }
 
 const changeIDToStringSQL = `
@@ -211,6 +216,16 @@ BEGIN
     END IF;
 END $$;
 
+-- SQLite version (handled in code)
+`
+
+const addWhatsmeowMessageSecretsMessageIDIndexSQL = `
+-- PostgreSQL version
+DO $$
+BEGIN
+	CREATE INDEX IF NOT EXISTS whatsmeow_message_secrets_message_id_idx
+	ON whatsmeow_message_secrets (message_id);
+END $$;
 -- SQLite version (handled in code)
 `
 
@@ -432,6 +447,12 @@ func applyMigration(db *sqlx.DB, migration Migration) error {
 		if db.DriverName() == "sqlite" {
 			// Add dataJson column to message_history table for SQLite
 			err = addColumnIfNotExistsSQLite(tx, "message_history", "datajson", "TEXT")
+		} else {
+			_, err = tx.Exec(migration.UpSQL)
+		}
+	} else if migration.ID == 9 {
+		if db.DriverName() == "sqlite" {
+			err = nil
 		} else {
 			_, err = tx.Exec(migration.UpSQL)
 		}

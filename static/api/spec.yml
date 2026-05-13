@@ -2010,6 +2010,18 @@ definitions:
         example:
           ["5491155553935@s.whatsapp.net", "5491155553936@s.whatsapp.net"]
         description: "Array of JIDs to mention in the message. Use full WhatsApp JID format (number@s.whatsapp.net)."
+  QuotedMessageExtendedText:
+    type: object
+    properties:
+      text:
+        type: string
+        example: "Original message text"
+  QuotedMessage:
+    type: object
+    description: "Optional quoted message payload for custom reply preview using extendedTextMessage."
+    properties:
+      extendedTextMessage:
+        $ref: "#/definitions/QuotedMessageExtendedText"
   User:
     type: object
     properties:
@@ -2297,6 +2309,8 @@ definitions:
         example: "BEGIN:VCARD\nVERSION:3.0\nN:Doe;John;;;\nFN:John Doe\nORG:Example.com Inc.;\nTITLE:Imaginary test person\nEMAIL;type=INTERNET;type=WORK;type=pref:johnDoe@example.org\nTEL;type=WORK;type=pref:+1 617 555 1212\nTEL;type=WORK:+1 (617) 555-1234\nTEL;type=CELL:+1 781 555 1212\nTEL;type=HOME:+1 202 555 1212\nitem1.ADR;type=WORK:;;2 Enterprise Avenue;Worktown;NY;01111;USA\nitem1.X-ABADR:us\nitem2.ADR;type=HOME;type=pref:;;3 Acacia Avenue;Hoitem2.X-ABADR:us\nEND:VCARD"
       ContextInfo:
         $ref: "#/definitions/ContextInfo"
+      QuotedMessage:
+        $ref: "#/definitions/QuotedMessage"
 
 
   MessageLocation:
@@ -2323,6 +2337,8 @@ definitions:
         example: 2.294481
       ContextInfo:
         $ref: "#/definitions/ContextInfo"
+      QuotedMessage:
+        $ref: "#/definitions/QuotedMessage"
   ReactionText:
     type: object
     required: 
@@ -2367,26 +2383,48 @@ definitions:
     type: object
     required:
       - Phone
-      - ButtonText
       - Desc
-      - TopText
-      - List
     properties:
       Phone:
         type: string
         example: "5521971532700"
       ButtonText:
         type: string
-        example: Click Here
+        example: "Click Here"
       Desc:
         type: string
-        example: This is a list
+        example: "This is a list"
       TopText:
         type: string
-        example: This is a list
+        example: "This is a list"
       FooterText:
         type: string
-        example: This is a footer text
+        example: "This is a footer text"
+      Id:
+        type: string
+        example: "ABCDABCD1234"
+      Sections:
+        type: array
+        items:
+          type: object
+          properties:
+            title:
+              type: string
+              example: "Menu"
+            rows:
+              type: array
+              items:
+                type: object
+                properties:
+                  title:
+                    type: string
+                    example: "menu option 1"
+                  desc:
+                    type: string
+                    example: "long description"
+                  RowId:
+                    type: string
+                    example: "1"
       List:
         type: array
         items:
@@ -2394,39 +2432,86 @@ definitions:
           properties:
             title:
               type: string
-              example: menu button 1
+              example: "menu option 1"
             desc:
               type: string
-              example: long description
+              example: "long description"
             RowId:
               type: string
-              example: 1
+              example: "1"
+      ContextInfo:
+        type: object
+        required:
+          - StanzaID
+          - Participant
+        properties:
+          StanzaID:
+            type: string
+            example: "3EB06F9067F80BAB89FF"
+          Participant:
+            type: string
+            example: "5491155553935@s.whatsapp.net"
 
   MessageButtons:
     type: object
     required:
       - Phone
       - Body
+      - Buttons
     properties:
       Phone:
         type: string
         example: "5521971532700"
       Body:
         type: string
-        example: How you doin
+        example: "How you doin"
+      Title:
+        type: string
+        example: "Main menu"
+      Footer:
+        type: string
+        example: "Choose an option"
+      Image:
+        type: string
+        example: "https://example.com/image.jpg"
       Id:
         type: string
         example: "ABCDABCD1234"
+      Buttons:
+        type: array
+        minItems: 1
+        maxItems: 5
+        items:
+          type: object
+          properties:
+            type:
+              type: string
+              example: "reply" # reply | cta_url | cta_call | copy
+            title:
+              type: string
+              example: "Confirm"
+            id:
+              type: string
+              example: "btn_confirm"
+            url:
+              type: string
+              example: "https://example.com"
+            phone_number:
+              type: string
+              example: "+5511999999999"
+            copy_code:
+              type: string
+              example: "PROMO2024"
       ContextInfo:
         type: object
         required:
-          - StanzaId
+          - StanzaID
           - Participant
         properties:
-          StanzaId: 
+          StanzaID:
             type: string
-            example: "3EB06F9067F80BAB89FF" 
-          Participant: 
+            example: "3EB06F9067F80BAB89FF"
+          Participant:
             type: string
             example: "5491155553935@s.whatsapp.net"
 
@@ -2455,6 +2540,8 @@ definitions:
         type: string
         description: "Text content of the message being replied to (for displaying quote preview)"
         example: "Original message text"
+      QuotedMessage:
+        $ref: "#/definitions/QuotedMessage"
   MessageImage:
     type: object
     required: 
@@ -2475,6 +2562,8 @@ definitions:
         example: "ABCDABCD1234"
       ContextInfo:
         $ref: "#/definitions/ContextInfo"
+      QuotedMessage:
+        $ref: "#/definitions/QuotedMessage"
   MessageAudio:
     type: object
     required:
@@ -2508,6 +2597,8 @@ definitions:
         example: [0, 0, 0, 12, 20, 20, 22, 10, 5, 0, 0, 0]
       ContextInfo:
         $ref: "#/definitions/ContextInfo"
+      QuotedMessage:
+        $ref: "#/definitions/QuotedMessage"
   MessageVideo:
     type: object
     required: 
@@ -2531,6 +2622,8 @@ definitions:
         example: "AA00D010"
       ContextInfo:
         $ref: "#/definitions/ContextInfo"
+      QuotedMessage:
+        $ref: "#/definitions/QuotedMessage"
   MessageSticker:
     type: object
     required: 
@@ -2569,6 +2662,8 @@ definitions:
       ContextInfo:
         $ref: "#/definitions/ContextInfo"
         description: "Optional context info for replies, mentions, and forwarding"
+      QuotedMessage:
+        $ref: "#/definitions/QuotedMessage"
   MessageDocument:
     type: object
     required: 
@@ -2590,6 +2685,8 @@ definitions:
         example: "ABCDABCD1234"
       ContextInfo:
         $ref: "#/definitions/ContextInfo"
+      QuotedMessage:
+        $ref: "#/definitions/QuotedMessage"
   MessageTemplate:
     type: object
     required: 
