@@ -8,7 +8,6 @@ import (
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
-	"crypto/tls"
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
@@ -271,43 +270,11 @@ func callHook(myurl string, payload map[string]string, userID string) {
 	callHookWithHmac(myurl, payload, userID, nil)
 }
 
-func newWebhookHTTPClient() *resty.Client {
-	client := resty.New()
-	client.SetRedirectPolicy(resty.FlexibleRedirectPolicy(15))
-	if *waDebug == "DEBUG" {
-		client.SetDebug(true)
-	}
-	client.SetTimeout(30 * time.Second)
-	client.SetTLSClientConfig(&tls.Config{InsecureSkipVerify: true})
-	return client
-}
-
-func getWebhookHTTPClient(userID string) *resty.Client {
-	client := clientManager.GetHTTPClient(userID)
-	if client != nil {
-		return client
-	}
-
-	log.Warn().Str("userID", userID).Msg("HTTP client not found for webhook; using temporary client")
-	return newWebhookHTTPClient()
-}
-
 // webhook for regular messages with HMAC
 func callHookWithHmac(myurl string, payload map[string]string, userID string, encryptedHmacKey []byte) {
-	defer func() {
-		if r := recover(); r != nil {
-			log.Error().
-				Interface("panic", r).
-				Str("url", myurl).
-				Str("userID", userID).
-				Bytes("stack", debug.Stack()).
-				Msg("Recovered panic while calling webhook")
-		}
-	}()
-
 	log.Info().Str("url", myurl).Str("userID", userID).Msg("Sending POST to client with retry logic")
 
-	client := getWebhookHTTPClient(userID)
+	client := clientManager.GetHTTPClient(userID)
 
 	// Retry settings
 	maxRetries := 1
@@ -459,23 +426,10 @@ func callHookFile(myurl string, payload map[string]string, userID string, file s
 }
 
 // webhook for messages with file attachments and HMAC
-func callHookFileWithHmac(myurl string, payload map[string]string, userID string, file string, encryptedHmacKey []byte) (err error) {
-	defer func() {
-		if r := recover(); r != nil {
-			log.Error().
-				Interface("panic", r).
-				Str("file", file).
-				Str("url", myurl).
-				Str("userID", userID).
-				Bytes("stack", debug.Stack()).
-				Msg("Recovered panic while calling file webhook")
-			err = fmt.Errorf("panic while calling file webhook: %v", r)
-		}
-	}()
-
+func callHookFileWithHmac(myurl string, payload map[string]string, userID string, file string, encryptedHmacKey []byte) error {
 	log.Info().Str("file", file).Str("url", myurl).Msg("Sending POST with retry logic")
 
-	client := getWebhookHTTPClient(userID)
+	client := clientManager.GetHTTPClient(userID)
 
 	maxRetries := 1
 	if *webhookRetryEnabled {
