@@ -319,6 +319,9 @@ func callHookWithHmac(myurl string, payload map[string]string, userID string, en
 					if instanceName, ok := payload["instanceName"]; ok {
 						postmap["instanceName"] = instanceName
 					}
+					if serverId, ok := payload["serverId"]; ok {
+						postmap["serverId"] = serverId
+					}
 					postmap["userID"] = userID
 					body = postmap
 				}

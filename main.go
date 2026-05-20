@@ -69,6 +69,8 @@ var (
 	webhookRetryDelaySeconds = flag.Int("retrydelay", 30, "Delay in seconds between webhook retries")
 	webhookErrorQueueName    = flag.String("errorqueue", "webhook_errors", "RabbitMQ queue name for failed webhooks")
 
+	queueServerID string
+
 	container        *sqlstore.Container
 	clientManager    = NewClientManager()
 	killchannel      = make(map[string](chan bool))
@@ -229,6 +231,11 @@ func main() {
 	}
 	if v := os.Getenv("WEBHOOK_ERROR_QUEUE_NAME"); v != "" {
 		*webhookErrorQueueName = v
+	}
+
+	queueServerID = os.Getenv("QUEUE_SERVER_ID")
+	if queueServerID != "" {
+		log.Info().Str("queue_server_id", queueServerID).Msg("Queue server ID configured from environment variable")
 	}
 
 	log.Info().

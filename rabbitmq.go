@@ -265,6 +265,7 @@ func sendToGlobalRabbit(jsonData []byte, token string, userID string, queueName 
 	// Add the new fields directly to the original data
 	originalData["userID"] = userID
 	originalData["instanceName"] = instance_name
+	originalData["serverId"] = queueServerID
 
 	// Marshal back to JSON
 	enhancedJSON, err := json.Marshal(originalData)

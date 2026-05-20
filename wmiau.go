@@ -48,6 +48,10 @@ func ensureS3ClientForUser(userID string) {
 	GetS3Manager().EnsureClientFromDB(userID)
 }
 
+func enrichWebhookPayload(postmap map[string]interface{}) {
+	postmap["serverId"] = queueServerID
+}
+
 func sendToGlobalWebHook(jsonData []byte, token string, userID string) {
 	jsonDataStr := string(jsonData)
 
@@ -64,6 +68,7 @@ func sendToGlobalWebHook(jsonData []byte, token string, userID string) {
 			"jsonData":     jsonDataStr,
 			"userID":       userID,
 			"instanceName": instance_name,
+			"serverId":     queueServerID,
 		}
 		callHookWithHmac(*globalWebhook, globalData, userID, globalHMACKeyEncrypted)
 	}
@@ -84,6 +89,7 @@ func sendToUserWebHookWithHmac(webhookurl string, path string, jsonData []byte, 
 		"jsonData":     string(jsonData),
 		"userID":       userID,
 		"instanceName": instance_name,
+		"serverId":     queueServerID,
 	}
 
 	log.Debug().Interface("webhookData", data).Msg("Data being sent to webhook")
@@ -225,6 +231,8 @@ func sendEventWithWebHook(mycli *MyClient, postmap map[string]interface{}, path 
 	if !checkIfSubscribedInEvent {
 		return
 	}
+
+	enrichWebhookPayload(postmap)
 
 	// In stdio mode, send as JSON-RPC notification instead of HTTP webhook
 	if mycli.s != nil && mycli.s.mode == Stdio {
