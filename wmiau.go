@@ -399,6 +399,31 @@ func getPlatformTypeEnum(platformType string) *waCompanionReg.DeviceProps_Platfo
 	}
 }
 
+func (s *server) connectionOSName(userID string) string {
+	instanceOSName := ""
+	if err := s.db.Get(&instanceOSName, "SELECT COALESCE(osname, '') FROM users WHERE id=$1", userID); err != nil {
+		log.Warn().Err(err).Str("userid", userID).Msg("Failed to load instance osname; using global osname")
+	}
+
+	instanceOSName = strings.TrimSpace(instanceOSName)
+	if instanceOSName != "" {
+		return instanceOSName
+	}
+
+	return *osName
+}
+
+func (s *server) configureDeviceProps(userID string) {
+	connectionOSName := s.connectionOSName(userID)
+	store.DeviceProps.PlatformType = getPlatformTypeEnum(*platformType)
+	store.DeviceProps.Os = &connectionOSName
+	log.Info().
+		Str("userid", userID).
+		Str("osname", connectionOSName).
+		Str("platformType", *platformType).
+		Msg("Configured WhatsApp connection device props")
+}
+
 func (s *server) startClient(userID string, textjid string, token string, subscriptions []string) {
 	log.Info().Str("userid", userID).Str("jid", textjid).Msg("Starting websocket connection to Whatsapp")
 
@@ -439,9 +464,7 @@ func (s *server) startClient(userID string, textjid string, token string, subscr
 
 	// Now we can use the client with the manager
 	clientManager.SetWhatsmeowClient(userID, client)
-
-	store.DeviceProps.PlatformType = getPlatformTypeEnum(*platformType)
-	store.DeviceProps.Os = osName
+	s.configureDeviceProps(userID)
 
 	mycli := MyClient{client, 1, userID, token, subscriptions, s.db, s}
 	mycli.eventHandlerID = mycli.WAClient.AddEventHandler(mycli.myEventHandler)

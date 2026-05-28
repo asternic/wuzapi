@@ -5163,6 +5163,7 @@ func (s *server) ListUsers() http.HandlerFunc {
 		ProxyURL   sql.NullString `db:"proxy_url"`
 		Events     string         `db:"events"`
 		History    sql.NullInt64  `db:"history"`
+		OSName     sql.NullString `db:"osname"`
 	}
 	return func(w http.ResponseWriter, r *http.Request) {
 		vars := mux.Vars(r)
@@ -5173,11 +5174,11 @@ func (s *server) ListUsers() http.HandlerFunc {
 
 		if hasID {
 			// Fetch a single user
-			query = "SELECT id, name, token, webhook, jid, qrcode, connected, expiration, proxy_url, events, history FROM users WHERE id = $1"
+			query = "SELECT id, name, token, webhook, jid, qrcode, connected, expiration, proxy_url, events, history, COALESCE(osname, '') AS osname FROM users WHERE id = $1"
 			args = append(args, userID)
 		} else {
 			// Fetch all users
-			query = "SELECT id, name, token, webhook, jid, qrcode, connected, expiration, proxy_url, events, history FROM users"
+			query = "SELECT id, name, token, webhook, jid, qrcode, connected, expiration, proxy_url, events, history, COALESCE(osname, '') AS osname FROM users"
 		}
 
 		rows, err := s.db.Queryx(query, args...)
@@ -5219,6 +5220,7 @@ func (s *server) ListUsers() http.HandlerFunc {
 				"expiration": user.Expiration.Int64,
 				"proxy_url":  user.ProxyURL.String,
 				"events":     user.Events,
+				"osname":     user.OSName.String,
 			}
 			// Add proxy_config
 			proxyURL := user.ProxyURL.String
@@ -5297,6 +5299,7 @@ func (s *server) AddUser() http.HandlerFunc {
 			Webhook     string       `json:"webhook,omitempty"`
 			Expiration  int          `json:"expiration,omitempty"`
 			Events      string       `json:"events,omitempty"`
+			OSName      string       `json:"osname,omitempty"`
 			ProxyConfig *ProxyConfig `json:"proxyConfig,omitempty"`
 			S3Config    *S3Config    `json:"s3Config,omitempty"`
 			HmacKey     string       `json:"hmacKey,omitempty"`
@@ -5315,6 +5318,8 @@ func (s *server) AddUser() http.HandlerFunc {
 
 		log.Info().Interface("proxyConfig", user.ProxyConfig).Interface("s3Config", user.S3Config).Msg("Received values for proxyConfig and s3Config")
 		log.Debug().Interface("user", user).Msg("Received values for user")
+
+		user.OSName = strings.TrimSpace(user.OSName)
 
 		// Set defaults only if nil
 		if user.Events == "" {
@@ -5407,9 +5412,9 @@ func (s *server) AddUser() http.HandlerFunc {
 
 		// Insert user with all proxy, S3 and HMAC fields
 		if _, err = s.db.Exec(
-			"INSERT INTO users (id, name, token, webhook, expiration, events, jid, qrcode, proxy_url, s3_enabled, s3_endpoint, s3_region, s3_bucket, s3_access_key, s3_secret_key, s3_path_style, s3_public_url, media_delivery, s3_retention_days, hmac_key, history) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)",
+			"INSERT INTO users (id, name, token, webhook, expiration, events, jid, qrcode, proxy_url, s3_enabled, s3_endpoint, s3_region, s3_bucket, s3_access_key, s3_secret_key, s3_path_style, s3_public_url, media_delivery, s3_retention_days, hmac_key, history, osname) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)",
 			id, user.Name, user.Token, user.Webhook, user.Expiration, user.Events, "", "", user.ProxyConfig.ProxyURL,
-			user.S3Config.Enabled, user.S3Config.Endpoint, user.S3Config.Region, user.S3Config.Bucket, user.S3Config.AccessKey, user.S3Config.SecretKey, user.S3Config.PathStyle, user.S3Config.PublicURL, user.S3Config.MediaDelivery, user.S3Config.RetentionDays, encryptedHmacKey, user.History,
+			user.S3Config.Enabled, user.S3Config.Endpoint, user.S3Config.Region, user.S3Config.Bucket, user.S3Config.AccessKey, user.S3Config.SecretKey, user.S3Config.PathStyle, user.S3Config.PublicURL, user.S3Config.MediaDelivery, user.S3Config.RetentionDays, encryptedHmacKey, user.History, user.OSName,
 		); err != nil {
 			log.Error().Str("error", fmt.Sprintf("%v", err)).Msg("admin DB error")
 			s.respondWithJSON(w, http.StatusInternalServerError, map[string]interface{}{
@@ -5460,6 +5465,7 @@ func (s *server) AddUser() http.HandlerFunc {
 			"webhook":      user.Webhook,
 			"expiration":   user.Expiration,
 			"events":       user.Events,
+			"osname":       user.OSName,
 			"proxy_config": proxyConfig,
 			"s3_config":    s3Config,
 			"hmac_key":     user.HmacKey != "",
@@ -5493,6 +5499,7 @@ func (s *server) EditUser() http.HandlerFunc {
 			Webhook     string       `json:"webhook,omitempty"`
 			Expiration  int          `json:"expiration,omitempty"`
 			Events      string       `json:"events,omitempty"`
+			OSName      *string      `json:"osname,omitempty"`
 			ProxyConfig *ProxyConfig `json:"proxyConfig,omitempty"`
 			S3Config    *S3Config    `json:"s3Config,omitempty"`
 			History     int          `json:"history,omitempty"`
@@ -5510,6 +5517,11 @@ func (s *server) EditUser() http.HandlerFunc {
 
 		log.Info().Interface("proxyConfig", user.ProxyConfig).Interface("s3Config", user.S3Config).Msg("Received values for proxyConfig and s3Config")
 		log.Debug().Interface("user", user).Msg("Received values for user")
+
+		if user.OSName != nil {
+			trimmedOSName := strings.TrimSpace(*user.OSName)
+			user.OSName = &trimmedOSName
+		}
 
 		// Check if user exists
 		var count int
@@ -5574,6 +5586,9 @@ func (s *server) EditUser() http.HandlerFunc {
 		addField("expiration", user.Expiration, user.Expiration != 0)
 		addField("events", user.Events, user.Events != "")
 		addField("history", user.History, user.History != 0)
+		if user.OSName != nil {
+			addField("osname", *user.OSName, true)
+		}
 
 		// Handle proxy config
 		if user.ProxyConfig != nil {

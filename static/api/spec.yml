@@ -1,7 +1,7 @@
 openapi: 3.0.0
 info:
   title: WUZAPI
-  description: "WUZAPI implements a multi user and multi device REST API for WhatsApp.\n\n<h2>Authentication</h2><ul><li>Standard Endpoints: Include the token header with a valid user token (matches tokens stored in the users database table).</li><li>Admin Endpoints: Use the Authorization header with the admin token (set in .env as WUZAPI_ADMIN_TOKEN).</li></ul><h2>Admin Setup:</h2>You can manage users and do some tests by using the builtin dashboard [here](/dashboard).<h3>Add a Sample User via API</h3>Run this command to create a test user:<pre><code>curl -X POST http://localhost:8080/admin/users \\ \n-H \"Authorization: $WUZAPI_ADMIN_TOKEN\" \\ \n-H \"Content-Type: application/json\" \\ \n-d '{\"name\": \"John\", \"token\": \"Z1234ABCCXD\"}' </code> </pre>\n\n<h2>Webhook Configuration</h2>To receive WhatsApp messages:<ul><li>Host your own server (to process incoming messages).</li><li>Set its URL as the webhook via the [webhook](#Webhook) API call.</li></ul><h2>Phone number format:</h2><ul><li>Required: Country code (e.g. <b>5491155553934</b> for Argentina</li><li>Do not prefix with a plus sign (+), as natively whatsapp requires no plus sign prefix.</li></ul>"
+  description: "WUZAPI implements a multi user and multi device REST API for WhatsApp.\n\n<h2>Authentication</h2><ul><li>Standard Endpoints: Include the token header with a valid user token (matches tokens stored in the users database table).</li><li>Admin Endpoints: Use the Authorization header with the admin token (set in .env as WUZAPI_ADMIN_TOKEN).</li></ul><h2>Admin Setup:</h2>You can manage users and do some tests by using the builtin dashboard [here](/dashboard).<h3>Add a Sample User via API</h3>Run this command to create a test user:<pre><code>curl -X POST http://localhost:8080/admin/users \\ \n-H \"Authorization: $WUZAPI_ADMIN_TOKEN\" \\ \n-H \"Content-Type: application/json\" \\ \n-d '{\"name\": \"John\", \"token\": \"Z1234ABCCXD\", \"osname\": \"WuzAPI - John\"}' </code> </pre>\n\n<h2>Webhook Configuration</h2>To receive WhatsApp messages:<ul><li>Host your own server (to process incoming messages).</li><li>Set its URL as the webhook via the [webhook](#Webhook) API call.</li></ul><h2>Phone number format:</h2><ul><li>Required: Country code (e.g. <b>5491155553934</b> for Argentina</li><li>Do not prefix with a plus sign (+), as natively whatsapp requires no plus sign prefix.</li></ul>"
   version: '3.0.0'
   termsOfService: ''
    
@@ -101,7 +101,7 @@ paths:
           content:
             application/json:
               schema:
-                example: { "code": 200, "data": [ { "connected": true, "events": "All", "expiration": 0, "id": "bec45bb93cbd24cbec32941ec3c93a12", "jid": "5491155551122:12@s.whatsapp.net", "loggedIn": true, "name": "Some User", "proxy_url": "", "qrcode": "", "token": "d030sl9aDL39sl3075zz", "webhook": "https://some.domain/webhook" } ], "success": true }
+                example: { "code": 200, "data": [ { "connected": true, "events": "All", "expiration": 0, "id": "bec45bb93cbd24cbec32941ec3c93a12", "jid": "5491155551122:12@s.whatsapp.net", "loggedIn": true, "name": "Some User", "osname": "WuzAPI - Some User", "proxy_url": "", "qrcode": "", "token": "d030sl9aDL39sl3075zz", "webhook": "https://some.domain/webhook" } ], "success": true }
     post:
       tags:
         - Admin
@@ -130,6 +130,7 @@ paths:
                   token: "1234ABCD"
                   webhook: "https://webhook.site/1234567890"
                   events: "All"
+                  osname: "WuzAPI - John Doe"
                   proxy_config:
                     enabled: true
                     proxy_url: "https://serverproxy.com:9080"
@@ -166,7 +167,7 @@ paths:
           content:
             application/json:
               schema:
-                example: { "code": 200, "data": [ { "connected": true, "events": "All", "expiration": 0, "id": "bec45bb93cbd24cbec32941ec3c93a12", "jid": "5491155551122:12@s.whatsapp.net", "loggedIn": true, "name": "Some User", "proxy_url": "", "qrcode": "", "token": "d030sl9aDL39sl3075zz", "webhook": "https://some.domain/webhook" } ], "success": true }
+                example: { "code": 200, "data": [ { "connected": true, "events": "All", "expiration": 0, "id": "bec45bb93cbd24cbec32941ec3c93a12", "jid": "5491155551122:12@s.whatsapp.net", "loggedIn": true, "name": "Some User", "osname": "WuzAPI - Some User", "proxy_url": "", "qrcode": "", "token": "d030sl9aDL39sl3075zz", "webhook": "https://some.domain/webhook" } ], "success": true }
     delete:
       tags:
         - Admin
@@ -2146,6 +2147,10 @@ definitions:
       events:
         type: string
         example: "All"
+      osname:
+        type: string
+        example: "WuzAPI - John Doe"
+        description: "WhatsApp linked device name for this user. Empty means use the server default. Applies when pairing a new linked device."
       proxy_config:
         type: object
         properties:
@@ -2206,6 +2211,10 @@ definitions:
         type: string
         example: "All"
         description: "Events to subscribe to. Ex: 'All', 'Message', 'Presence'"
+      osname:
+        type: string
+        example: "WuzAPI - John Doe"
+        description: "WhatsApp linked device name for this user. Empty means use the server default. Applies when pairing a new linked device."
       proxyConfig:
         type: object
         properties:

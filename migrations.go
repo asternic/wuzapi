@@ -75,6 +75,11 @@ var migrations = []Migration{
 		Name:  "add_whatsmeow_message_secrets_message_id_idx",
 		UpSQL: addWhatsmeowMessageSecretsMessageIDIndexSQL,
 	},
+	{
+		ID:    10,
+		Name:  "add_user_osname",
+		UpSQL: addUserOSNameSQL,
+	},
 }
 
 const changeIDToStringSQL = `
@@ -113,7 +118,8 @@ BEGIN
             connected INTEGER,
             expiration INTEGER,
             events TEXT NOT NULL DEFAULT '',
-            proxy_url TEXT DEFAULT ''
+            proxy_url TEXT DEFAULT '',
+            osname TEXT DEFAULT ''
         );
     END IF;
 END $$;
@@ -226,6 +232,18 @@ BEGIN
 	CREATE INDEX IF NOT EXISTS whatsmeow_message_secrets_message_id_idx
 	ON whatsmeow_message_secrets (message_id);
 END $$;
+-- SQLite version (handled in code)
+`
+
+const addUserOSNameSQL = `
+-- PostgreSQL version - Add per-user WhatsApp connection OS name
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'osname') THEN
+        ALTER TABLE users ADD COLUMN osname TEXT DEFAULT '';
+    END IF;
+END $$;
+
 -- SQLite version (handled in code)
 `
 
@@ -349,7 +367,8 @@ func applyMigration(db *sqlx.DB, migration Migration) error {
                     connected INTEGER,
                     expiration INTEGER,
                     events TEXT NOT NULL DEFAULT '',
-                    proxy_url TEXT DEFAULT ''
+                    proxy_url TEXT DEFAULT '',
+                    osname TEXT DEFAULT ''
                 )`)
 		} else {
 			_, err = tx.Exec(migration.UpSQL)
@@ -453,6 +472,12 @@ func applyMigration(db *sqlx.DB, migration Migration) error {
 	} else if migration.ID == 9 {
 		if db.DriverName() == "sqlite" {
 			err = nil
+		} else {
+			_, err = tx.Exec(migration.UpSQL)
+		}
+	} else if migration.ID == 10 {
+		if db.DriverName() == "sqlite" {
+			err = addColumnIfNotExistsSQLite(tx, "users", "osname", "TEXT DEFAULT ''")
 		} else {
 			_, err = tx.Exec(migration.UpSQL)
 		}

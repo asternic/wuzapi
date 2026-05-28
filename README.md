@@ -258,6 +258,9 @@ The JSON body for creating a new user must contain:
 - `webhook` [string] : URL to send events via POST (optional)
 - `events` [string] : Comma-separated list of events to receive (required) - Valid events are: "Message", "ReadReceipt", "Presence", "HistorySync", "ChatPresence", "All"
 - `expiration` [int] : Expiration timestamp (optional, not enforced by the system)
+- `osname` [string] : WhatsApp linked device name for this user (optional, falls back to `-osname` or `SESSION_DEVICE_NAME`)
+
+The `osname` value is used when pairing a new WhatsApp linked device. Changing it later requires logging out and pairing the instance again for WhatsApp to show the new name.
 
 ## User Creation with Optional Proxy and S3 Configuration
 
@@ -269,6 +272,7 @@ You can create a user with optional proxy and S3 storage configuration. All fiel
 {
   "name": "test_user",
   "token": "user_token",
+  "osname": "WuzAPI - test_user",
   "proxyConfig": {
     "enabled": true,
     "proxyURL": "socks5://user:pass@host:port"

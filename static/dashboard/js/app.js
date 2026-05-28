@@ -541,6 +541,7 @@ async function addInstance(data) {
   const payload = {
     name: data.name,
     token: data.token,
+    osname: data.osname || '',
     events: data.events.join(','),
     webhook: data.webhook_url || '',
     expiration: 0,
@@ -1236,6 +1237,10 @@ function populateInstances(instances) {
                           <div class="item">
                               <div class="header">JID</div>
                               <div class="content">${instance.jid || 'Not available'}</div>
+                          </div>
+                          <div class="item">
+                              <div class="header">Connection Name</div>
+                              <div class="content">${instance.osname || 'Server default'}</div>
                           </div>
                           <div class="item">
                               <div class="header">Webhook</div>

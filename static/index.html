@@ -298,7 +298,7 @@ TZ=America/New_York</pre>
 <pre>curl -X POST http://localhost:8080/admin/users \
 -H "Authorization: $WUZAPI_ADMIN_TOKEN" \
 -H "Content-Type: application/json" \
--d '{"name": "John", "token": "Z1234ABCCXD"}'</pre>
+-d '{"name": "John", "token": "Z1234ABCCXD", "osname": "WuzAPI - John"}'</pre>
                     </div>
                     <p>Once users are created, you can communicate with the API by passing the <strong>Token</strong> header as a simple authentication method. You can have multiple users (different numbers) on the same server. For every user you will need to Connect to whatsapp and then either scan a QR Code or Pair via phone number.</p>
                 </div>
