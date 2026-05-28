@@ -3,6 +3,7 @@ files/
 wuzapi
 .env
 .tool-versions
+e2e/.tmp/
 
 # Added by Claude Task Master
 # Logs
