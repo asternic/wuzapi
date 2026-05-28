@@ -36,13 +36,18 @@ func request(driver *webdriver.Driver, method string, path string, body map[stri
 		return nil, err
 	}
 
+	var responseBody []byte
+	if driverResponse.Body != nil {
+		responseBody = *driverResponse.Body
+	}
+
 	appiumResponse := &response{
 		statusCode: driverResponse.StatusCode,
-		body:       *driverResponse.Body,
+		body:       responseBody,
 	}
 
 	if driverResponse.StatusCode < 200 || driverResponse.StatusCode > 299 {
-		return appiumResponse, fmt.Errorf("Appium returned HTTP %d for %s %s: %s", driverResponse.StatusCode, method, path, compactBody(*driverResponse.Body))
+		return appiumResponse, fmt.Errorf("Appium returned HTTP %d for %s %s: %s", driverResponse.StatusCode, method, path, compactBody(responseBody))
 	}
 
 	return appiumResponse, nil

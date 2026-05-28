@@ -27,6 +27,10 @@ func (client *Client) RequestPairCode(ctx context.Context, user *ScenarioUser, p
 	var lastErr error
 
 	for time.Now().Before(deadline) {
+		if err := ctx.Err(); err != nil {
+			return "", err
+		}
+
 		var pairResponse struct {
 			LinkingCode string `json:"LinkingCode"`
 		}
