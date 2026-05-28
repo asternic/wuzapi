@@ -54,10 +54,22 @@ func StartServer(ctx context.Context) (*Server, error) {
 		return nil, fmt.Errorf("failed to create the e2e HTTP log: %w", err)
 	}
 
+	serverEnvironment := isolatedEnvironment(adminToken)
+	binaryPath := filepath.Join(runtimeDir, "wuzapi")
+	buildCommand := exec.CommandContext(ctx, "go", "build", "-o", binaryPath, ".")
+	buildCommand.Dir = repoRoot
+	buildCommand.Env = serverEnvironment
+	buildCommand.Stdout = logFile
+	buildCommand.Stderr = logFile
+	if err := buildCommand.Run(); err != nil {
+		_ = logFile.Close()
+		return nil, fmt.Errorf("failed to build the project HTTP server for e2e: %w", err)
+	}
+
 	commandCtx, cancel := context.WithCancel(ctx)
-	command := exec.CommandContext(commandCtx, "go", "run", ".", "-address", "127.0.0.1", "-port", port, "-admintoken", adminToken, "-datadir", runtimeDir, "-logtype", "json", "-color=false")
+	command := exec.CommandContext(commandCtx, binaryPath, "-address", "127.0.0.1", "-port", port, "-admintoken", adminToken, "-datadir", runtimeDir, "-logtype", "json", "-color=false")
 	command.Dir = repoRoot
-	command.Env = isolatedEnvironment(adminToken)
+	command.Env = serverEnvironment
 	command.Stdout = logFile
 	command.Stderr = logFile
 
