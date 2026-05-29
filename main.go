@@ -131,6 +131,28 @@ func signalKill(userID string) {
 	}
 }
 
+// trustedHosts holds hostnames that bypass SSRF checks (e.g. internal Docker service names).
+// Populated from WUZAPI_TRUSTED_HOSTS env var (comma-separated).
+var trustedHosts = map[string]struct{}{}
+
+func initTrustedHosts() {
+	if v := os.Getenv("WUZAPI_TRUSTED_HOSTS"); v != "" {
+		for _, h := range strings.Split(v, ",") {
+			h = strings.TrimSpace(h)
+			if h != "" {
+				trustedHosts[h] = struct{}{}
+			}
+		}
+		log.Info().Strs("hosts", func() []string {
+			out := make([]string, 0, len(trustedHosts))
+			for h := range trustedHosts {
+				out = append(out, h)
+			}
+			return out
+		}()).Msg("SSRF trusted hosts configured")
+	}
+}
+
 func newSafeHTTPClient() *http.Client {
 	return &http.Client{
 		Timeout: 60 * time.Second,
@@ -139,6 +161,12 @@ func newSafeHTTPClient() *http.Client {
 				host, port, err := net.SplitHostPort(addr)
 				if err != nil {
 					return nil, fmt.Errorf("unexpected address format from http transport: %q: %w", addr, err)
+				}
+
+				// Allow explicitly trusted internal hostnames (e.g. Docker service names)
+				if _, trusted := trustedHosts[host]; trusted {
+					dialer := &net.Dialer{Timeout: 4 * time.Second, KeepAlive: 30 * time.Second}
+					return dialer.DialContext(ctx, network, net.JoinHostPort(host, port))
 				}
 
 				ips, err := net.LookupIP(host)
@@ -229,6 +257,7 @@ func main() {
 	}
 
 	flag.Parse()
+	initTrustedHosts()
 
 	// Check for address in environment variable if flag is default or empty
 	if *address == "0.0.0.0" || *address == "" {

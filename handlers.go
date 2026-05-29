@@ -2253,6 +2253,115 @@ func (s *server) SendButtons() http.HandlerFunc {
 	}
 }
 
+// SendPix sends a PIX payment message with a copy-code button containing the PIX key/payload.
+func (s *server) SendPix() http.HandlerFunc {
+
+	type sendPixStruct struct {
+		Phone   string `json:"Phone"`
+		Body    string `json:"Body"`    // Main message text
+		PixCode string `json:"PixCode"` // PIX copia-e-cola payload
+		Title   string `json:"Title"`   // Optional header title
+		Footer  string `json:"Footer"`  // Optional footer
+		Id      string `json:"Id"`      // Optional custom message ID
+	}
+
+	return func(w http.ResponseWriter, r *http.Request) {
+		txtid := r.Context().Value("userinfo").(Values).Get("Id")
+		client := clientManager.GetWhatsmeowClient(txtid)
+		if client == nil {
+			s.Respond(w, r, http.StatusInternalServerError, errors.New("no session"))
+			return
+		}
+
+		var t sendPixStruct
+		if err := json.NewDecoder(r.Body).Decode(&t); err != nil {
+			s.Respond(w, r, http.StatusBadRequest, errors.New("could not decode Payload"))
+			return
+		}
+		if t.Phone == "" || t.PixCode == "" || t.Body == "" {
+			s.Respond(w, r, http.StatusBadRequest, errors.New("missing Phone, Body or PixCode"))
+			return
+		}
+
+		recipient, ok := parseJID(t.Phone)
+		if !ok {
+			s.Respond(w, r, http.StatusBadRequest, errors.New("could not parse Phone"))
+			return
+		}
+
+		msgid := t.Id
+		if msgid == "" {
+			msgid = client.GenerateMessageID()
+		}
+
+		// Build copy_code button with PIX payload
+		paramsJSON, _ := json.Marshal(map[string]string{
+			"display_text": "Copiar código PIX",
+			"copy_code":    t.PixCode,
+		})
+		pixBtn := &waE2E.InteractiveMessage_NativeFlowMessage_NativeFlowButton{
+			Name:             proto.String("cta_copy"),
+			ButtonParamsJSON: proto.String(string(paramsJSON)),
+		}
+
+		interactiveMsg := &waE2E.InteractiveMessage{
+			Header: &waE2E.InteractiveMessage_Header{},
+			Body:   &waE2E.InteractiveMessage_Body{Text: proto.String(t.Body)},
+			InteractiveMessage: &waE2E.InteractiveMessage_NativeFlowMessage_{
+				NativeFlowMessage: &waE2E.InteractiveMessage_NativeFlowMessage{
+					Buttons:        []*waE2E.InteractiveMessage_NativeFlowMessage_NativeFlowButton{pixBtn},
+					MessageVersion: proto.Int32(1),
+				},
+			},
+		}
+		if t.Footer != "" {
+			interactiveMsg.Footer = &waE2E.InteractiveMessage_Footer{Text: proto.String(t.Footer)}
+		}
+		if t.Title != "" {
+			interactiveMsg.Header.Title = proto.String(t.Title)
+		}
+
+		finalMsg := &waE2E.Message{InteractiveMessage: interactiveMsg}
+
+		extraNodes := []waBinary.Node{{
+			Tag: "biz",
+			Content: []waBinary.Node{{
+				Tag:   "interactive",
+				Attrs: waBinary.Attrs{"type": "native_flow", "v": "1"},
+				Content: []waBinary.Node{{
+					Tag:   "native_flow",
+					Attrs: waBinary.Attrs{"v": "9", "name": "mixed"},
+				}},
+			}},
+		}}
+
+		resp, err := client.SendMessage(context.Background(), recipient, finalMsg,
+			whatsmeow.SendRequestExtra{
+				ID:              msgid,
+				AdditionalNodes: &extraNodes,
+			},
+		)
+		if err != nil {
+			s.Respond(w, r, http.StatusInternalServerError, fmt.Errorf("error sending pix message: %v", err))
+			return
+		}
+
+		historyStr := r.Context().Value("userinfo").(Values).Get("History")
+		historyLimit, _ := strconv.Atoi(historyStr)
+		s.saveOutgoingMessageToHistory(txtid, recipient.String(), msgid, "pix", t.Body, "", historyLimit)
+
+		token := r.Context().Value("userinfo").(Values).Get("Token")
+		s.publishSentMessageEvent(token, txtid, txtid, recipient, msgid, finalMsg, resp.Timestamp)
+
+		responseJSON, _ := json.Marshal(map[string]interface{}{
+			"Details":   "Sent",
+			"Timestamp": resp.Timestamp.Unix(),
+			"Id":        msgid,
+		})
+		s.Respond(w, r, http.StatusOK, string(responseJSON))
+	}
+}
+
 // SendList
 func (s *server) SendList() http.HandlerFunc {
 

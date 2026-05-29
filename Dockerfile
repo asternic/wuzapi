@@ -1,53 +1,14 @@
-FROM golang:1.25-bookworm AS builder
-
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
-
-# Install build dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    gcc \
-    g++ \
-    pkg-config \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
-
+FROM golang:1.24-alpine AS builder
 WORKDIR /app
+RUN apk add --no-cache gcc musl-dev sqlite-dev
 COPY go.mod go.sum ./
 RUN go mod download
-
 COPY . .
-ENV CGO_ENABLED=1
-RUN go build -o wuzapi
+RUN CGO_ENABLED=1 go build -o wuzapi .
 
-FROM debian:bookworm-slim
-
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
-
-# Install runtime dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates \
-    netcat-openbsd \
-    postgresql-client \
-    openssl \
-    curl \
-    ffmpeg \
-    tzdata \
-    && rm -rf /var/lib/apt/lists/*
-
-ENV TZ="America/Sao_Paulo"
+FROM alpine:3.20
+RUN apk add --no-cache ca-certificates ffmpeg tzdata
 WORKDIR /app
-
-COPY --from=builder /app/wuzapi         /app/
-COPY --from=builder /app/static         /app/static/
-COPY --from=builder /app/wuzapi.service /app/wuzapi.service
-
-RUN chmod +x /app/wuzapi && \
-    chmod -R 755 /app && \
-    chown -R root:root /app
-
-ENTRYPOINT ["/app/wuzapi", "--logtype=console", "--color=true"]
+COPY --from=builder /app/wuzapi .
+EXPOSE 8080
+ENTRYPOINT ["./wuzapi"]
