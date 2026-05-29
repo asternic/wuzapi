@@ -605,12 +605,18 @@ func generateHmacSignature(payload []byte, encryptedHmacKey []byte) (string, err
 	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
+// normalizeAESKey returns a 32-byte key from any string using SHA-256.
+func normalizeAESKey(key string) []byte {
+	h := sha256.Sum256([]byte(key))
+	return h[:]
+}
+
 func encryptHMACKey(plainText string) ([]byte, error) {
 	if *globalEncryptionKey == "" {
 		return nil, fmt.Errorf("encryption key not configured")
 	}
 
-	block, err := aes.NewCipher([]byte(*globalEncryptionKey))
+	block, err := aes.NewCipher(normalizeAESKey(*globalEncryptionKey))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create cipher: %w", err)
 	}
@@ -633,9 +639,10 @@ func encryptHMACKey(plainText string) ([]byte, error) {
 func decryptHMACKey(encryptedData []byte) (string, error) {
 	if *globalEncryptionKey == "" {
 		return "", fmt.Errorf("encryption key not configured")
+
 	}
 
-	block, err := aes.NewCipher([]byte(*globalEncryptionKey))
+	block, err := aes.NewCipher(normalizeAESKey(*globalEncryptionKey))
 	if err != nil {
 		return "", fmt.Errorf("failed to create cipher: %w", err)
 	}
