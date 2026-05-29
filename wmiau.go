@@ -854,6 +854,20 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 
 		postmap["type"] = "Message"
 		dowebhook = 1
+
+		// Resolve LID JIDs to phone-number JIDs before sending webhook
+		// so the consumer always receives standard phone-based JIDs
+		if evt.Info.Chat.Server == "lid" {
+			if pn, err := getCachedPNForLID(context.Background(), mycli.WAClient, evt.Info.Chat); err == nil {
+				evt.Info.MessageSource.Chat = pn
+			}
+		}
+		if evt.Info.Sender.Server == "lid" {
+			if pn, err := getCachedPNForLID(context.Background(), mycli.WAClient, evt.Info.Sender); err == nil {
+				evt.Info.MessageSource.Sender = pn
+			}
+		}
+
 		metaParts := []string{fmt.Sprintf("pushname: %s", evt.Info.PushName), fmt.Sprintf("timestamp: %s", evt.Info.Timestamp)}
 		if evt.Info.Type != "" {
 			metaParts = append(metaParts, fmt.Sprintf("type: %s", evt.Info.Type))
