@@ -17,6 +17,7 @@ const (
 type Server struct {
 	BaseURL    string
 	AdminToken string
+	RuntimeDir string
 
 	cancel  context.CancelFunc
 	command *exec.Cmd
@@ -51,6 +52,7 @@ func StartServer(ctx context.Context) (*Server, error) {
 
 	logFile, err := os.Create(filepath.Join(runtimeDir, "http.log"))
 	if err != nil {
+		_ = os.RemoveAll(runtimeDir)
 		return nil, fmt.Errorf("failed to create the e2e HTTP log: %w", err)
 	}
 
@@ -63,6 +65,7 @@ func StartServer(ctx context.Context) (*Server, error) {
 	buildCommand.Stderr = logFile
 	if err := buildCommand.Run(); err != nil {
 		_ = logFile.Close()
+		_ = os.RemoveAll(runtimeDir)
 		return nil, fmt.Errorf("failed to build the project HTTP server for e2e: %w", err)
 	}
 
@@ -76,12 +79,14 @@ func StartServer(ctx context.Context) (*Server, error) {
 	if err := command.Start(); err != nil {
 		cancel()
 		_ = logFile.Close()
+		_ = os.RemoveAll(runtimeDir)
 		return nil, fmt.Errorf("failed to start the project HTTP server for e2e: %w", err)
 	}
 
 	server := &Server{
 		BaseURL:    "http://127.0.0.1:" + port,
 		AdminToken: adminToken,
+		RuntimeDir: runtimeDir,
 		cancel:     cancel,
 		command:    command,
 		logFile:    logFile,
@@ -123,6 +128,10 @@ func (server *Server) Stop() {
 
 	if server.logFile != nil {
 		_ = server.logFile.Close()
+	}
+
+	if server.RuntimeDir != "" {
+		_ = os.RemoveAll(server.RuntimeDir)
 	}
 }
 

@@ -367,6 +367,22 @@ func resolvedLabelState(existingLabel *persistedLabel, name *string, color *int3
 }
 
 func (s *server) saveLabelChatAssociation(userID, labelID, chatJID string, labeled bool) error {
+	if !labeled {
+		query := `
+			DELETE FROM label_chat_associations
+			WHERE user_id = $1 AND label_id = $2 AND chat_jid = $3`
+		if s.db.DriverName() == "sqlite" {
+			query = `
+				DELETE FROM label_chat_associations
+				WHERE user_id = ? AND label_id = ? AND chat_jid = ?`
+		}
+
+		if _, err := s.db.Exec(query, userID, labelID, chatJID); err != nil {
+			return fmt.Errorf("failed to delete chat label association: %w", err)
+		}
+		return nil
+	}
+
 	query := `
 		INSERT INTO label_chat_associations (user_id, label_id, chat_jid, labeled, updated_at)
 		VALUES ($1, $2, $3, $4, $5)
@@ -382,13 +398,29 @@ func (s *server) saveLabelChatAssociation(userID, labelID, chatJID string, label
 				updated_at = excluded.updated_at`
 	}
 
-	if _, err := s.db.Exec(query, userID, labelID, chatJID, labeled, time.Now().UTC()); err != nil {
+	if _, err := s.db.Exec(query, userID, labelID, chatJID, true, time.Now().UTC()); err != nil {
 		return fmt.Errorf("failed to save chat label association: %w", err)
 	}
 	return nil
 }
 
 func (s *server) saveLabelMessageAssociation(userID, labelID, chatJID, messageID string, labeled bool) error {
+	if !labeled {
+		query := `
+			DELETE FROM label_message_associations
+			WHERE user_id = $1 AND label_id = $2 AND chat_jid = $3 AND message_id = $4`
+		if s.db.DriverName() == "sqlite" {
+			query = `
+				DELETE FROM label_message_associations
+				WHERE user_id = ? AND label_id = ? AND chat_jid = ? AND message_id = ?`
+		}
+
+		if _, err := s.db.Exec(query, userID, labelID, chatJID, messageID); err != nil {
+			return fmt.Errorf("failed to delete message label association: %w", err)
+		}
+		return nil
+	}
+
 	query := `
 		INSERT INTO label_message_associations (user_id, label_id, chat_jid, message_id, labeled, updated_at)
 		VALUES ($1, $2, $3, $4, $5, $6)
@@ -404,7 +436,7 @@ func (s *server) saveLabelMessageAssociation(userID, labelID, chatJID, messageID
 				updated_at = excluded.updated_at`
 	}
 
-	if _, err := s.db.Exec(query, userID, labelID, chatJID, messageID, labeled, time.Now().UTC()); err != nil {
+	if _, err := s.db.Exec(query, userID, labelID, chatJID, messageID, true, time.Now().UTC()); err != nil {
 		return fmt.Errorf("failed to save message label association: %w", err)
 	}
 	return nil
