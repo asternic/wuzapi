@@ -1,6 +1,6 @@
 dbdata/
 files/
-wuzapi
+/wuzapi
 .env
 .tool-versions
 e2e/.tmp/

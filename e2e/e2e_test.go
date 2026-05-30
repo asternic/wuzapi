@@ -26,19 +26,25 @@ func TestMain(m *testing.M) {
 		WhatsAppPackage: config.AppPackage,
 		PairPhone:       config.PairPhone,
 	}
-	if err := support.CheckPreflight(context.Background(), preflight); err != nil {
+	preflightResources, err := support.CheckPreflight(context.Background(), preflight)
+	if err != nil {
 		fmt.Fprintf(os.Stderr, "e2e preflight failed: %v\n", err)
 		os.Exit(1)
 	}
 
 	server, err := support.StartServer(context.Background())
 	if err != nil {
+		_ = preflightResources.Close()
 		fmt.Fprintf(os.Stderr, "failed to start e2e HTTP server: %v\n", err)
 		os.Exit(1)
 	}
 
 	code := m.Run()
 	server.Stop()
+	if err := preflightResources.Close(); err != nil && code == 0 {
+		fmt.Fprintf(os.Stderr, "failed to stop e2e preflight resources: %v\n", err)
+		code = 1
+	}
 	os.Exit(code)
 }
 

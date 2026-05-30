@@ -359,6 +359,20 @@ func (ss *stdioServer) routeRequest(req *jsonRpcRequest) {
 			httpPath += fmt.Sprintf("&limit=%d", int(limit))
 		}
 
+	// Labels
+	case "label.edit":
+		httpMethod = "POST"
+		httpPath = "/label/edit"
+	case "label.chat":
+		httpMethod = "POST"
+		httpPath = "/label/chat"
+	case "label.message":
+		httpMethod = "POST"
+		httpPath = "/label/message"
+	case "label.list":
+		httpMethod = "GET"
+		httpPath = "/label/list"
+
 	// User info
 	case "user.contacts":
 		httpMethod = "GET"

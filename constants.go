@@ -44,6 +44,9 @@ var supportedEventTypes = []string{
 	"HistorySync",
 	"OfflineSyncCompleted",
 	"OfflineSyncPreview",
+	"LabelEdit",
+	"LabelAssociationChat",
+	"LabelAssociationMessage",
 
 	// Calls
 	"CallOffer",

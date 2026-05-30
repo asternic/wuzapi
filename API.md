@@ -139,6 +139,9 @@ The following _webhook_ endpoints are used to get or set the webhook that will b
 * ReadReceipt
 * HistorySync
 * ChatPresence
+* LabelEdit
+* LabelAssociationChat
+* LabelAssociationMessage
 
 
 ## Sets webhook
@@ -990,6 +993,135 @@ method: **POST**
 
 ```
 curl -s -X POST -H 'Token: 1234ABCD' -H 'Content-Type: application/json' --data '{"Url":"https://mmg.whatsapp.net/d/f/Apah954sUug5I9GnQsmXKPUdUn3ZPKGYFnscJU02dpuD.enc","Mimetype":"application/pdf", "FileSHA256":"nMthnfkUWQiMfNJpA6K9+ft+Dx9Mb1STs+9wMHjeo/M=","FileLength":2039,"MediaKey":"vq0RR0nYGkxm2HrpwUp3sK8A7Nr1KUcOiBHrT1hg+PU=","FileEncSHA256":"6bMVZ5dRf9JKxJSUgg4w1h3iSYA3dM8gEQxaMPwoONc="}' http://localhost:8080/chat/downloaddocument
+```
+
+---
+
+## Labels
+
+The following _label_ endpoints manage WhatsApp labels and keep a local projection that can be listed through the API. Label changes also emit `LabelEdit`, `LabelAssociationChat`, and `LabelAssociationMessage` events when subscribed through webhooks, RabbitMQ, or stdio mode.
+
+## Create, rename, or delete a label
+
+Creates, renames, or marks a WhatsApp label as deleted. The caller provides a stable `labelId`; WuzAPI uses it as the local and WhatsApp app-state label key. When updating an existing label, omitted `name`, `color`, or `deleted` fields keep their locally persisted values. New labels still require `name`; omitted `color` defaults to `0` and omitted `deleted` defaults to `false`.
+
+endpoint: _/label/edit_
+
+method: **POST**
+
+```
+curl -s -X POST -H 'Token: 1234ABCD' -H 'Content-Type: application/json' --data '{"labelId":"1001","name":"Leads","color":5,"deleted":false}' http://localhost:8080/label/edit
+```
+
+Response:
+
+```json
+{
+  "code": 200,
+  "data": {
+    "color": 5,
+    "deleted": false,
+    "labelId": "1001",
+    "name": "Leads",
+    "success": true
+  },
+  "success": true
+}
+```
+
+---
+
+## Apply or remove a label from a chat
+
+Adds or removes a label association for a chat JID.
+
+endpoint: _/label/chat_
+
+method: **POST**
+
+```
+curl -s -X POST -H 'Token: 1234ABCD' -H 'Content-Type: application/json' --data '{"jid":"5511999999999@s.whatsapp.net","labelId":"1001","labeled":true}' http://localhost:8080/label/chat
+```
+
+Response:
+
+```json
+{
+  "code": 200,
+  "data": {
+    "jid": "5511999999999@s.whatsapp.net",
+    "labelId": "1001",
+    "labeled": true,
+    "success": true
+  },
+  "success": true
+}
+```
+
+---
+
+## Apply or remove a label from a message
+
+Adds or removes a label association for a specific message.
+
+endpoint: _/label/message_
+
+method: **POST**
+
+```
+curl -s -X POST -H 'Token: 1234ABCD' -H 'Content-Type: application/json' --data '{"jid":"5511999999999@s.whatsapp.net","labelId":"1001","messageId":"AABBCCDD112233","labeled":true}' http://localhost:8080/label/message
+```
+
+Response:
+
+```json
+{
+  "code": 200,
+  "data": {
+    "jid": "5511999999999@s.whatsapp.net",
+    "labelId": "1001",
+    "labeled": true,
+    "messageId": "AABBCCDD112233",
+    "success": true
+  },
+  "success": true
+}
+```
+
+---
+
+## List labels
+
+Returns labels persisted for the authenticated user, including chat associations. Deleted labels are returned with `deleted: true` so clients can decide whether to hide or show them.
+
+endpoint: _/label/list_
+
+method: **GET**
+
+```
+curl -s -X GET -H 'Token: 1234ABCD' http://localhost:8080/label/list
+```
+
+Response:
+
+```json
+{
+  "code": 200,
+  "data": {
+    "labels": [
+      {
+        "labelId": "1001",
+        "name": "Leads",
+        "color": 5,
+        "deleted": false,
+        "chats": [
+          "5511999999999@s.whatsapp.net"
+        ]
+      }
+    ]
+  },
+  "success": true
+}
 ```
 
 ---

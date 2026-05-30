@@ -80,6 +80,11 @@ var migrations = []Migration{
 		Name:  "add_user_osname",
 		UpSQL: addUserOSNameSQL,
 	},
+	{
+		ID:    11,
+		Name:  "add_whatsapp_labels",
+		UpSQL: addWhatsAppLabelsSQL,
+	},
 }
 
 const changeIDToStringSQL = `
@@ -242,6 +247,55 @@ BEGIN
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'osname') THEN
         ALTER TABLE users ADD COLUMN osname TEXT DEFAULT '';
     END IF;
+END $$;
+
+-- SQLite version (handled in code)
+`
+
+const addWhatsAppLabelsSQL = `
+-- PostgreSQL version - Store WhatsApp labels and local label associations
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'labels') THEN
+        CREATE TABLE labels (
+            user_id TEXT NOT NULL,
+            label_id TEXT NOT NULL,
+            name TEXT NOT NULL DEFAULT '',
+            color INTEGER NOT NULL DEFAULT 0,
+            deleted BOOLEAN NOT NULL DEFAULT FALSE,
+            updated_at TIMESTAMP NOT NULL,
+            datajson TEXT,
+            PRIMARY KEY (user_id, label_id)
+        );
+    END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'label_chat_associations') THEN
+        CREATE TABLE label_chat_associations (
+            user_id TEXT NOT NULL,
+            label_id TEXT NOT NULL,
+            chat_jid TEXT NOT NULL,
+            labeled BOOLEAN NOT NULL DEFAULT FALSE,
+            updated_at TIMESTAMP NOT NULL,
+            PRIMARY KEY (user_id, label_id, chat_jid)
+        );
+    END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'label_message_associations') THEN
+        CREATE TABLE label_message_associations (
+            user_id TEXT NOT NULL,
+            label_id TEXT NOT NULL,
+            chat_jid TEXT NOT NULL,
+            message_id TEXT NOT NULL,
+            labeled BOOLEAN NOT NULL DEFAULT FALSE,
+            updated_at TIMESTAMP NOT NULL,
+            PRIMARY KEY (user_id, label_id, chat_jid, message_id)
+        );
+    END IF;
+
+    CREATE INDEX IF NOT EXISTS idx_label_chat_associations_user_chat
+        ON label_chat_associations (user_id, chat_jid);
+    CREATE INDEX IF NOT EXISTS idx_label_message_associations_user_chat
+        ON label_message_associations (user_id, chat_jid, message_id);
 END $$;
 
 -- SQLite version (handled in code)
@@ -481,6 +535,12 @@ func applyMigration(db *sqlx.DB, migration Migration) error {
 		} else {
 			_, err = tx.Exec(migration.UpSQL)
 		}
+	} else if migration.ID == 11 {
+		if db.DriverName() == "sqlite" {
+			err = createWhatsAppLabelsSQLite(tx)
+		} else {
+			_, err = tx.Exec(migration.UpSQL)
+		}
 	} else {
 		_, err = tx.Exec(migration.UpSQL)
 	}
@@ -514,6 +574,59 @@ func createTableIfNotExistsSQLite(tx *sqlx.Tx, tableName, createSQL string) erro
 	}
 	return nil
 }
+
+func createWhatsAppLabelsSQLite(tx *sqlx.Tx) error {
+	if err := createTableIfNotExistsSQLite(tx, "labels", `
+		CREATE TABLE labels (
+			user_id TEXT NOT NULL,
+			label_id TEXT NOT NULL,
+			name TEXT NOT NULL DEFAULT '',
+			color INTEGER NOT NULL DEFAULT 0,
+			deleted BOOLEAN NOT NULL DEFAULT 0,
+			updated_at DATETIME NOT NULL,
+			datajson TEXT,
+			PRIMARY KEY (user_id, label_id)
+		)`); err != nil {
+		return err
+	}
+
+	if err := createTableIfNotExistsSQLite(tx, "label_chat_associations", `
+		CREATE TABLE label_chat_associations (
+			user_id TEXT NOT NULL,
+			label_id TEXT NOT NULL,
+			chat_jid TEXT NOT NULL,
+			labeled BOOLEAN NOT NULL DEFAULT 0,
+			updated_at DATETIME NOT NULL,
+			PRIMARY KEY (user_id, label_id, chat_jid)
+		)`); err != nil {
+		return err
+	}
+
+	if err := createTableIfNotExistsSQLite(tx, "label_message_associations", `
+		CREATE TABLE label_message_associations (
+			user_id TEXT NOT NULL,
+			label_id TEXT NOT NULL,
+			chat_jid TEXT NOT NULL,
+			message_id TEXT NOT NULL,
+			labeled BOOLEAN NOT NULL DEFAULT 0,
+			updated_at DATETIME NOT NULL,
+			PRIMARY KEY (user_id, label_id, chat_jid, message_id)
+		)`); err != nil {
+		return err
+	}
+
+	if _, err := tx.Exec(`
+		CREATE INDEX IF NOT EXISTS idx_label_chat_associations_user_chat
+		ON label_chat_associations (user_id, chat_jid)`); err != nil {
+		return err
+	}
+
+	_, err := tx.Exec(`
+		CREATE INDEX IF NOT EXISTS idx_label_message_associations_user_chat
+		ON label_message_associations (user_id, chat_jid, message_id)`)
+	return err
+}
+
 func sqliteChangeIDType(tx *sqlx.Tx) error {
 	// SQLite requires a more complex approach:
 	// 1. Create new table with string ID

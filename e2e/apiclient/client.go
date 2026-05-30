@@ -28,7 +28,7 @@ func New(baseURL string, adminToken string) *Client {
 	return &Client{
 		baseURL:    strings.TrimRight(baseURL, "/"),
 		adminToken: adminToken,
-		httpClient: http.Client{Timeout: 30 * time.Second},
+		httpClient: http.Client{Timeout: 90 * time.Second},
 	}
 }
 

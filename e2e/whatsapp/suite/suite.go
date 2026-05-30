@@ -10,6 +10,7 @@ import (
 	"wuzapi/e2e/whatsapp/linkeddevices"
 	"wuzapi/e2e/whatsapp/pairing"
 	"wuzapi/e2e/whatsapp/scenario"
+	"wuzapi/e2e/wuzapi/labels"
 	"wuzapi/e2e/wuzapi/users"
 )
 
@@ -32,6 +33,7 @@ func InitializeScenario(scenarioContext *godog.ScenarioContext) {
 	})
 
 	users.RegisterSteps(scenarioContext)
+	labels.RegisterSteps(scenarioContext)
 	whatsappapp.RegisterSteps(scenarioContext)
 	linkeddevices.RegisterSteps(scenarioContext)
 	pairing.RegisterSteps(scenarioContext)

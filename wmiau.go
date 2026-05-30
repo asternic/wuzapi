@@ -942,24 +942,24 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 				}
 			}
 		}
-    
-    if encMessage := evt.Message.GetSecretEncryptedMessage(); encMessage != nil {
-        decrypted, derr := mycli.WAClient.DecryptSecretEncryptedMessage(context.Background(), evt)
-        if derr != nil {
-            log.Warn().
-                Err(derr).
-                Str("messageID", evt.Info.ID).
-                Str("secretEncType", encMessage.GetSecretEncType().String()).
-                Msg("DecryptSecretEncryptedMessage failed")
-        } else if decrypted != nil {
-            log.Info().
-                Str("messageID", evt.Info.ID).
-                Str("secretEncType", encMessage.GetSecretEncType().String()).
-                Msg("Decrypted secretEncryptedMessage; swapping evt.Message")
-                evt.Message = decrypted
-        }
-    }
-    
+
+		if encMessage := evt.Message.GetSecretEncryptedMessage(); encMessage != nil {
+			decrypted, derr := mycli.WAClient.DecryptSecretEncryptedMessage(context.Background(), evt)
+			if derr != nil {
+				log.Warn().
+					Err(derr).
+					Str("messageID", evt.Info.ID).
+					Str("secretEncType", encMessage.GetSecretEncType().String()).
+					Msg("DecryptSecretEncryptedMessage failed")
+			} else if decrypted != nil {
+				log.Info().
+					Str("messageID", evt.Info.ID).
+					Str("secretEncType", encMessage.GetSecretEncType().String()).
+					Msg("Decrypted secretEncryptedMessage; swapping evt.Message")
+				evt.Message = decrypted
+			}
+		}
+
 		if !*skipMedia {
 
 			isIncoming := !evt.Info.IsFromMe
@@ -1457,6 +1457,50 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 
 	case *events.AppState:
 		log.Info().Str("index", fmt.Sprintf("%+v", evt.Index)).Str("actionValue", fmt.Sprintf("%+v", evt.SyncActionValue)).Msg("App state event received")
+	case *events.LabelEdit:
+		name := evt.Action.GetName()
+		color := evt.Action.GetColor()
+		colorKnown := evt.Action != nil && evt.Action.Color != nil
+		deleted := evt.Action.GetDeleted()
+		postmap["type"] = "LabelEdit"
+		postmap["labelId"] = evt.LabelID
+		postmap["name"] = name
+		postmap["color"] = color
+		postmap["deleted"] = deleted
+		dowebhook = 1
+		if mycli.s != nil {
+			if err := mycli.s.saveLabelEvent(txtid, evt.LabelID, name, color, colorKnown, deleted, marshalLabelDataJSON(evt)); err != nil {
+				log.Error().Err(err).Str("labelID", evt.LabelID).Msg("Failed to save label event")
+			}
+		}
+		log.Info().Str("labelID", evt.LabelID).Str("name", name).Int32("color", color).Bool("deleted", deleted).Msg("Label edit received")
+	case *events.LabelAssociationChat:
+		labeled := evt.Action.GetLabeled()
+		postmap["type"] = "LabelAssociationChat"
+		postmap["labelId"] = evt.LabelID
+		postmap["jid"] = evt.JID.String()
+		postmap["labeled"] = labeled
+		dowebhook = 1
+		if mycli.s != nil {
+			if err := mycli.s.saveLabelChatAssociation(txtid, evt.LabelID, evt.JID.String(), labeled); err != nil {
+				log.Error().Err(err).Str("labelID", evt.LabelID).Str("jid", evt.JID.String()).Msg("Failed to save chat label association event")
+			}
+		}
+		log.Info().Str("labelID", evt.LabelID).Str("jid", evt.JID.String()).Bool("labeled", labeled).Msg("Label chat association received")
+	case *events.LabelAssociationMessage:
+		labeled := evt.Action.GetLabeled()
+		postmap["type"] = "LabelAssociationMessage"
+		postmap["labelId"] = evt.LabelID
+		postmap["jid"] = evt.JID.String()
+		postmap["messageId"] = evt.MessageID
+		postmap["labeled"] = labeled
+		dowebhook = 1
+		if mycli.s != nil {
+			if err := mycli.s.saveLabelMessageAssociation(txtid, evt.LabelID, evt.JID.String(), evt.MessageID, labeled); err != nil {
+				log.Error().Err(err).Str("labelID", evt.LabelID).Str("jid", evt.JID.String()).Str("messageID", evt.MessageID).Msg("Failed to save message label association event")
+			}
+		}
+		log.Info().Str("labelID", evt.LabelID).Str("jid", evt.JID.String()).Str("messageID", evt.MessageID).Bool("labeled", labeled).Msg("Label message association received")
 	case *events.LoggedOut:
 		postmap["type"] = "LoggedOut"
 		dowebhook = 1

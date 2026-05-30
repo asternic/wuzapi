@@ -10,6 +10,18 @@ import (
 )
 
 func RegisterSteps(scenarioContext *godog.ScenarioContext) {
+	scenarioContext.Before(func(ctx context.Context, _ *godog.Scenario) (context.Context, error) {
+		return NewStateContext(ctx), nil
+	})
+
+	scenarioContext.After(func(ctx context.Context, _ *godog.Scenario, scenarioErr error) (context.Context, error) {
+		if err := CloseState(ctx); err != nil && scenarioErr == nil {
+			return ctx, err
+		}
+
+		return ctx, nil
+	})
+
 	scenarioContext.Step(`^WhatsApp is open on the phone$`, func(ctx context.Context) (context.Context, error) {
 		state := scenario.FromContext(ctx)
 		config := state.Config()
@@ -19,7 +31,7 @@ func RegisterSteps(scenarioContext *godog.ScenarioContext) {
 			return ctx, err
 		}
 
-		state.SetDevice(device)
+		SetDevice(ctx, device)
 		return ctx, Open(device, config.AppPackage, config.AppActivity)
 	})
 }

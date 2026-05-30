@@ -24,15 +24,25 @@ func Open(device *appium.Session, appPackage string) error {
 }
 
 func RemoveIfListed(device *appium.Session, appPackage string, deviceName string) error {
-	source, err := device.PageSource()
-	if err != nil {
-		return err
+	for attempt := 0; attempt < 5; attempt++ {
+		source, err := device.PageSource()
+		if err != nil {
+			return err
+		}
+
+		if !appium.ContainsAnyFold(source, deviceName) {
+			return nil
+		}
+
+		if err := removeListedDevice(device, appPackage, deviceName); err != nil {
+			return err
+		}
 	}
 
-	if !appium.ContainsAnyFold(source, deviceName) {
-		return nil
-	}
+	return fmt.Errorf("device %q still appears in the linked devices list after cleanup", deviceName)
+}
 
+func removeListedDevice(device *appium.Session, appPackage string, deviceName string) error {
 	if err := device.WaitAndTap("device "+deviceName, deviceSelectors(deviceName), 10*time.Second); err != nil {
 		return err
 	}
@@ -46,11 +56,7 @@ func RemoveIfListed(device *appium.Session, appPackage string, deviceName string
 	}
 
 	_ = device.TapIfVisible("remove confirmation for device "+deviceName, confirmRemoveLinkedDeviceSelectors(appPackage), 5*time.Second)
-
-	if err := device.WaitUntilTextGone(30*time.Second, deviceName); err != nil {
-		return fmt.Errorf("removed device %q, but it still appears in the list: %w", deviceName, err)
-	}
-
+	time.Sleep(500 * time.Millisecond)
 	return nil
 }
 

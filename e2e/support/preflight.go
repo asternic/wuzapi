@@ -21,39 +21,61 @@ type PreflightConfig struct {
 	PairPhone       string
 }
 
+type PreflightResources struct {
+	appium *startedAppium
+}
+
 type androidDevice struct {
 	udid  string
 	state string
 }
 
-func CheckPreflight(ctx context.Context, config PreflightConfig) error {
+type startedAppium struct {
+	command *exec.Cmd
+	done    chan error
+}
+
+func CheckPreflight(ctx context.Context, config PreflightConfig) (*PreflightResources, error) {
 	if err := validatePairPhone(config.PairPhone); err != nil {
-		return err
+		return nil, err
 	}
 
 	adbPath, err := exec.LookPath("adb")
 	if err != nil {
-		return errors.New("adb was not found in PATH; install Android Platform Tools and make adb available before running the e2e suite")
+		return nil, errors.New("adb was not found in PATH; install Android Platform Tools and make adb available before running the e2e suite")
 	}
 
 	if err := ensureAndroidSDKConfigured(config.AppiumURLs, adbPath); err != nil {
-		return err
+		return nil, err
 	}
 
 	deviceUDID, err := findAndroidDevice(ctx, adbPath, config.AndroidUDID)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	if err := ensurePackageInstalled(ctx, adbPath, deviceUDID, config.WhatsAppPackage); err != nil {
-		return err
+		return nil, err
 	}
 
-	if err := ensureAppiumIsReady(ctx, config.AppiumURLs); err != nil {
-		return err
+	resources := &PreflightResources{}
+	if err := ensureAppiumIsReady(ctx, config.AppiumURLs); err == nil {
+		return resources, nil
+	} else if !usesLocalAppium(config.AppiumURLs) {
+		return nil, err
+	} else if appiumErr := resources.startLocalAppium(ctx, config.AppiumURLs); appiumErr != nil {
+		return nil, fmt.Errorf("%w; also failed to start local Appium: %v", err, appiumErr)
 	}
 
-	return nil
+	return resources, nil
+}
+
+func (resources *PreflightResources) Close() error {
+	if resources == nil || resources.appium == nil {
+		return nil
+	}
+
+	return resources.appium.stop()
 }
 
 func validatePairPhone(pairPhone string) error {
@@ -80,16 +102,32 @@ func ensureAndroidSDKConfigured(appiumURLs []string, adbPath string) error {
 		return nil
 	}
 
-	if os.Getenv("ANDROID_HOME") != "" || os.Getenv("ANDROID_SDK_ROOT") != "" {
+	if os.Getenv("ANDROID_HOME") != "" && os.Getenv("ANDROID_SDK_ROOT") != "" {
 		return nil
 	}
 
-	suggestion := ""
-	if sdkRoot := inferSDKRoot(adbPath); sdkRoot != "" {
-		suggestion = "; for this machine, try: export ANDROID_HOME=" + sdkRoot + " ANDROID_SDK_ROOT=" + sdkRoot
+	configuredRoot := os.Getenv("ANDROID_HOME")
+	if configuredRoot == "" {
+		configuredRoot = os.Getenv("ANDROID_SDK_ROOT")
 	}
 
-	return errors.New("ANDROID_HOME or ANDROID_SDK_ROOT must be exported before starting local Appium" + suggestion)
+	sdkRoot := configuredRoot
+	if sdkRoot == "" {
+		sdkRoot = inferSDKRoot(adbPath)
+	}
+
+	if sdkRoot == "" {
+		return errors.New("ANDROID_HOME or ANDROID_SDK_ROOT could not be inferred from adb; export one of them before running local Appium")
+	}
+
+	if os.Getenv("ANDROID_HOME") == "" {
+		_ = os.Setenv("ANDROID_HOME", sdkRoot)
+	}
+	if os.Getenv("ANDROID_SDK_ROOT") == "" {
+		_ = os.Setenv("ANDROID_SDK_ROOT", sdkRoot)
+	}
+
+	return nil
 }
 
 func usesLocalAppium(appiumURLs []string) bool {
@@ -218,6 +256,179 @@ func ensureAppiumIsReady(ctx context.Context, appiumURLs []string) error {
 	}
 
 	return fmt.Errorf("Appium is not ready; start Appium at E2E_APPIUM_URL or 127.0.0.1:4723. Attempts: %s", strings.Join(errorsByURL, "; "))
+}
+
+func (resources *PreflightResources) startLocalAppium(ctx context.Context, appiumURLs []string) error {
+	appiumPath, err := exec.LookPath("appium")
+	if err != nil {
+		return errors.New("appium was not found in PATH")
+	}
+
+	appiumURL, ok := firstLocalAppiumURL(appiumURLs)
+	if !ok {
+		return errors.New("no local Appium URL was configured")
+	}
+
+	args, err := localAppiumArgs(appiumURL)
+	if err != nil {
+		return err
+	}
+
+	logPath, logFile, err := createAppiumLogFile()
+	if err != nil {
+		return err
+	}
+
+	command := exec.Command(appiumPath, args...)
+	command.Env = os.Environ()
+	command.Stdout = logFile
+	command.Stderr = logFile
+
+	if err := command.Start(); err != nil {
+		_ = logFile.Close()
+		return err
+	}
+
+	appium := &startedAppium{
+		command: command,
+		done:    make(chan error, 1),
+	}
+	resources.appium = appium
+
+	go func() {
+		appium.done <- command.Wait()
+		_ = logFile.Close()
+	}()
+
+	if err := waitForAppium(ctx, appiumURLs, appium.done, 20*time.Second); err != nil {
+		_ = appium.stop()
+		return fmt.Errorf("%w; Appium log: %s", err, logPath)
+	}
+
+	return nil
+}
+
+func firstLocalAppiumURL(appiumURLs []string) (string, bool) {
+	for _, appiumURL := range appiumURLs {
+		parsedURL, err := url.Parse(appiumURL)
+		if err != nil {
+			continue
+		}
+
+		host := parsedURL.Hostname()
+		if host == "" || host == "localhost" || host == "127.0.0.1" || host == "::1" {
+			return appiumURL, true
+		}
+	}
+
+	return "", false
+}
+
+func localAppiumArgs(appiumURL string) ([]string, error) {
+	parsedURL, err := url.Parse(appiumURL)
+	if err != nil {
+		return nil, err
+	}
+
+	host := parsedURL.Hostname()
+	if host == "" || host == "localhost" || host == "::1" {
+		host = "127.0.0.1"
+	}
+
+	port := parsedURL.Port()
+	if port == "" {
+		port = "4723"
+	}
+
+	args := []string{"--address", host, "--port", port}
+	if parsedURL.Path != "" && parsedURL.Path != "/" {
+		args = append(args, "--base-path", strings.TrimRight(parsedURL.Path, "/"))
+	}
+
+	return args, nil
+}
+
+func createAppiumLogFile() (string, *os.File, error) {
+	repoRoot, err := repoRoot()
+	if err != nil {
+		return "", nil, err
+	}
+
+	tmpDir := filepath.Join(repoRoot, "e2e", ".tmp")
+	if err := os.MkdirAll(tmpDir, 0o755); err != nil {
+		return "", nil, err
+	}
+
+	logFile, err := os.Create(filepath.Join(tmpDir, "appium-preflight.log"))
+	if err != nil {
+		return "", nil, err
+	}
+
+	return logFile.Name(), logFile, nil
+}
+
+func waitForAppium(ctx context.Context, appiumURLs []string, done <-chan error, timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	var lastErr error
+
+	for time.Now().Before(deadline) {
+		select {
+		case err := <-done:
+			return fmt.Errorf("local Appium exited before becoming ready: %w", err)
+		default:
+		}
+
+		if err := ensureAppiumIsReady(ctx, appiumURLs); err == nil {
+			return nil
+		} else {
+			lastErr = err
+		}
+
+		time.Sleep(500 * time.Millisecond)
+	}
+
+	return fmt.Errorf("local Appium did not become ready in %s: %w", timeout, lastErr)
+}
+
+func (appium *startedAppium) stop() error {
+	if appium == nil || appium.command == nil || appium.command.Process == nil {
+		return nil
+	}
+
+	select {
+	case err := <-appium.done:
+		return ignoreSuccessfulSignalExit(err)
+	default:
+	}
+
+	if err := appium.command.Process.Signal(os.Interrupt); err != nil {
+		return err
+	}
+
+	select {
+	case err := <-appium.done:
+		return ignoreSuccessfulSignalExit(err)
+	case <-time.After(3 * time.Second):
+	}
+
+	if err := appium.command.Process.Kill(); err != nil {
+		return err
+	}
+
+	return ignoreSuccessfulSignalExit(<-appium.done)
+}
+
+func ignoreSuccessfulSignalExit(err error) error {
+	if err == nil {
+		return nil
+	}
+
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) {
+		return nil
+	}
+
+	return err
 }
 
 func parseADBDevices(output string) []androidDevice {

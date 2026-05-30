@@ -18,6 +18,7 @@ Be very careful—do not use this to send SPAM or anything similar. Use at your 
 * **Messages:** Send text, image, audio, document, template, video, sticker, location, contact, and poll messages.
 * **Users:** Check if phone numbers have WhatsApp, get user information and avatars, and retrieve the full contact list.
 * **Chat:** Set presence (typing/paused, recording media), mark messages as read, download images from messages, send reactions.
+* **Labels:** Create, rename, delete, list, and associate WhatsApp labels with chats or messages.
 * **Groups:** Create, delete and list groups, get info, get invite links, set participants, change group photos and names.
 * **Webhooks:** Set and get webhooks that will be called whenever events or messages are received.
 * **HMAC Configuration:** Configure HMAC keys for webhook security and signature verification.
@@ -256,7 +257,7 @@ The JSON body for creating a new user must contain:
 - `name` [string] : User's name 
 - `token` [string] : Security token to authorize/authenticate this user
 - `webhook` [string] : URL to send events via POST (optional)
-- `events` [string] : Comma-separated list of events to receive (required) - Valid events are: "Message", "ReadReceipt", "Presence", "HistorySync", "ChatPresence", "All"
+- `events` [string] : Comma-separated list of events to receive (required) - Valid events include: "Message", "ReadReceipt", "Presence", "HistorySync", "ChatPresence", "LabelEdit", "LabelAssociationChat", "LabelAssociationMessage", "All"
 - `expiration` [int] : Expiration timestamp (optional, not enforced by the system)
 - `osname` [string] : WhatsApp linked device name for this user (optional, falls back to `-osname` or `SESSION_DEVICE_NAME`)
 

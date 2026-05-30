@@ -1439,6 +1439,90 @@
       ]
     },
     {
+      "name": "Label",
+      "item": [
+        {
+          "name": "Edit Label",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "token", "value": "{{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"labelId\": \"1001\",\n  \"name\": \"Leads\",\n  \"color\": 5,\n  \"deleted\": false\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/label/edit",
+              "host": ["{{baseUrl}}"],
+              "path": ["label", "edit"]
+            },
+            "description": "Create, rename, or delete a WhatsApp label. The caller provides a stable labelId. Omitted fields keep locally persisted values when updating an existing label."
+          },
+          "response": []
+        },
+        {
+          "name": "Label Chat",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "token", "value": "{{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jid\": \"5511999999999@s.whatsapp.net\",\n  \"labelId\": \"1001\",\n  \"labeled\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/label/chat",
+              "host": ["{{baseUrl}}"],
+              "path": ["label", "chat"]
+            },
+            "description": "Apply or remove a label from a chat."
+          },
+          "response": []
+        },
+        {
+          "name": "Label Message",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "token", "value": "{{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jid\": \"5511999999999@s.whatsapp.net\",\n  \"labelId\": \"1001\",\n  \"messageId\": \"AABBCCDD112233\",\n  \"labeled\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/label/message",
+              "host": ["{{baseUrl}}"],
+              "path": ["label", "message"]
+            },
+            "description": "Apply or remove a label from a message."
+          },
+          "response": []
+        },
+        {
+          "name": "List Labels",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "token", "value": "{{token}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/label/list",
+              "host": ["{{baseUrl}}"],
+              "path": ["label", "list"]
+            },
+            "description": "List locally persisted WhatsApp labels and their chat associations, including deleted labels marked with deleted=true."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
       "name": "Status",
       "item": [
         {

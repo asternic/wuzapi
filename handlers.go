@@ -7021,7 +7021,9 @@ func (s *server) ArchiveChat() http.HandlerFunc {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 
-		err = client.SendAppState(ctx, appstate.BuildArchive(chatJID, t.Archive, time.Time{}, nil))
+		err = sendAppStatePatch(ctx, client, func() appstate.PatchInfo {
+			return appstate.BuildArchive(chatJID, t.Archive, time.Time{}, nil)
+		})
 		if err != nil {
 			s.Respond(w, r, http.StatusInternalServerError, errors.New(fmt.Sprintf("failed to archive chat: %s", err)))
 			return

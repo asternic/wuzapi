@@ -5,13 +5,14 @@ import (
 
 	"github.com/cucumber/godog"
 
+	whatsappapp "wuzapi/e2e/whatsapp/app"
 	"wuzapi/e2e/whatsapp/scenario"
 )
 
 func RegisterSteps(scenarioContext *godog.ScenarioContext) {
 	scenarioContext.Step(`^the linked devices screen is open$`, func(ctx context.Context) (context.Context, error) {
 		state := scenario.FromContext(ctx)
-		device, err := state.Device("WhatsApp must be open before opening linked devices")
+		device, err := whatsappapp.Device(ctx, "WhatsApp must be open before opening linked devices")
 		if err != nil {
 			return ctx, err
 		}
@@ -21,7 +22,7 @@ func RegisterSteps(scenarioContext *godog.ScenarioContext) {
 
 	scenarioContext.Step(`^no device named "([^"]*)" is currently linked$`, func(ctx context.Context, deviceName string) (context.Context, error) {
 		state := scenario.FromContext(ctx)
-		device, err := state.Device("the linked devices list must be open before removing a device")
+		device, err := whatsappapp.Device(ctx, "the linked devices list must be open before removing a device")
 		if err != nil {
 			return ctx, err
 		}
@@ -31,7 +32,7 @@ func RegisterSteps(scenarioContext *godog.ScenarioContext) {
 
 	scenarioContext.Step(`^"([^"]*)" appears in the list of linked devices$`, func(ctx context.Context, deviceName string) (context.Context, error) {
 		state := scenario.FromContext(ctx)
-		device, err := state.Device("WhatsApp must be open before validating the device list")
+		device, err := whatsappapp.Device(ctx, "WhatsApp must be open before validating the device list")
 		if err != nil {
 			return ctx, err
 		}

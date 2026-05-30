@@ -41,6 +41,7 @@ func isolatedEnvironment(adminToken string) []string {
 		"WUZAPI_GLOBAL_HMAC_KEY=abcdef0123456789abcdef0123456789",
 		"WUZAPI_GLOBAL_WEBHOOK=",
 		"WUZAPI_GLOBAL_PROXY_URL=",
+		"WEBHOOK_FORMAT=json",
 		"DB_USER=",
 		"DB_PASSWORD=",
 		"DB_NAME=",

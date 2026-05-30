@@ -5,13 +5,12 @@ import (
 
 	"github.com/cucumber/godog"
 
-	"wuzapi/e2e/whatsapp/scenario"
+	whatsappapp "wuzapi/e2e/whatsapp/app"
 )
 
 func RegisterSteps(scenarioContext *godog.ScenarioContext) {
 	scenarioContext.Step(`^I name the linked device "([^"]*)"$`, func(ctx context.Context, deviceName string) (context.Context, error) {
-		state := scenario.FromContext(ctx)
-		device, err := state.Device("WhatsApp must be open before entering the device name")
+		device, err := whatsappapp.Device(ctx, "WhatsApp must be open before entering the device name")
 		if err != nil {
 			return ctx, err
 		}

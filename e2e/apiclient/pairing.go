@@ -19,7 +19,7 @@ func (client *Client) RequestPairCode(ctx context.Context, user *ScenarioUser, p
 		return "", errors.New("set E2E_PAIR_PHONE to the primary WhatsApp number without a leading + before requesting the pairing code")
 	}
 
-	if err := client.connect(ctx, user); err != nil {
+	if err := client.Connect(ctx, user); err != nil {
 		return "", err
 	}
 
@@ -52,16 +52,4 @@ func (client *Client) RequestPairCode(ctx context.Context, user *ScenarioUser, p
 	}
 
 	return "", fmt.Errorf("failed to request the pairing code for user %q: %w", user.Name, lastErr)
-}
-
-func (client *Client) connect(ctx context.Context, user *ScenarioUser) error {
-	err := client.UserRequest(ctx, http.MethodPost, "/session/connect", user.Token, map[string]interface{}{
-		"Subscribe": []string{"All"},
-		"Immediate": true,
-	}, nil)
-	if err == nil || strings.Contains(err.Error(), "already connected") {
-		return nil
-	}
-
-	return fmt.Errorf("failed to connect user session %q before requesting the pairing code: %w", user.Name, err)
 }
