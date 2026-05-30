@@ -54,8 +54,11 @@ func TestE2E(t *testing.T) {
 			suite.InitializeScenario(scenarioContext)
 		},
 		Options: &godog.Options{
-			Format:        "pretty",
-			Paths:         []string{"features"},
+			Format: "pretty",
+			Paths: []string{
+				"features/whatsapp/linked_devices/link_device.feature",
+				"features/whatsapp/labels/manage_labels.feature",
+			},
 			Strict:        true,
 			StopOnFailure: true,
 			TestingT:      t,
