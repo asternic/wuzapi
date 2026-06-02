@@ -5884,18 +5884,31 @@ func (s *server) Respond(w http.ResponseWriter, r *http.Request, status int, dat
 		// still reporting success=true.
 		success := status < http.StatusBadRequest
 		if str, ok := data.(string); ok {
-			// Expected to be a JSON object or array; if it isn't, surface the
+			// Only attempt to parse when the payload actually looks like a JSON
+			// object or array — avoids two failed unmarshals on plain text,
+			// the common case for error messages. If it isn't JSON, surface the
 			// raw string instead of discarding it.
-			var mydata map[string]interface{}
-			var mySlice []interface{}
-			if json.Unmarshal([]byte(str), &mydata) == nil {
-				dataenvelope["data"] = mydata
-			} else if json.Unmarshal([]byte(str), &mySlice) == nil {
-				dataenvelope["data"] = mySlice
-			} else if success {
-				dataenvelope["data"] = str
-			} else {
-				dataenvelope["error"] = str
+			trimmed := strings.TrimSpace(str)
+			parsed := false
+			if strings.HasPrefix(trimmed, "{") {
+				var mydata map[string]interface{}
+				if json.Unmarshal([]byte(trimmed), &mydata) == nil {
+					dataenvelope["data"] = mydata
+					parsed = true
+				}
+			} else if strings.HasPrefix(trimmed, "[") {
+				var mySlice []interface{}
+				if json.Unmarshal([]byte(trimmed), &mySlice) == nil {
+					dataenvelope["data"] = mySlice
+					parsed = true
+				}
+			}
+			if !parsed {
+				if success {
+					dataenvelope["data"] = str
+				} else {
+					dataenvelope["error"] = str
+				}
 			}
 		} else {
 			dataenvelope["data"] = data
