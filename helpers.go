@@ -235,8 +235,19 @@ func getOpenGraphData(ctx context.Context, urlStr string, userID string) (title,
 // Update entry in User map
 func updateUserInfo(values interface{}, field string, value string) interface{} {
 	log.Debug().Str("field", field).Str("value", value).Msg("User info updated")
-	values.(Values).m[field] = value
-	return values
+	// Copy-on-write: the map inside Values is shared — it lives in
+	// userinfocache and is handed to request goroutines via the request
+	// context. Mutating it in place races with concurrent readers (Values.Get)
+	// and can crash the process with "concurrent map read and map write".
+	// Build a fresh map and return a new Values; callers persist it via
+	// userinfocache.Set.
+	old := values.(Values)
+	m := make(map[string]string, len(old.m)+1)
+	for k, v := range old.m {
+		m[k] = v
+	}
+	m[field] = value
+	return Values{m: m}
 }
 
 // webhook for regular messages
