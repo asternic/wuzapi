@@ -2572,6 +2572,61 @@ func (s *server) SetStatusMessage() http.HandlerFunc {
 	}
 }
 
+// SetProfileName sets the account's own WhatsApp profile (push) name. whatsmeow
+// exposes no direct Client setter for this; the push name is changed by sending
+// a "setting_pushName" app-state mutation, so we build that patch and send it.
+func (s *server) SetProfileName() http.HandlerFunc {
+
+	type nameStruct struct {
+		Name string
+	}
+
+	return func(w http.ResponseWriter, r *http.Request) {
+
+		txtid := r.Context().Value("userinfo").(Values).Get("Id")
+
+		decoder := json.NewDecoder(r.Body)
+		var t nameStruct
+		if err := decoder.Decode(&t); err != nil {
+			s.Respond(w, r, http.StatusBadRequest, errors.New("could not decode Payload"))
+			return
+		}
+
+		t.Name = strings.TrimSpace(t.Name)
+		if t.Name == "" {
+			s.Respond(w, r, http.StatusBadRequest, errors.New("missing Name in Payload"))
+			return
+		}
+
+		client := clientManager.GetWhatsmeowClient(txtid)
+		if client == nil {
+			s.Respond(w, r, http.StatusInternalServerError, errors.New("no session"))
+			return
+		}
+
+		err := client.SendAppState(context.Background(), appstate.BuildSettingPushName(t.Name))
+		if err != nil {
+			// App state keys only exist after the initial post-pairing sync.
+			// Surface that as a clear client error rather than a generic 500.
+			if strings.Contains(err.Error(), "app state keys") {
+				s.Respond(w, r, http.StatusConflict, errors.New("profile name not settable yet: app state not synced — reconnect once after pairing and retry"))
+				return
+			}
+			s.Respond(w, r, http.StatusInternalServerError, fmt.Errorf("error setting profile name: %w", err))
+			return
+		}
+
+		log.Info().Str("userID", txtid).Str("name", t.Name).Msg("Profile push name updated")
+		response := map[string]interface{}{"Details": "Profile name set", "Name": t.Name}
+		responseJson, err := json.Marshal(response)
+		if err != nil {
+			s.Respond(w, r, http.StatusInternalServerError, err)
+		} else {
+			s.Respond(w, r, http.StatusOK, string(responseJson))
+		}
+	}
+}
+
 // Sends a regular text message
 func (s *server) SendMessage() http.HandlerFunc {
 	type textStruct struct {

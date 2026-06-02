@@ -133,6 +133,7 @@ func (s *server) routes() {
 	s.router.Handle("/user/contacts", c.Then(s.GetContacts())).Methods("GET")
 	s.router.Handle("/user/block", c.Then(s.BlockUser())).Methods("POST")
 	s.router.Handle("/user/unblock", c.Then(s.UnblockUser())).Methods("POST")
+	s.router.Handle("/user/profile/name", c.Then(s.SetProfileName())).Methods("POST")
 	s.router.Handle("/user/lid/{jid}", c.Then(s.GetUserLID())).Methods("GET")
 
 	s.router.Handle("/chat/presence", c.Then(s.ChatPresence())).Methods("POST")

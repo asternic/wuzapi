@@ -697,6 +697,33 @@ Response:
 
 ---
 
+## Set Profile Name
+
+Sets the account's own WhatsApp profile (push) name — the display name other users see. Requires a connected session that has completed its initial app-state sync after pairing (otherwise the call returns 409 until the sync is done).
+
+Endpoint: _/user/profile/name_
+
+Method: **POST**
+
+```
+curl -s -X POST -H 'Token: 1234ABCD' -H 'Content-Type: application/json' --data '{"Name":"My Business"}' http://localhost:8080/user/profile/name
+```
+
+Response:
+
+```json
+{
+  "code": 200,
+  "data": {
+    "Details": "Profile name set",
+    "Name": "My Business"
+  },
+  "success": true
+}
+```
+
+---
+
 
 # Chat
 
