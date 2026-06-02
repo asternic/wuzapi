@@ -1144,7 +1144,14 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 			//} else if evt.Type == events.ReceiptTypeDelivered {
 		} else if evt.Type == types.ReceiptTypeDelivered {
 			postmap["state"] = "Delivered"
-			log.Info().Str("id", evt.MessageIDs[0]).Str("source", evt.SourceString()).Str("timestamp", fmt.Sprintf("%v", evt.Timestamp)).Msg("Message delivered")
+			// A Delivered receipt can arrive with an empty MessageIDs slice;
+			// indexing [0] unconditionally panicked (recovered by whatsmeow's
+			// dispatch, but the receipt was dropped and a stack trace logged).
+			deliveredID := ""
+			if len(evt.MessageIDs) > 0 {
+				deliveredID = evt.MessageIDs[0]
+			}
+			log.Info().Str("id", deliveredID).Str("source", evt.SourceString()).Str("timestamp", fmt.Sprintf("%v", evt.Timestamp)).Msg("Message delivered")
 		} else {
 			// Discard webhooks for inactive or other delivery types
 			return
