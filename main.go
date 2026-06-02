@@ -2,9 +2,10 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
 	"flag"
 	"fmt"
-	"math/rand"
+	"math/big"
 	"net"
 	"net/http"
 	"os"
@@ -156,6 +157,24 @@ func isPrivateOrLoopback(ip net.IP) bool {
 	return false
 }
 
+// secureToken returns a cryptographically secure random alphanumeric string of
+// length n, generated with crypto/rand. It replaces the previous math/rand-based
+// generation used for the auto-generated admin token and global encryption/HMAC
+// keys, whose output is predictable and therefore unsuitable for secrets.
+func secureToken(n int) (string, error) {
+	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	max := big.NewInt(int64(len(charset)))
+	b := make([]byte, n)
+	for i := range b {
+		idx, err := rand.Int(rand.Reader, max)
+		if err != nil {
+			return "", err
+		}
+		b[i] = charset[idx.Int64()]
+	}
+	return string(b), nil
+}
+
 func main() {
 	for _, cidr := range []string{
 		"127.0.0.0/8",    // IPv4 loopback
@@ -297,13 +316,12 @@ func main() {
 		if v := os.Getenv("WUZAPI_ADMIN_TOKEN"); v != "" {
 			*adminToken = v
 		} else {
-			// Generate a random token if none provided
-			const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-			b := make([]byte, 32)
-			for i := range b {
-				b[i] = charset[rand.Intn(len(charset))]
+			// Generate a cryptographically secure random token if none provided
+			tok, err := secureToken(32)
+			if err != nil {
+				log.Fatal().Err(err).Msg("Failed to generate a secure admin token")
 			}
-			*adminToken = string(b)
+			*adminToken = tok
 			log.Warn().Str("admin_token", *adminToken).Msg("No admin token provided, generated a random one")
 		}
 	}
@@ -313,13 +331,12 @@ func main() {
 			*globalEncryptionKey = v
 			log.Info().Msg("Encryption key loaded from environment variable")
 		} else {
-			// Generate a random key if none provided
-			const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-			b := make([]byte, 32)
-			for i := range b {
-				b[i] = charset[rand.Intn(len(charset))]
+			// Generate a cryptographically secure random key if none provided
+			key, err := secureToken(32)
+			if err != nil {
+				log.Fatal().Err(err).Msg("Failed to generate a secure encryption key")
 			}
-			*globalEncryptionKey = string(b)
+			*globalEncryptionKey = key
 			log.Warn().Str("global_encryption_key", *globalEncryptionKey).Msg("No WUZAPI_GLOBAL_ENCRYPTION_KEY provided, generated a random one. " +
 				"SAVE THIS KEY TO YOUR .ENV FILE OR ALL ENCRYPTED DATA WILL BE LOST ON RESTART!")
 		}
@@ -341,13 +358,12 @@ func main() {
 			*globalHMACKey = v
 			log.Info().Msg("Global HMAC key configured from environment variable")
 		} else {
-			// Generate a random key if none provided
-			const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-			b := make([]byte, 32)
-			for i := range b {
-				b[i] = charset[rand.Intn(len(charset))]
+			// Generate a cryptographically secure random key if none provided
+			key, err := secureToken(32)
+			if err != nil {
+				log.Fatal().Err(err).Msg("Failed to generate a secure HMAC key")
 			}
-			*globalHMACKey = string(b)
+			*globalHMACKey = key
 			log.Warn().Str("global_hmac_key", *globalHMACKey).Msg("No WUZAPI_GLOBAL_HMAC_KEY provided, generated a random one")
 		}
 

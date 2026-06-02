@@ -6382,7 +6382,7 @@ func (s *server) GetHistory() http.HandlerFunc {
 		if historyLimit == 0 {
 			// Before returning error, try refreshing the cache in case the DB was updated
 			token := r.Context().Value("userinfo").(Values).Get("Token")
-			log.Info().Str("userId", txtid).Str("token", token).Msg("History is 0, invalidating cache and trying fresh DB lookup")
+			log.Info().Str("userId", txtid).Msg("History is 0, invalidating cache and trying fresh DB lookup")
 			userinfocache.Delete(token)
 
 			// Re-fetch from database
