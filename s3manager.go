@@ -179,11 +179,14 @@ func (m *S3Manager) GenerateS3Key(userID, contactJID, messageID string, mimeType
 	contactJID = strings.ReplaceAll(contactJID, "@", "_")
 	contactJID = strings.ReplaceAll(contactJID, ":", "_")
 
-	// Get current time
+	// Get current time. Go's reference time is "2006-01-02 15:04:05", so the
+	// layout tokens for year/month/day are "2006"/"01"/"02". The previous
+	// values ("2025"/"05"/"25") were not valid tokens — "05" is the seconds
+	// field — so media was filed under nonsensical, non-chronological folders.
 	now := time.Now()
-	year := now.Format("2025")
-	month := now.Format("05")
-	day := now.Format("25")
+	year := now.Format("2006")
+	month := now.Format("01")
+	day := now.Format("02")
 
 	// Determine media type folder
 	mediaType := "documents"
