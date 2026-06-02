@@ -326,7 +326,7 @@ func parseJID(arg string) (types.JID, bool) {
 	if arg == "" {
 		return types.JID{}, false
 	}
-	if arg[0] == '+' {
+	if strings.HasPrefix(arg, "+") {
 		arg = arg[1:]
 	}
 	if !strings.ContainsRune(arg, '@') {
