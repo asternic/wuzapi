@@ -5877,20 +5877,30 @@ func (s *server) Respond(w http.ResponseWriter, r *http.Request, status int, dat
 		dataenvelope["error"] = err.Error()
 		dataenvelope["success"] = false
 	} else {
-		// Try to unmarshal into a map first
-		var mydata map[string]interface{}
-		if err := json.Unmarshal([]byte(data.(string)), &mydata); err == nil {
-			dataenvelope["data"] = mydata
-		} else {
-			// If unmarshaling into a map fails, try as a slice
+		// A non-error payload is a success unless the status code says otherwise.
+		// Previously this branch always set success=true and did an unchecked
+		// data.(string), so a non-string value panicked, and a plain non-JSON
+		// string (passed by many handlers on error paths) was dropped while
+		// still reporting success=true.
+		success := status < http.StatusBadRequest
+		if str, ok := data.(string); ok {
+			// Expected to be a JSON object or array; if it isn't, surface the
+			// raw string instead of discarding it.
+			var mydata map[string]interface{}
 			var mySlice []interface{}
-			if err := json.Unmarshal([]byte(data.(string)), &mySlice); err == nil {
+			if json.Unmarshal([]byte(str), &mydata) == nil {
+				dataenvelope["data"] = mydata
+			} else if json.Unmarshal([]byte(str), &mySlice) == nil {
 				dataenvelope["data"] = mySlice
+			} else if success {
+				dataenvelope["data"] = str
 			} else {
-				log.Error().Str("error", fmt.Sprintf("%v", err)).Msg("error unmarshalling JSON")
+				dataenvelope["error"] = str
 			}
+		} else {
+			dataenvelope["data"] = data
 		}
-		dataenvelope["success"] = true
+		dataenvelope["success"] = success
 	}
 
 	if err := json.NewEncoder(w).Encode(dataenvelope); err != nil {
