@@ -2604,7 +2604,7 @@ func (s *server) SetProfileName() http.HandlerFunc {
 			return
 		}
 
-		err := client.SendAppState(context.Background(), appstate.BuildSettingPushName(t.Name))
+		err := client.SendAppState(r.Context(), appstate.BuildSettingPushName(t.Name))
 		if err != nil {
 			// App state keys only exist after the initial post-pairing sync.
 			// Surface that as a clear client error rather than a generic 500.
