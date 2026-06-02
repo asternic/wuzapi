@@ -953,35 +953,37 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 			if img := evt.Message.GetImageMessage(); img != nil {
 				mycli.processMedia(img, img.GetMimetype(), ".jpg",
 					downloadTimeoutImage, isIncoming, chatJID,
-					evt.Info.ID, s3cfg, postmap, nil)
+					evt.Info.ID, "", s3cfg, postmap, nil)
 			}
 
 			if audio := evt.Message.GetAudioMessage(); audio != nil {
 				mycli.processMedia(audio, audio.GetMimetype(), ".ogg",
 					downloadTimeoutAudio, isIncoming, chatJID,
-					evt.Info.ID, s3cfg, postmap, nil)
+					evt.Info.ID, "", s3cfg, postmap, nil)
 			}
 
 			if doc := evt.Message.GetDocumentMessage(); doc != nil {
 				ext := ".bin"
+				docName := ""
 				if doc.FileName != nil {
+					docName = *doc.FileName
 					ext = filepath.Ext(*doc.FileName)
 				}
 				mycli.processMedia(doc, doc.GetMimetype(), ext,
 					downloadTimeoutDocument, isIncoming, chatJID,
-					evt.Info.ID, s3cfg, postmap, nil)
+					evt.Info.ID, docName, s3cfg, postmap, nil)
 			}
 
 			if video := evt.Message.GetVideoMessage(); video != nil {
 				mycli.processMedia(video, video.GetMimetype(), ".mp4",
 					downloadTimeoutVideo, isIncoming, chatJID,
-					evt.Info.ID, s3cfg, postmap, nil)
+					evt.Info.ID, "", s3cfg, postmap, nil)
 			}
 
 			if sticker := evt.Message.GetStickerMessage(); sticker != nil {
 				mycli.processMedia(sticker, sticker.GetMimetype(), ".webp",
 					downloadTimeoutSticker, isIncoming, chatJID,
-					evt.Info.ID, s3cfg, postmap, map[string]interface{}{
+					evt.Info.ID, "", s3cfg, postmap, map[string]interface{}{
 						"isSticker":       true,
 						"stickerAnimated": sticker.GetIsAnimated(),
 					})

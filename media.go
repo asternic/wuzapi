@@ -24,6 +24,18 @@ type mediaS3Config struct {
 	MediaDelivery string
 }
 
+// resolveMediaFileName picks the filename surfaced in the webhook and S3
+// payloads. It prefers the sender's original filename (e.g. a document's
+// FileName) and falls back to the temp file's base name when none was
+// provided. filepath.Base strips any directory component a sender may have
+// embedded, so a crafted name can't escape into a path.
+func resolveMediaFileName(originalFileName, fallbackPath string) string {
+	if originalFileName != "" {
+		return filepath.Base(originalFileName)
+	}
+	return filepath.Base(fallbackPath)
+}
+
 func (mycli *MyClient) processMedia(
 	msg whatsmeow.DownloadableMessage,
 	mimeType string,
@@ -32,6 +44,7 @@ func (mycli *MyClient) processMedia(
 	isIncoming bool,
 	chatJID string,
 	messageID string,
+	originalFileName string,
 	s3cfg mediaS3Config,
 	postmap map[string]interface{},
 	extraKeys map[string]interface{},
@@ -56,6 +69,7 @@ func (mycli *MyClient) processMedia(
 		ext = exts[0]
 	}
 	tmpPath := filepath.Join(tmpDir, messageID+ext)
+	displayName := resolveMediaFileName(originalFileName, tmpPath)
 
 	if err := os.WriteFile(tmpPath, data, 0600); err != nil {
 		log.Error().Err(err).Msg("Failed to save media to temporary file")
@@ -77,7 +91,7 @@ func (mycli *MyClient) processMedia(
 			messageID,
 			data,
 			mimeType,
-			filepath.Base(tmpPath),
+			displayName,
 			isIncoming,
 		)
 		if err != nil {
@@ -95,7 +109,7 @@ func (mycli *MyClient) processMedia(
 		}
 		postmap["base64"] = b64
 		postmap["mimeType"] = mime_
-		postmap["fileName"] = filepath.Base(tmpPath)
+		postmap["fileName"] = displayName
 	}
 
 	for k, v := range extraKeys {
