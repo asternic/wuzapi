@@ -275,7 +275,7 @@ func (s *server) Connect() http.HandlerFunc {
 		userinfocache.Set(token, v, cache.NoExpiration)
 
 		log.Info().Str("jid", jid).Msg("Attempt to connect")
-		killchannel[txtid] = make(chan bool, 1)
+		setKillChannel(txtid, make(chan bool, 1))
 		go s.startClient(txtid, jid, token, subscribedEvents)
 
 		if t.Immediate == false {
@@ -332,10 +332,7 @@ func (s *server) Disconnect() http.HandlerFunc {
 			responseJson, err := json.Marshal(response)
 
 			clientManager.DeleteWhatsmeowClient(txtid)
-			select {
-			case killchannel[txtid] <- true:
-			default:
-			}
+			signalKill(txtid)
 
 			if err != nil {
 				s.Respond(w, r, http.StatusInternalServerError, err)
@@ -636,10 +633,7 @@ func (s *server) Logout() http.HandlerFunc {
 				} else {
 					log.Info().Str("jid", jid).Msg("Logged out")
 					clientManager.DeleteWhatsmeowClient(txtid)
-					select {
-					case killchannel[txtid] <- true:
-					default:
-					}
+					signalKill(txtid)
 				}
 			} else {
 				if clientManager.GetWhatsmeowClient(txtid).IsConnected() == true {

@@ -307,7 +307,7 @@ func (s *server) connectOnStartup() {
 			}
 			eventstring := strings.Join(subscribedEvents, ",")
 			log.Info().Str("events", eventstring).Str("jid", jid).Msg("Attempt to connect")
-			killchannel[txtid] = make(chan bool, 1)
+			setKillChannel(txtid, make(chan bool, 1))
 			go s.startClient(txtid, jid, token, subscribedEvents)
 
 			// Initialize S3 client if configured
@@ -568,10 +568,7 @@ func (s *server) startClient(userID string, textjid string, token string, subscr
 					clientManager.DeleteWhatsmeowClient(userID)
 					clientManager.DeleteMyClient(userID)
 					clientManager.DeleteHTTPClient(userID)
-					select {
-					case killchannel[userID] <- true:
-					default:
-					}
+					signalKill(userID)
 				} else if evt.Event == "success" {
 					log.Info().Msg("QR pairing ok!")
 					// Clear QR code after pairing
@@ -655,10 +652,13 @@ func (s *server) startClient(userID string, textjid string, token string, subscr
 		}
 	}
 
-	// Keep connected client live until disconnected/killed
+	// Keep connected client live until disconnected/killed. Read the kill
+	// channel through the mutex-guarded helper each iteration so this read
+	// never races with concurrent map writes/deletes from request goroutines.
 	for {
+		kill, _ := getKillChannel(userID)
 		select {
-		case <-killchannel[userID]:
+		case <-kill:
 			log.Info().Str("userid", userID).Msg("Received kill signal")
 			client.Disconnect()
 			clientManager.DeleteWhatsmeowClient(userID)
@@ -669,7 +669,7 @@ func (s *server) startClient(userID string, textjid string, token string, subscr
 			if err != nil {
 				log.Error().Err(err).Msg(sqlStmt)
 			}
-			delete(killchannel, userID)
+			deleteKillChannel(userID)
 			return
 		default:
 			time.Sleep(1000 * time.Millisecond)
@@ -1440,10 +1440,7 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 		log.Info().Str("reason", evt.Reason.String()).Msg("Logged out")
 		defer func() {
 			// Use a non-blocking send to prevent a deadlock if the receiver has already terminated.
-			select {
-			case killchannel[mycli.userID] <- true:
-			default:
-			}
+			signalKill(mycli.userID)
 		}()
 		sqlStmt := `UPDATE users SET connected=0 WHERE id=$1`
 		_, err := mycli.db.Exec(sqlStmt, mycli.userID)

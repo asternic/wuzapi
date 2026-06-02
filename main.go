@@ -73,6 +73,7 @@ var (
 	container        *sqlstore.Container
 	clientManager    = NewClientManager()
 	killchannel      = make(map[string](chan bool))
+	killchannelMu    sync.Mutex
 	userinfocache    = cache.New(5*time.Minute, 10*time.Minute)
 	lastMessageCache = cache.New(24*time.Hour, 24*time.Hour)
 	globalHTTPClient = newSafeHTTPClient()
@@ -81,6 +82,45 @@ var (
 var privateIPBlocks []*net.IPNet
 
 const version = "1.0.6"
+
+// killchannel maps a userID to its session goroutine's kill channel. It is
+// accessed from HTTP request goroutines (Connect/Disconnect/logout/delete) and
+// from the per-session startClient goroutine, so every map operation must be
+// serialized through killchannelMu. The helpers below lock only around the map
+// access itself — never while sending on or receiving from a channel — so a
+// slow or absent receiver can never block another session.
+func setKillChannel(userID string, ch chan bool) {
+	killchannelMu.Lock()
+	killchannel[userID] = ch
+	killchannelMu.Unlock()
+}
+
+func getKillChannel(userID string) (chan bool, bool) {
+	killchannelMu.Lock()
+	ch, ok := killchannel[userID]
+	killchannelMu.Unlock()
+	return ch, ok
+}
+
+func deleteKillChannel(userID string) {
+	killchannelMu.Lock()
+	delete(killchannel, userID)
+	killchannelMu.Unlock()
+}
+
+// signalKill delivers a non-blocking kill signal to userID's session goroutine,
+// if one is registered. The channel is buffered (cap 1) so the send never
+// blocks; the default guards a full buffer or a missing entry.
+func signalKill(userID string) {
+	ch, ok := getKillChannel(userID)
+	if !ok {
+		return
+	}
+	select {
+	case ch <- true:
+	default:
+	}
+}
 
 func newSafeHTTPClient() *http.Client {
 	return &http.Client{
