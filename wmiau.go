@@ -653,10 +653,11 @@ func (s *server) startClient(userID string, textjid string, token string, subscr
 	}
 
 	// Keep connected client live until disconnected/killed. Read the kill
-	// channel through the mutex-guarded helper each iteration so this read
-	// never races with concurrent map writes/deletes from request goroutines.
+	// channel once through the mutex-guarded helper; the goroutine then listens
+	// on its own channel for the rest of its life, so it neither re-locks the
+	// mutex every second nor risks switching to a replaced channel.
+	kill, _ := getKillChannel(userID)
 	for {
-		kill, _ := getKillChannel(userID)
 		select {
 		case <-kill:
 			log.Info().Str("userid", userID).Msg("Received kill signal")
