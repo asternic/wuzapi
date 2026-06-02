@@ -323,6 +323,9 @@ func (s *server) connectOnStartup() {
 }
 
 func parseJID(arg string) (types.JID, bool) {
+	if arg == "" {
+		return types.JID{}, false
+	}
 	if arg[0] == '+' {
 		arg = arg[1:]
 	}
