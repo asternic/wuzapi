@@ -5,6 +5,7 @@ import (
 	"mime"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -27,11 +28,14 @@ type mediaS3Config struct {
 // resolveMediaFileName picks the filename surfaced in the webhook and S3
 // payloads. It prefers the sender's original filename (e.g. a document's
 // FileName) and falls back to the temp file's base name when none was
-// provided. filepath.Base strips any directory component a sender may have
-// embedded, so a crafted name can't escape into a path.
+// provided. It strips any directory component a sender may have embedded so a
+// crafted name can't escape into a path. Backslashes are normalised to forward
+// slashes first: filepath.Base only treats the OS separator as a divider, so on
+// Linux (where this typically runs) a Windows-style "..\\..\\name" would not be
+// stripped otherwise.
 func resolveMediaFileName(originalFileName, fallbackPath string) string {
 	if originalFileName != "" {
-		return filepath.Base(originalFileName)
+		return filepath.Base(strings.ReplaceAll(originalFileName, "\\", "/"))
 	}
 	return filepath.Base(fallbackPath)
 }
