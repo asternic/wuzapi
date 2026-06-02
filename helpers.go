@@ -240,8 +240,9 @@ func updateUserInfo(values interface{}, field string, value string) interface{} 
 	// context. Mutating it in place races with concurrent readers (Values.Get)
 	// and can crash the process with "concurrent map read and map write".
 	// Build a fresh map and return a new Values; callers persist it via
-	// userinfocache.Set.
-	old := values.(Values)
+	// userinfocache.Set. Use a comma-ok assertion so a nil or unexpected value
+	// can't panic — it falls back to the zero Values (nil map), handled below.
+	old, _ := values.(Values)
 	m := make(map[string]string, len(old.m)+1)
 	for k, v := range old.m {
 		m[k] = v
