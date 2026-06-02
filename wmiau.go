@@ -39,7 +39,6 @@ type MyClient struct {
 	eventHandlerID uint32
 	userID         string
 	token          string
-	subscriptions  []string
 	db             *sqlx.DB
 	s              *server
 }
@@ -150,9 +149,6 @@ func updateAndGetUserSubscriptions(mycli *MyClient) ([]string, error) {
 			}
 		}
 	}
-
-	// Update the client subscriptions
-	mycli.subscriptions = subscribedEvents
 
 	return subscribedEvents, nil
 }
@@ -308,7 +304,7 @@ func (s *server) connectOnStartup() {
 			eventstring := strings.Join(subscribedEvents, ",")
 			log.Info().Str("events", eventstring).Str("jid", jid).Msg("Attempt to connect")
 			killchannel[txtid] = make(chan bool, 1)
-			go s.startClient(txtid, jid, token, subscribedEvents)
+			go s.startClient(txtid, jid, token)
 
 			// Initialize S3 client if configured
 			go func(userID string) {
@@ -399,7 +395,7 @@ func getPlatformTypeEnum(platformType string) *waCompanionReg.DeviceProps_Platfo
 	}
 }
 
-func (s *server) startClient(userID string, textjid string, token string, subscriptions []string) {
+func (s *server) startClient(userID string, textjid string, token string) {
 	log.Info().Str("userid", userID).Str("jid", textjid).Msg("Starting websocket connection to Whatsapp")
 
 	// Connection retry constants
@@ -443,7 +439,7 @@ func (s *server) startClient(userID string, textjid string, token string, subscr
 	store.DeviceProps.PlatformType = getPlatformTypeEnum(*platformType)
 	store.DeviceProps.Os = osName
 
-	mycli := MyClient{client, 1, userID, token, subscriptions, s.db, s}
+	mycli := MyClient{client, 1, userID, token, s.db, s}
 	mycli.eventHandlerID = mycli.WAClient.AddEventHandler(mycli.myEventHandler)
 
 	// Store the MyClient in clientManager

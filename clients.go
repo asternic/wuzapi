@@ -89,15 +89,6 @@ func (cm *ClientManager) DeleteMyClient(userID string) {
 	delete(cm.pollOptions, userID)
 }
 
-// UpdateMyClientSubscriptions updates the event subscriptions of a client without reconnecting
-func (cm *ClientManager) UpdateMyClientSubscriptions(userID string, subscriptions []string) {
-	cm.Lock()
-	defer cm.Unlock()
-	if client, exists := cm.myClients[userID]; exists {
-		client.subscriptions = subscriptions
-	}
-}
-
 // SetPollOptions remembers the plaintext options of a poll we just sent so
 // that incoming votes (which arrive as SHA-256 hashes of the option text)
 // can be resolved back to readable strings.

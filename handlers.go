@@ -276,7 +276,7 @@ func (s *server) Connect() http.HandlerFunc {
 
 		log.Info().Str("jid", jid).Msg("Attempt to connect")
 		killchannel[txtid] = make(chan bool, 1)
-		go s.startClient(txtid, jid, token, subscribedEvents)
+		go s.startClient(txtid, jid, token)
 
 		if t.Immediate == false {
 			log.Warn().Msg("Waiting 10 seconds")
@@ -467,9 +467,9 @@ func (s *server) UpdateWebhook() http.HandlerFunc {
 		if len(t.Events) > 0 {
 			_, err = s.db.Exec("UPDATE users SET webhook=$1, events=$2 WHERE id=$3", webhook, eventstring, txtid)
 
-			// Update MyClient if connected - integrated UpdateEvents functionality
+			// Event subscriptions are persisted to the users table and
+			// userinfocache above; the event handler re-reads them per event.
 			if len(validEvents) > 0 {
-				clientManager.UpdateMyClientSubscriptions(txtid, validEvents)
 				log.Info().Strs("events", validEvents).Str("user", txtid).Msg("Updated event subscriptions")
 			}
 		} else {
@@ -535,9 +535,9 @@ func (s *server) SetWebhook() http.HandlerFunc {
 			// Update both webhook and events
 			_, err = s.db.Exec("UPDATE users SET webhook=$1, events=$2 WHERE id=$3", webhook, eventstring, txtid)
 
-			// Update MyClient if connected - integrated UpdateEvents functionality
+			// Event subscriptions are persisted to the users table and
+			// userinfocache above; the event handler re-reads them per event.
 			if len(validEvents) > 0 {
-				clientManager.UpdateMyClientSubscriptions(txtid, validEvents)
 				log.Info().Strs("events", validEvents).Str("user", txtid).Msg("Updated event subscriptions")
 			}
 		} else {
