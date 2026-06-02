@@ -439,7 +439,14 @@ func (s *server) startClient(userID string, textjid string, token string) {
 	store.DeviceProps.PlatformType = getPlatformTypeEnum(*platformType)
 	store.DeviceProps.Os = osName
 
-	mycli := MyClient{client, 1, userID, token, s.db, s}
+	mycli := MyClient{
+		WAClient:       client,
+		eventHandlerID: 1,
+		userID:         userID,
+		token:          token,
+		db:             s.db,
+		s:              s,
+	}
 	mycli.eventHandlerID = mycli.WAClient.AddEventHandler(mycli.myEventHandler)
 
 	// Store the MyClient in clientManager
