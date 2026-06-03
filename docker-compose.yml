@@ -18,6 +18,7 @@ services:
       - TZ=${TZ:-America/Sao_Paulo}
       - WEBHOOK_FORMAT=${WEBHOOK_FORMAT:-json}
       - SESSION_DEVICE_NAME=${SESSION_DEVICE_NAME:-WuzAPI}
+      - QUEUE_SERVER_ID=${QUEUE_SERVER_ID:-}
     depends_on:
       db:
         condition: service_healthy
