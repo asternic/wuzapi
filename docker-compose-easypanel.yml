@@ -1,0 +1,151 @@
+# Docker Compose for EasyPanel deployment
+# This file is optimized for EasyPanel's Docker Compose support
+#
+# Usage in EasyPanel:
+# 1. Create a new project in EasyPanel
+# 2. Select "Docker Compose" as the deployment method
+# 3. Paste this file or point to the repository
+# 4. Configure the environment variables in EasyPanel's UI
+
+services:
+  wuzapi:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: wuzapi
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      # Required - Set these in EasyPanel's Environment Variables section
+      - WUZAPI_ADMIN_TOKEN=${WUZAPI_ADMIN_TOKEN:?WUZAPI_ADMIN_TOKEN is required}
+      - WUZAPI_GLOBAL_ENCRYPTION_KEY=${WUZAPI_GLOBAL_ENCRYPTION_KEY:?WUZAPI_GLOBAL_ENCRYPTION_KEY is required}
+      - WUZAPI_GLOBAL_HMAC_KEY=${WUZAPI_GLOBAL_HMAC_KEY:-}
+      - WUZAPI_GLOBAL_WEBHOOK=${WUZAPI_GLOBAL_WEBHOOK:-}
+      
+      # Database Configuration
+      - DB_USER=${DB_USER:-wuzapi}
+      - DB_PASSWORD=${DB_PASSWORD:-wuzapi}
+      - DB_NAME=${DB_NAME:-wuzapi}
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_SSLMODE=disable
+      
+      # Application Settings
+      - TZ=${TZ:-America/Sao_Paulo}
+      - WEBHOOK_FORMAT=${WEBHOOK_FORMAT:-json}
+      - SESSION_DEVICE_NAME=${SESSION_DEVICE_NAME:-WuzAPI}
+      
+      # Webhook Retry Settings
+      - WEBHOOK_RETRY_ENABLED=${WEBHOOK_RETRY_ENABLED:-true}
+      - WEBHOOK_RETRY_COUNT=${WEBHOOK_RETRY_COUNT:-5}
+      - WEBHOOK_RETRY_DELAY_SECONDS=${WEBHOOK_RETRY_DELAY_SECONDS:-30}
+      
+      # RabbitMQ (Optional - remove if not using message queue)
+      - RABBITMQ_URL=amqp://${RABBITMQ_USER:-wuzapi}:${RABBITMQ_PASSWORD:-wuzapi}@rabbitmq:5672/
+      - RABBITMQ_QUEUE=${RABBITMQ_QUEUE:-whatsapp_events}
+    volumes:
+      - wuzapi_data:/app/data
+    networks:
+      - wuzapi-network
+    depends_on:
+      db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/api"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    labels:
+      # EasyPanel labels for automatic configuration
+      - "easypanel.enable=true"
+      - "easypanel.http.routers.wuzapi.rule=Host(`${DOMAIN:-wuzapi.localhost}`)"
+      - "easypanel.http.routers.wuzapi.entrypoints=websecure"
+      - "easypanel.http.routers.wuzapi.tls.certresolver=letsencrypt"
+      - "easypanel.http.services.wuzapi.loadbalancer.server.port=8080"
+
+  db:
+    image: postgres:16-alpine
+    container_name: wuzapi-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:-wuzapi}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-wuzapi}
+      POSTGRES_DB: ${DB_NAME:-wuzapi}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - wuzapi-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-wuzapi} -d ${DB_NAME:-wuzapi}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: wuzapi-rabbitmq
+    hostname: rabbitmq
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-wuzapi}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-wuzapi}
+      RABBITMQ_DEFAULT_VHOST: /
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - wuzapi-network
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+    labels:
+      # Optional: Expose RabbitMQ Management UI
+      - "easypanel.enable=true"
+      - "easypanel.http.routers.rabbitmq.rule=Host(`rabbitmq.${DOMAIN:-wuzapi.localhost}`)"
+      - "easypanel.http.routers.rabbitmq.entrypoints=websecure"
+      - "easypanel.http.services.rabbitmq.loadbalancer.server.port=15672"
+
+networks:
+  wuzapi-network:
+    driver: bridge
+    name: wuzapi-network
+
+volumes:
+  wuzapi_data:
+    name: wuzapi_data
+  postgres_data:
+    name: wuzapi_postgres_data
+  rabbitmq_data:
+    name: wuzapi_rabbitmq_data

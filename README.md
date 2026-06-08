@@ -233,6 +233,22 @@ The Docker configuration will:
 
 **Note:** The `.env` file is already included in `.gitignore` to avoid committing sensitive information to your repository.
 
+### EasyPanel Deployment
+
+WuzAPI can be easily deployed to [EasyPanel](https://easypanel.io). We provide ready-to-use configuration files:
+
+1. **Quick Start**: Use `docker-compose-easypanel.yml` with EasyPanel's Docker Compose support
+2. **Template**: Import `easypanel.json` as an EasyPanel template
+
+**Required environment variables for EasyPanel:**
+```
+WUZAPI_ADMIN_TOKEN=your_secure_token
+WUZAPI_GLOBAL_ENCRYPTION_KEY=your_32_char_key
+DB_PASSWORD=your_db_password
+```
+
+For detailed instructions, see [EASYPANEL.md](EASYPANEL.md).
+
 ## Usage
 
 To interact with the API, you must include the `Authorization` header in HTTP requests, containing the user's authentication token. You can have multiple users (different WhatsApp numbers) on the same server.  

@@ -6699,6 +6699,23 @@ func (s *server) syncHistoryForChat(ctx context.Context, userID string, chatJID 
 
 // save outgoing message to history
 func (s *server) saveOutgoingMessageToHistory(userID, chatJID, messageID, messageType, textContent, mediaLink string, historyLimit int) {
+	// Detect new chat before saving to history (query happens before insert)
+	// Only fires for individual chats (1-to-1), not groups (@g.us)
+	if mycli := clientManager.GetMyClient(userID); mycli != nil {
+		if !strings.HasSuffix(chatJID, "@g.us") && isNewChat(mycli, chatJID) {
+			// Extract phone number from JID (e.g. "5215518426237" from "5215518426237@s.whatsapp.net")
+			phone := strings.Split(chatJID, "@")[0]
+			extraData := map[string]interface{}{
+				"phone":       phone,
+				"isFromMe":    true,
+				"isGroup":     false,
+				"messageID":   messageID,
+				"messageType": messageType,
+			}
+			go fireChatNewEvent(mycli, chatJID, "message", extraData)
+		}
+	}
+
 	if historyLimit > 0 {
 		err := s.saveMessageToHistory(userID, chatJID, "me", messageID, messageType, textContent, mediaLink, "", "")
 		if err != nil {

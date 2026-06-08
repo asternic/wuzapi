@@ -666,6 +666,11 @@
                         <li><code>ChatPresence</code> - Chat presence (typing)</li>
                     </ul>
                     
+                    <h4>Chat Lifecycle</h4>
+                    <ul>
+                        <li><code>ChatNew</code> - New chat detected (first message or call with a contact/group)</li>
+                    </ul>
+                    
                     <h4>Others</h4>
                     <ul>
                         <li><code>IdentityChange</code> - Identity change</li>
@@ -732,6 +737,29 @@
     "status": "available",
     "timestamp": 1647878750
   }
+}</code></pre>
+
+            <h3>Chat New</h3>
+            <p>Fired when a new chat is detected for the first time (incoming/outgoing message or call with a previously unknown contact or group).</p>
+            <pre><code class="language-json">{
+  "type": "ChatNew",
+  "chat": "5491199999999@s.whatsapp.net",
+  "trigger": "message",
+  "sender": "5491199999999@s.whatsapp.net",
+  "pushName": "Contact Name",
+  "isGroup": false,
+  "isFromMe": false,
+  "timestamp": "2026-03-18T10:30:00Z",
+  "messageID": "3EB0ABCD123456789"
+}</code></pre>
+            <p>When triggered by a call:</p>
+            <pre><code class="language-json">{
+  "type": "ChatNew",
+  "chat": "5491199999999@s.whatsapp.net",
+  "trigger": "call",
+  "caller": "5491199999999@s.whatsapp.net",
+  "callID": "ABCDEF123456",
+  "timestamp": "2026-03-18T10:30:00Z"
 }</code></pre>
 
             <div class="alert alert-info">

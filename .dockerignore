@@ -24,6 +24,15 @@ API.md
 LICENSE
 *.md
 
+# EasyPanel and deployment configs (not needed in container)
+easypanel.json
+docker-compose*.yml
+docker-compose*.yaml
+
+# Nix files
+*.nix
+flake.lock
+
 # Others
 .DS_Store
 .idea/
@@ -31,3 +40,5 @@ LICENSE
 *.swp
 *.swo
 tmp/
+*.test
+*_test.go

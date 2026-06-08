@@ -2,7 +2,17 @@ dbdata/
 files/
 wuzapi
 .env
+.direnv/
 .tool-versions
+
+# Nix build outputs (keep source files)
+result
+result-*
+
+# Local environment samples (keep .env.sample, ignore others)
+.env.*
+!.env.sample
+!.env.easypanel.sample
 
 # Added by Claude Task Master
 # Logs

@@ -1,0 +1,215 @@
+{
+  "$schema": "https://easypanel.io/schema/v1.json",
+  "name": "wuzapi",
+  "description": "WuzAPI - WhatsApp REST API with multiple device support",
+  "services": [
+    {
+      "type": "app",
+      "name": "wuzapi",
+      "source": {
+        "type": "github",
+        "owner": "asternic",
+        "repo": "wuzapi",
+        "ref": "main",
+        "path": "/"
+      },
+      "build": {
+        "type": "dockerfile",
+        "file": "Dockerfile"
+      },
+      "domains": [
+        {
+          "host": "$(EASYPANEL_DOMAIN)"
+        }
+      ],
+      "ports": [
+        {
+          "published": 8080,
+          "target": 8080,
+          "protocol": "http"
+        }
+      ],
+      "env": [
+        {
+          "name": "WUZAPI_ADMIN_TOKEN",
+          "value": "${WUZAPI_ADMIN_TOKEN}",
+          "secret": true
+        },
+        {
+          "name": "WUZAPI_GLOBAL_ENCRYPTION_KEY",
+          "value": "${WUZAPI_GLOBAL_ENCRYPTION_KEY}",
+          "secret": true
+        },
+        {
+          "name": "WUZAPI_GLOBAL_HMAC_KEY",
+          "value": "${WUZAPI_GLOBAL_HMAC_KEY}",
+          "secret": true
+        },
+        {
+          "name": "WUZAPI_GLOBAL_WEBHOOK",
+          "value": "${WUZAPI_GLOBAL_WEBHOOK:-}"
+        },
+        {
+          "name": "DB_USER",
+          "value": "wuzapi"
+        },
+        {
+          "name": "DB_PASSWORD",
+          "value": "${DB_PASSWORD}",
+          "secret": true
+        },
+        {
+          "name": "DB_NAME",
+          "value": "wuzapi"
+        },
+        {
+          "name": "DB_HOST",
+          "value": "wuzapi-db"
+        },
+        {
+          "name": "DB_PORT",
+          "value": "5432"
+        },
+        {
+          "name": "DB_SSLMODE",
+          "value": "disable"
+        },
+        {
+          "name": "TZ",
+          "value": "${TZ:-America/Sao_Paulo}"
+        },
+        {
+          "name": "WEBHOOK_FORMAT",
+          "value": "${WEBHOOK_FORMAT:-json}"
+        },
+        {
+          "name": "SESSION_DEVICE_NAME",
+          "value": "${SESSION_DEVICE_NAME:-WuzAPI}"
+        },
+        {
+          "name": "RABBITMQ_URL",
+          "value": "amqp://wuzapi:${RABBITMQ_PASSWORD:-wuzapi}@wuzapi-rabbitmq:5672/"
+        },
+        {
+          "name": "RABBITMQ_QUEUE",
+          "value": "${RABBITMQ_QUEUE:-whatsapp_events}"
+        }
+      ],
+      "mounts": [
+        {
+          "type": "volume",
+          "name": "wuzapi-data",
+          "mountPath": "/app/data"
+        }
+      ],
+      "deploy": {
+        "replicas": 1,
+        "resources": {
+          "limits": {
+            "memory": "512M",
+            "cpu": "500m"
+          },
+          "reservations": {
+            "memory": "256M",
+            "cpu": "250m"
+          }
+        }
+      },
+      "healthCheck": {
+        "path": "/api",
+        "port": 8080,
+        "interval": "30s",
+        "timeout": "10s",
+        "retries": 3
+      }
+    },
+    {
+      "type": "postgres",
+      "name": "wuzapi-db",
+      "image": "postgres:16",
+      "env": [
+        {
+          "name": "POSTGRES_USER",
+          "value": "wuzapi"
+        },
+        {
+          "name": "POSTGRES_PASSWORD",
+          "value": "${DB_PASSWORD}",
+          "secret": true
+        },
+        {
+          "name": "POSTGRES_DB",
+          "value": "wuzapi"
+        }
+      ],
+      "mounts": [
+        {
+          "type": "volume",
+          "name": "postgres-data",
+          "mountPath": "/var/lib/postgresql/data"
+        }
+      ],
+      "deploy": {
+        "resources": {
+          "limits": {
+            "memory": "512M",
+            "cpu": "500m"
+          }
+        }
+      }
+    },
+    {
+      "type": "app",
+      "name": "wuzapi-rabbitmq",
+      "image": "rabbitmq:3-management",
+      "ports": [
+        {
+          "published": 15672,
+          "target": 15672,
+          "protocol": "http"
+        }
+      ],
+      "env": [
+        {
+          "name": "RABBITMQ_DEFAULT_USER",
+          "value": "wuzapi"
+        },
+        {
+          "name": "RABBITMQ_DEFAULT_PASS",
+          "value": "${RABBITMQ_PASSWORD:-wuzapi}",
+          "secret": true
+        },
+        {
+          "name": "RABBITMQ_DEFAULT_VHOST",
+          "value": "/"
+        }
+      ],
+      "mounts": [
+        {
+          "type": "volume",
+          "name": "rabbitmq-data",
+          "mountPath": "/var/lib/rabbitmq"
+        }
+      ],
+      "deploy": {
+        "resources": {
+          "limits": {
+            "memory": "256M",
+            "cpu": "250m"
+          }
+        }
+      }
+    }
+  ],
+  "volumes": [
+    {
+      "name": "wuzapi-data"
+    },
+    {
+      "name": "postgres-data"
+    },
+    {
+      "name": "rabbitmq-data"
+    }
+  ]
+}
