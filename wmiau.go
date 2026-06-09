@@ -1503,13 +1503,15 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 		postmap["type"] = "UndecryptableMessage"
 		postmap["event"] = map[string]interface{}{
 			"Info": map[string]interface{}{
-				"ID":       evt.Info.ID,
-				"Chat":     evt.Info.Chat.String(),
-				"Sender":   evt.Info.Sender.String(),
-				"IsFromMe": evt.Info.IsFromMe,
-				"IsGroup":  evt.Info.IsGroup,
-				"PushName": evt.Info.PushName,
-				"Timestamp": evt.Info.Timestamp,
+				"ID":           evt.Info.ID,
+				"Chat":         evt.Info.Chat.String(),
+				"Sender":       evt.Info.Sender.String(),
+				"SenderAlt":    evt.Info.SenderAlt.String(),
+				"RecipientAlt": evt.Info.RecipientAlt.String(),
+				"IsFromMe":     evt.Info.IsFromMe,
+				"IsGroup":      evt.Info.IsGroup,
+				"PushName":     evt.Info.PushName,
+				"Timestamp":    evt.Info.Timestamp,
 			},
 		}
 		dowebhook = 1
