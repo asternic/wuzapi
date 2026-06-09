@@ -7,7 +7,7 @@ COPY . .
 RUN CGO_ENABLED=1 go build -o wuzapi .
 
 FROM alpine:3.20
-RUN apk add --no-cache ca-certificates ffmpeg tzdata
+RUN apk add --no-cache ca-certificates ffmpeg tzdata sqlite
 WORKDIR /app
 COPY --from=builder /app/wuzapi .
 EXPOSE 8080
