@@ -894,6 +894,17 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 		if evt.Message.GetPollUpdateMessage() != nil {
 			pollMsgID := evt.Message.GetPollUpdateMessage().GetPollCreationMessageKey().GetID()
 
+			// Resolve LID → phone JID in pollCreationMessageKey so whatsmeow can
+			// find the stored poll secret (secret is keyed by phone JID, not LID)
+			if pollKey := evt.Message.GetPollUpdateMessage().GetPollCreationMessageKey(); pollKey != nil && pollKey.RemoteJID != nil {
+				if keyJID, kjErr := types.ParseJID(*pollKey.RemoteJID); kjErr == nil && keyJID.Server == types.HiddenUserServer {
+					if pn, pnErr := getCachedPNForLID(context.Background(), mycli.WAClient, keyJID); pnErr == nil {
+						pnStr := pn.String()
+						pollKey.RemoteJID = &pnStr
+					}
+				}
+			}
+
 			pollVote, perr := mycli.WAClient.DecryptPollVote(context.Background(), evt)
 			if perr != nil {
 				log.Warn().Err(perr).Str("pollMsgID", pollMsgID).Msg("DecryptPollVote failed")
@@ -1490,6 +1501,17 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 		log.Error().Str("reason", fmt.Sprintf("%+v", evt)).Msg("Failed to connect to Whatsapp")
 	case *events.UndecryptableMessage:
 		postmap["type"] = "UndecryptableMessage"
+		postmap["event"] = map[string]interface{}{
+			"Info": map[string]interface{}{
+				"ID":       evt.Info.ID,
+				"Chat":     evt.Info.Chat.String(),
+				"Sender":   evt.Info.Sender.String(),
+				"IsFromMe": evt.Info.IsFromMe,
+				"IsGroup":  evt.Info.IsGroup,
+				"PushName": evt.Info.PushName,
+				"Timestamp": evt.Info.Timestamp,
+			},
+		}
 		dowebhook = 1
 		log.Warn().Str("info", evt.Info.SourceString()).Msg("Undecryptable message received")
 	case *events.MediaRetry:
