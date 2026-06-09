@@ -2823,7 +2823,15 @@ func (s *server) SendMessage() http.HandlerFunc {
 			msg.ExtendedTextMessage.ContextInfo.IsForwarded = proto.Bool(true)
 		}
 		if t.ViewOnce {
-			msg = &waE2E.Message{ViewOnceMessageV2: &waE2E.FutureProofMessage{Message: msg}}
+			// Senha descartável: usa Conversation (texto simples) para exibir ícone de chave 🔑
+			// ExtendedTextMessage não exibe o ícone correto no destinatário
+			var innerMsg *waE2E.Message
+			if t.ContextInfo.StanzaID != nil {
+				innerMsg = msg // tem citação, mantém ExtendedTextMessage
+			} else {
+				innerMsg = &waE2E.Message{Conversation: proto.String(t.Body)}
+			}
+			msg = &waE2E.Message{ViewOnceMessageV2: &waE2E.FutureProofMessage{Message: innerMsg}}
 		}
 		resp, err = clientManager.GetWhatsmeowClient(txtid).SendMessage(context.Background(), recipient, msg, whatsmeow.SendRequestExtra{ID: msgid})
 		if err != nil {
