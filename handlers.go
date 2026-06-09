@@ -1028,6 +1028,7 @@ func (s *server) SendAudio() http.HandlerFunc {
 		MimeType      string `json:"mimetype,omitempty"`
 		Seconds       uint32
 		Waveform      []byte
+		ViewOnce      bool           `json:"ViewOnce,omitempty"`
 		ContextInfo   waE2E.ContextInfo
 		QuotedMessage *waE2E.Message `json:"QuotedMessage,omitempty"`
 	}
@@ -1177,6 +1178,9 @@ func (s *server) SendAudio() http.HandlerFunc {
 			}
 			msg.AudioMessage.ContextInfo.IsForwarded = proto.Bool(true)
 		}
+		if t.ViewOnce {
+			msg = &waE2E.Message{ViewOnceMessageV2: &waE2E.FutureProofMessage{Message: msg}}
+		}
 
 		resp, err = client.SendMessage(context.Background(), recipient, msg, whatsmeow.SendRequestExtra{ID: msgid})
 		if err != nil {
@@ -1233,6 +1237,7 @@ func (s *server) SendImage() http.HandlerFunc {
 		Caption       string
 		Id            string
 		MimeType      string
+		ViewOnce      bool           `json:"ViewOnce,omitempty"`
 		ContextInfo   waE2E.ContextInfo
 		QuotedMessage *waE2E.Message `json:"QuotedMessage,omitempty"`
 	}
@@ -1384,6 +1389,9 @@ func (s *server) SendImage() http.HandlerFunc {
 				msg.ImageMessage.ContextInfo = &waE2E.ContextInfo{}
 			}
 			msg.ImageMessage.ContextInfo.IsForwarded = proto.Bool(true)
+		}
+		if t.ViewOnce {
+			msg = &waE2E.Message{ViewOnceMessageV2: &waE2E.FutureProofMessage{Message: msg}}
 		}
 
 		resp, err = clientManager.GetWhatsmeowClient(txtid).SendMessage(context.Background(), recipient, msg, whatsmeow.SendRequestExtra{ID: msgid})
@@ -1591,6 +1599,7 @@ func (s *server) SendVideo() http.HandlerFunc {
 		Id            string
 		JPEGThumbnail []byte
 		MimeType      string
+		ViewOnce      bool           `json:"ViewOnce,omitempty"`
 		ContextInfo   waE2E.ContextInfo
 		QuotedMessage *waE2E.Message `json:"QuotedMessage,omitempty"`
 	}
@@ -1726,6 +1735,9 @@ func (s *server) SendVideo() http.HandlerFunc {
 				msg.VideoMessage.ContextInfo = &waE2E.ContextInfo{}
 			}
 			msg.VideoMessage.ContextInfo.IsForwarded = proto.Bool(true)
+		}
+		if t.ViewOnce {
+			msg = &waE2E.Message{ViewOnceMessageV2: &waE2E.FutureProofMessage{Message: msg}}
 		}
 
 		resp, err = clientManager.GetWhatsmeowClient(txtid).SendMessage(context.Background(), recipient, msg, whatsmeow.SendRequestExtra{ID: msgid})
@@ -2714,6 +2726,7 @@ func (s *server) SendMessage() http.HandlerFunc {
 		Body          string
 		LinkPreview   bool
 		Id            string
+		ViewOnce      bool           `json:"ViewOnce,omitempty"`
 		ContextInfo   waE2E.ContextInfo
 		QuotedText    string         `json:"QuotedText,omitempty"`
 		QuotedMessage *waE2E.Message `json:"QuotedMessage,omitempty"`
@@ -2808,6 +2821,9 @@ func (s *server) SendMessage() http.HandlerFunc {
 				msg.ExtendedTextMessage.ContextInfo = &waE2E.ContextInfo{}
 			}
 			msg.ExtendedTextMessage.ContextInfo.IsForwarded = proto.Bool(true)
+		}
+		if t.ViewOnce {
+			msg = &waE2E.Message{ViewOnceMessageV2: &waE2E.FutureProofMessage{Message: msg}}
 		}
 		resp, err = clientManager.GetWhatsmeowClient(txtid).SendMessage(context.Background(), recipient, msg, whatsmeow.SendRequestExtra{ID: msgid})
 		if err != nil {
