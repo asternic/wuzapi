@@ -1179,6 +1179,7 @@ func (s *server) SendAudio() http.HandlerFunc {
 			msg.AudioMessage.ContextInfo.IsForwarded = proto.Bool(true)
 		}
 		if t.ViewOnce {
+			msg.AudioMessage.ViewOnce = proto.Bool(true)
 			msg = &waE2E.Message{ViewOnceMessageV2: &waE2E.FutureProofMessage{Message: msg}}
 		}
 
@@ -1391,6 +1392,7 @@ func (s *server) SendImage() http.HandlerFunc {
 			msg.ImageMessage.ContextInfo.IsForwarded = proto.Bool(true)
 		}
 		if t.ViewOnce {
+			msg.ImageMessage.ViewOnce = proto.Bool(true)
 			msg = &waE2E.Message{ViewOnceMessageV2: &waE2E.FutureProofMessage{Message: msg}}
 		}
 
@@ -1737,6 +1739,7 @@ func (s *server) SendVideo() http.HandlerFunc {
 			msg.VideoMessage.ContextInfo.IsForwarded = proto.Bool(true)
 		}
 		if t.ViewOnce {
+			msg.VideoMessage.ViewOnce = proto.Bool(true)
 			msg = &waE2E.Message{ViewOnceMessageV2: &waE2E.FutureProofMessage{Message: msg}}
 		}
 
