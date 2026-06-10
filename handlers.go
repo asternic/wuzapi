@@ -744,6 +744,44 @@ func (s *server) PairPhone() http.HandlerFunc {
 	}
 }
 
+// resolveSessionJID returns the best-known JID for a user. When logged in, the
+func (s *server) resolveSessionJID(txtid string, waClient *whatsmeow.Client, userInfo Values) string {
+	jid := userInfo.Get("Jid")
+
+	if waClient != nil && waClient.IsLoggedIn() && waClient.Store != nil && waClient.Store.ID != nil {
+		storeJID := waClient.Store.ID.ToNonAD()
+		if storeJID.Server == types.HiddenUserServer {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			pn, err := getCachedPNForLID(ctx, waClient, storeJID)
+			cancel()
+			if err == nil && !pn.IsEmpty() {
+				storeJID = pn.ToNonAD()
+			}
+		}
+		resolved := storeJID.String()
+		if resolved != "" {
+			jid = resolved
+			if resolved != userInfo.Get("Jid") {
+				token := userInfo.Get("Token")
+				if token != "" {
+					v := updateUserInfo(userInfo, "Jid", resolved)
+					userinfocache.Set(token, v, cache.NoExpiration)
+				}
+				if _, err := s.db.Exec("UPDATE users SET jid=$1 WHERE id=$2", resolved, txtid); err != nil {
+					log.Warn().Err(err).Str("user_id", txtid).Msg("Failed to persist resolved JID")
+				}
+			}
+		}
+	} else if jid == "" {
+		var dbJid string
+		if err := s.db.QueryRow("SELECT jid FROM users WHERE id = $1", txtid).Scan(&dbJid); err == nil && dbJid != "" {
+			jid = dbJid
+		}
+	}
+
+	return jid
+}
+
 // Gets Connected and LoggedIn Status
 func (s *server) GetStatus() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -763,8 +801,10 @@ func (s *server) GetStatus() http.HandlerFunc {
 
 		txtid := userInfo.Get("Id")
 
-		isConnected := clientManager.GetWhatsmeowClient(txtid).IsConnected()
-		isLoggedIn := clientManager.GetWhatsmeowClient(txtid).IsLoggedIn()
+		waClient := clientManager.GetWhatsmeowClient(txtid)
+		isConnected := waClient != nil && waClient.IsConnected()
+		isLoggedIn := waClient != nil && waClient.IsLoggedIn()
+		jid := s.resolveSessionJID(txtid, waClient, userInfo)
 
 		var proxyURL string
 		s.db.QueryRow("SELECT proxy_url FROM users WHERE id = $1", txtid).Scan(&proxyURL)
@@ -821,7 +861,7 @@ func (s *server) GetStatus() http.HandlerFunc {
 			"connected":       isConnected,
 			"loggedIn":        isLoggedIn,
 			"token":           userInfo.Get("Token"),
-			"jid":             userInfo.Get("Jid"),
+			"jid":             jid,
 			"webhook":         userInfo.Get("Webhook"),
 			"events":          userInfo.Get("Events"),
 			"proxy_url":       userInfo.Get("Proxy"),

@@ -718,11 +718,23 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 			log.Error().Err(err).Msg(sqlStmt)
 			return
 		}
+		if mycli.WAClient.Store != nil && mycli.WAClient.Store.ID != nil {
+			connectedJID := mycli.WAClient.Store.ID.ToNonAD().String()
+			if _, err := mycli.db.Exec(`UPDATE users SET jid=$1 WHERE id=$2`, connectedJID, mycli.userID); err != nil {
+				log.Warn().Err(err).Str("user_id", mycli.userID).Msg("Failed to persist JID on connect")
+			} else if myuserinfo, found := userinfocache.Get(mycli.token); found {
+				v := updateUserInfo(myuserinfo, "Jid", connectedJID)
+				userinfocache.Set(mycli.token, v, cache.NoExpiration)
+			}
+		}
 	case *events.PairSuccess:
 		log.Info().Str("userid", mycli.userID).Str("token", mycli.token).Str("ID", evt.ID.String()).Str("BusinessName", evt.BusinessName).Str("Platform", evt.Platform).Msg("QR Pair Success")
-		jid := evt.ID
+		jidStr := evt.ID.String()
+		if mycli.WAClient.Store != nil && mycli.WAClient.Store.ID != nil {
+			jidStr = mycli.WAClient.Store.ID.ToNonAD().String()
+		}
 		sqlStmt := `UPDATE users SET jid=$1 WHERE id=$2`
-		_, err := mycli.db.Exec(sqlStmt, jid, mycli.userID)
+		_, err := mycli.db.Exec(sqlStmt, jidStr, mycli.userID)
 		if err != nil {
 			log.Error().Err(err).Msg(sqlStmt)
 			return
@@ -737,9 +749,9 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 		} else {
 			txtid = myuserinfo.(Values).Get("Id")
 			token := myuserinfo.(Values).Get("Token")
-			v := updateUserInfo(myuserinfo, "Jid", fmt.Sprintf("%s", jid))
+			v := updateUserInfo(myuserinfo, "Jid", jidStr)
 			userinfocache.Set(token, v, cache.NoExpiration)
-			log.Info().Str("jid", jid.String()).Str("userid", txtid).Str("token", token).Msg("User information set")
+			log.Info().Str("jid", jidStr).Str("userid", txtid).Str("token", token).Msg("User information set")
 		}
 
 		// Check if automatic history sync is enabled and trigger it after QR code is scanned
