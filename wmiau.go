@@ -887,7 +887,13 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 
 				// Determine the file extension based on the MIME type
 				exts, _ := mime.ExtensionsByType(img.GetMimetype())
-				tmpPath := filepath.Join(tmpDirectory, evt.Info.ID+exts[0])
+				var ext string
+				if len(exts) > 0 {
+					ext = exts[0]
+				} else {
+					ext = ".jpg"
+				}
+				tmpPath := filepath.Join(tmpDirectory, evt.Info.ID+ext)
 
 				// Write the image to the temporary file
 				err = os.WriteFile(tmpPath, data, 0600)
@@ -1153,7 +1159,13 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 
 				// Determine the file extension based on the MIME type
 				exts, _ := mime.ExtensionsByType(video.GetMimetype())
-				tmpPath := filepath.Join(tmpDirectory, evt.Info.ID+exts[0])
+				var ext string
+				if len(exts) > 0 {
+					ext = exts[0]
+				} else {
+					ext = ".mp4"
+				}
+				tmpPath := filepath.Join(tmpDirectory, evt.Info.ID+ext)
 
 				// Write the video to the temporary file
 				err = os.WriteFile(tmpPath, data, 0600)
