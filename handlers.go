@@ -4197,6 +4197,156 @@ func (s *server) React() http.HandlerFunc {
 	}
 }
 
+// Pins or unpins an existing message in a chat or group
+func (s *server) PinMessage() http.HandlerFunc {
+
+	type pinStruct struct {
+		Chat            string
+		Sender          string
+		Id              string
+		DurationSeconds *uint32
+		Pin             *bool
+	}
+
+	// Allowed pin durations in seconds: 24h, 7d, 30d
+	allowedDurations := map[uint32]bool{
+		86400:   true,
+		604800:  true,
+		2592000: true,
+	}
+	const defaultDuration uint32 = 604800
+
+	return func(w http.ResponseWriter, r *http.Request) {
+
+		txtid := r.Context().Value("userinfo").(Values).Get("Id")
+
+		client := clientManager.GetWhatsmeowClient(txtid)
+		if client == nil {
+			s.Respond(w, r, http.StatusInternalServerError, errors.New("no session"))
+			return
+		}
+
+		if !client.IsConnected() {
+			s.Respond(w, r, http.StatusInternalServerError, errors.New("not connected"))
+			return
+		}
+
+		decoder := json.NewDecoder(r.Body)
+		var t pinStruct
+		err := decoder.Decode(&t)
+		if err != nil {
+			s.Respond(w, r, http.StatusBadRequest, errors.New("could not decode payload"))
+			return
+		}
+
+		if t.Chat == "" {
+			s.Respond(w, r, http.StatusBadRequest, errors.New("missing Chat in payload"))
+			return
+		}
+
+		if t.Id == "" {
+			s.Respond(w, r, http.StatusBadRequest, errors.New("missing Id in payload"))
+			return
+		}
+
+		chatJID, ok := parseJID(t.Chat)
+		if !ok {
+			s.Respond(w, r, http.StatusBadRequest, errors.New("invalid Chat JID"))
+			return
+		}
+
+		isGroup := chatJID.Server == types.GroupServer || chatJID.Server == types.BroadcastServer
+
+		var senderJID types.JID
+		if t.Sender != "" {
+			senderJID, ok = parseJID(t.Sender)
+			if !ok {
+				s.Respond(w, r, http.StatusBadRequest, errors.New("invalid Sender JID"))
+				return
+			}
+		} else if isGroup {
+			s.Respond(w, r, http.StatusBadRequest, errors.New("missing Sender in payload for group chat"))
+			return
+		}
+
+		// Default to pinning unless Pin is explicitly false
+		pin := true
+		if t.Pin != nil {
+			pin = *t.Pin
+		}
+
+		duration := defaultDuration
+		if pin && t.DurationSeconds != nil {
+			if !allowedDurations[*t.DurationSeconds] {
+				s.Respond(w, r, http.StatusBadRequest, errors.New("invalid DurationSeconds, must be one of 86400, 604800, 2592000"))
+				return
+			}
+			duration = *t.DurationSeconds
+		}
+
+		key := &waCommon.MessageKey{
+			RemoteJID: proto.String(chatJID.String()),
+			FromMe:    proto.Bool(false),
+			ID:        proto.String(t.Id),
+		}
+		if senderJID.String() != "" {
+			key.Participant = proto.String(senderJID.String())
+		}
+
+		pinType := waE2E.PinInChatMessage_PIN_FOR_ALL
+		if !pin {
+			pinType = waE2E.PinInChatMessage_UNPIN_FOR_ALL
+		}
+
+		msg := &waE2E.Message{
+			PinInChatMessage: &waE2E.PinInChatMessage{
+				Key:               key,
+				Type:              pinType.Enum(),
+				SenderTimestampMS: proto.Int64(time.Now().UnixMilli()),
+			},
+		}
+
+		if pin {
+			msg.MessageContextInfo = &waE2E.MessageContextInfo{
+				MessageAddOnDurationInSecs: proto.Uint32(duration),
+			}
+		}
+
+		resp, err := client.SendMessage(context.Background(), chatJID, msg)
+		if err != nil {
+			if pin {
+				s.Respond(w, r, http.StatusInternalServerError, errors.New(fmt.Sprintf("could not pin message: %v", err)))
+			} else {
+				s.Respond(w, r, http.StatusInternalServerError, errors.New(fmt.Sprintf("could not unpin message: %v", err)))
+			}
+			return
+		}
+
+		response := map[string]interface{}{
+			"Chat":      chatJID.String(),
+			"Id":        t.Id,
+			"Timestamp": resp.Timestamp.UTC().Format(time.RFC3339),
+		}
+		if pin {
+			response["Details"] = "Message pinned"
+			response["DurationSeconds"] = duration
+			log.Info().Str("id", t.Id).Str("chat", chatJID.String()).Uint32("duration", duration).Msg("Message pinned")
+		} else {
+			response["Details"] = "Message unpinned"
+			log.Info().Str("id", t.Id).Str("chat", chatJID.String()).Msg("Message unpinned")
+		}
+
+		responseJson, err := json.Marshal(response)
+		if err != nil {
+			s.Respond(w, r, http.StatusInternalServerError, err)
+		} else {
+			s.Respond(w, r, http.StatusOK, string(responseJson))
+		}
+
+		return
+	}
+}
+
 // Mark messages as read
 func (s *server) MarkRead() http.HandlerFunc {
 
