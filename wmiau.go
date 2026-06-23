@@ -839,7 +839,7 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 		lastMessageCache.Set(mycli.userID, &evt.Info, cache.DefaultExpiration)
 		myuserinfo, found := userinfocache.Get(mycli.token)
 		if !found {
-			err := mycli.db.Get(&s3Config, "SELECT CASE WHEN s3_enabled = 1 THEN 'true' ELSE 'false' END AS s3_enabled, media_delivery, COALESCE(skip_media, 0) AS skip_media FROM users WHERE id = $1", txtid)
+			err := mycli.db.Get(&s3Config, "SELECT CASE WHEN s3_enabled THEN 'true' ELSE 'false' END AS s3_enabled, media_delivery, COALESCE(skip_media, false) AS skip_media FROM users WHERE id = $1", txtid)
 			if err != nil {
 				log.Error().Err(err).Msg("onMessage Failed to get S3 config from DB as it was not on cache")
 				s3Config.Enabled = "false"
