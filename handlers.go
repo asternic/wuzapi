@@ -161,16 +161,16 @@ func (s *server) authalice(next http.Handler) http.Handler {
 		if !found {
 			log.Info().Msg("Looking for user information in DB")
 			// Checks DB from matching user and store user values in context
-			rows, err := s.db.Query("SELECT id,name,webhook,jid,events,proxy_url,qrcode,history,hmac_key IS NOT NULL AND length(hmac_key) > 0,CASE WHEN s3_enabled THEN 'true' ELSE 'false' END,COALESCE(media_delivery, 'base64') FROM users WHERE token=$1 LIMIT 1", token)
+			rows, err := s.db.Query("SELECT id,name,webhook,jid,events,proxy_url,qrcode,history,hmac_key IS NOT NULL AND length(hmac_key) > 0,CASE WHEN s3_enabled THEN 'true' ELSE 'false' END,COALESCE(media_delivery, 'base64'),CASE WHEN COALESCE(skip_media, false) THEN 'true' ELSE 'false' END FROM users WHERE token=$1 LIMIT 1", token)
 			if err != nil {
 				s.Respond(w, r, http.StatusInternalServerError, err)
 				return
 			}
 			defer rows.Close()
 			var history sql.NullInt64
-			var s3Enabled, mediaDelivery string
+			var s3Enabled, mediaDelivery, skipMedia string
 			for rows.Next() {
-				err = rows.Scan(&txtid, &name, &webhook, &jid, &events, &proxy_url, &qrcode, &history, &hasHmac, &s3Enabled, &mediaDelivery)
+				err = rows.Scan(&txtid, &name, &webhook, &jid, &events, &proxy_url, &qrcode, &history, &hasHmac, &s3Enabled, &mediaDelivery, &skipMedia)
 				if err != nil {
 					s.Respond(w, r, http.StatusInternalServerError, err)
 					return
@@ -196,6 +196,7 @@ func (s *server) authalice(next http.Handler) http.Handler {
 					"HasHmac":       strconv.FormatBool(hasHmac),
 					"S3Enabled":     s3Enabled,
 					"MediaDelivery": mediaDelivery,
+					"SkipMedia":     skipMedia,
 				}}
 
 				userinfocache.Set(token, v, cache.NoExpiration)
@@ -827,6 +828,7 @@ func (s *server) GetStatus() http.HandlerFunc {
 			"proxy_url":       userInfo.Get("Proxy"),
 			"qrcode":          userInfo.Get("Qrcode"),
 			"history":         userInfo.Get("History"),
+			"skip_media":      userInfo.Get("SkipMedia") == "true",
 			"proxy_config":    proxyConfig,
 			"s3_config":       s3Config,
 			"hmac_configured": hmacConfigured,
@@ -5374,6 +5376,7 @@ func (s *server) AddUser() http.HandlerFunc {
 			S3Config    *S3Config    `json:"s3Config,omitempty"`
 			HmacKey     string       `json:"hmacKey,omitempty"`
 			History     int          `json:"history,omitempty"`
+			SkipMedia   bool         `json:"skipMedia,omitempty"`
 		}
 
 		if err := json.NewDecoder(r.Body).Decode(&user); err != nil {
@@ -5480,9 +5483,9 @@ func (s *server) AddUser() http.HandlerFunc {
 
 		// Insert user with all proxy, S3 and HMAC fields
 		if _, err = s.db.Exec(
-			"INSERT INTO users (id, name, token, webhook, expiration, events, jid, qrcode, proxy_url, s3_enabled, s3_endpoint, s3_region, s3_bucket, s3_access_key, s3_secret_key, s3_path_style, s3_public_url, media_delivery, s3_retention_days, hmac_key, history) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)",
+			"INSERT INTO users (id, name, token, webhook, expiration, events, jid, qrcode, proxy_url, s3_enabled, s3_endpoint, s3_region, s3_bucket, s3_access_key, s3_secret_key, s3_path_style, s3_public_url, media_delivery, s3_retention_days, hmac_key, history, skip_media) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)",
 			id, user.Name, user.Token, user.Webhook, user.Expiration, user.Events, "", "", user.ProxyConfig.ProxyURL,
-			user.S3Config.Enabled, user.S3Config.Endpoint, user.S3Config.Region, user.S3Config.Bucket, user.S3Config.AccessKey, user.S3Config.SecretKey, user.S3Config.PathStyle, user.S3Config.PublicURL, user.S3Config.MediaDelivery, user.S3Config.RetentionDays, encryptedHmacKey, user.History,
+			user.S3Config.Enabled, user.S3Config.Endpoint, user.S3Config.Region, user.S3Config.Bucket, user.S3Config.AccessKey, user.S3Config.SecretKey, user.S3Config.PathStyle, user.S3Config.PublicURL, user.S3Config.MediaDelivery, user.S3Config.RetentionDays, encryptedHmacKey, user.History, user.SkipMedia,
 		); err != nil {
 			log.Error().Str("error", fmt.Sprintf("%v", err)).Msg("admin DB error")
 			s.respondWithJSON(w, http.StatusInternalServerError, map[string]interface{}{
@@ -5536,6 +5539,7 @@ func (s *server) AddUser() http.HandlerFunc {
 			"proxy_config": proxyConfig,
 			"s3_config":    s3Config,
 			"hmac_key":     user.HmacKey != "",
+			"skip_media":   user.SkipMedia,
 		}
 		s.respondWithJSON(w, http.StatusCreated, map[string]interface{}{
 			"code":    http.StatusCreated,
@@ -6043,6 +6047,83 @@ func (s *server) SetHistory() http.HandlerFunc {
 		response := map[string]interface{}{
 			"Details": "History configured successfully",
 			"History": t.History,
+		}
+		responseJson, err := json.Marshal(response)
+		if err != nil {
+			s.Respond(w, r, http.StatusInternalServerError, err)
+		} else {
+			s.Respond(w, r, http.StatusOK, string(responseJson))
+		}
+	}
+}
+
+// GetSkipMedia returns the per-instance skip_media setting. When enabled the
+// server does not automatically download media from incoming messages for this
+// instance. It defaults to false (media is downloaded).
+func (s *server) GetSkipMedia() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		txtid := r.Context().Value("userinfo").(Values).Get("Id")
+
+		var skipMedia bool
+		err := s.db.QueryRow("SELECT COALESCE(skip_media, false) FROM users WHERE id = $1", txtid).Scan(&skipMedia)
+		if err != nil {
+			s.Respond(w, r, http.StatusInternalServerError, errors.New("failed to read skip_media configuration"))
+			return
+		}
+
+		response := map[string]interface{}{
+			"skip_media": skipMedia,
+		}
+		responseJson, err := json.Marshal(response)
+		if err != nil {
+			s.Respond(w, r, http.StatusInternalServerError, err)
+		} else {
+			s.Respond(w, r, http.StatusOK, string(responseJson))
+		}
+	}
+}
+
+// SetSkipMedia updates the per-instance skip_media setting. When true, media is
+// not automatically downloaded for incoming messages on this instance; set it
+// to false (the default) to enable automatic media download.
+func (s *server) SetSkipMedia() http.HandlerFunc {
+	type skipMediaStruct struct {
+		SkipMedia *bool `json:"skip_media"`
+	}
+
+	return func(w http.ResponseWriter, r *http.Request) {
+		txtid := r.Context().Value("userinfo").(Values).Get("Id")
+
+		decoder := json.NewDecoder(r.Body)
+		var t skipMediaStruct
+		err := decoder.Decode(&t)
+		if err != nil {
+			s.Respond(w, r, http.StatusBadRequest, errors.New("could not decode payload"))
+			return
+		}
+
+		if t.SkipMedia == nil {
+			s.Respond(w, r, http.StatusBadRequest, errors.New("skip_media is required"))
+			return
+		}
+
+		// Store skip_media configuration in database
+		_, err = s.db.Exec("UPDATE users SET skip_media = $1 WHERE id = $2", *t.SkipMedia, txtid)
+		if err != nil {
+			s.Respond(w, r, http.StatusInternalServerError, errors.New("failed to save skip_media configuration"))
+			return
+		}
+
+		token := r.Context().Value("userinfo").(Values).Get("Token")
+		if cachedUserInfo, found := userinfocache.Get(token); found {
+			updatedUserInfo := updateUserInfo(cachedUserInfo, "SkipMedia", strconv.FormatBool(*t.SkipMedia)).(Values)
+			userinfocache.Set(token, updatedUserInfo, cache.NoExpiration)
+			log.Info().Str("userID", txtid).Bool("skip_media", *t.SkipMedia).Msg("User info cache updated with SkipMedia configuration")
+		}
+
+		response := map[string]interface{}{
+			"Details":    "Skip media configured successfully",
+			"skip_media": *t.SkipMedia,
 		}
 		responseJson, err := json.Marshal(response)
 		if err != nil {

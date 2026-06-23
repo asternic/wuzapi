@@ -151,6 +151,12 @@
           <div class="description">Configure HMAC key for webhook security.</div>
         </div>
       </div>
+      <div class="purple card hidden widget" style="cursor: pointer;" id="skipMediaConfig">
+        <div class="content"><a class="ui purple right ribbon label">Config</a>
+          <div class="header">Media Download</div>
+          <div class="description">Enable or disable automatic media download for this instance.</div>
+        </div>
+      </div>
     </div>
 
     <div class="ui horizontal divider widget"> User </div>
@@ -486,6 +492,31 @@
   </div>
 
 
+  <!-- Media Download Configuration Modal -->
+  <div class="ui modal" id="modalSkipMediaConfig"><i class="close icon"></i>
+    <div class="header"> Media Download Configuration </div>
+    <div class="content">
+      <div class="ui info message">
+        <div class="header">Automatic Media Download</div>
+        <p>When disabled, the server skips downloading media (images, audio, documents, etc.) from incoming messages for this instance. Media download is enabled by default.</p>
+      </div>
+      <div class="ui form">
+        <div class="field">
+          <div class="ui toggle checkbox" id="skipMediaToggle">
+            <input type="checkbox" id="downloadMediaEnabled">
+            <label>Download media from incoming messages</label>
+          </div>
+          <small>Turn this on to automatically download media for this instance.</small>
+        </div>
+      </div>
+    </div>
+    <div class="actions">
+      <div class="ui cancel button secondary">Cancel</div>
+      <div class="ui positive right labeled icon button" id="saveSkipMediaConfig">Save<i class="checkmark icon"></i></div>
+    </div>
+  </div>
+
+
   <!-- Proxy Configuration Modal -->
   <div class="ui modal" id="modalProxyConfig"><i class="close icon"></i>
     <div class="header"> Proxy Configuration </div>
@@ -648,6 +679,13 @@
           <label>Message History</label>
           <input type="number" name="history" min="0" value="0" placeholder="0">
           <small>Number of messages to store in history per chat for this instance. Set to 0 to disable message history.</small>
+        </div>
+        <div class="field">
+          <div class="ui toggle checkbox" id="addInstanceSkipMediaToggle">
+            <input type="checkbox" name="skip_media">
+            <label>Skip Media Download</label>
+          </div>
+          <small>When enabled, this instance does not automatically download media from incoming messages. Disabled by default.</small>
         </div>
 
         <!-- Proxy Configuration -->

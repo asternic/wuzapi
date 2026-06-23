@@ -240,7 +240,7 @@ func checkIfSubscribedToEvent(subscribedEvents []string, eventType string, userI
 
 // Connects to Whatsapp Websocket on server startup if last state was connected
 func (s *server) connectOnStartup() {
-	rows, err := s.db.Queryx("SELECT id,name,token,jid,webhook,events,proxy_url,CASE WHEN s3_enabled THEN 'true' ELSE 'false' END AS s3_enabled,media_delivery,COALESCE(history, 0) as history,hmac_key FROM users WHERE connected=1")
+	rows, err := s.db.Queryx("SELECT id,name,token,jid,webhook,events,proxy_url,CASE WHEN s3_enabled THEN 'true' ELSE 'false' END AS s3_enabled,media_delivery,COALESCE(history, 0) as history,hmac_key,CASE WHEN COALESCE(skip_media, false) THEN 'true' ELSE 'false' END AS skip_media FROM users WHERE connected=1")
 	if err != nil {
 		log.Error().Err(err).Msg("DB Problem")
 		return
@@ -256,9 +256,10 @@ func (s *server) connectOnStartup() {
 		proxy_url := ""
 		s3_enabled := ""
 		media_delivery := ""
+		skip_media := ""
 		var history int
 		var hmac_key []byte
-		err = rows.Scan(&txtid, &name, &token, &jid, &webhook, &events, &proxy_url, &s3_enabled, &media_delivery, &history, &hmac_key)
+		err = rows.Scan(&txtid, &name, &token, &jid, &webhook, &events, &proxy_url, &s3_enabled, &media_delivery, &history, &hmac_key, &skip_media)
 		if err != nil {
 			log.Error().Err(err).Msg("DB Problem")
 			return
@@ -279,6 +280,7 @@ func (s *server) connectOnStartup() {
 				"Events":           events,
 				"S3Enabled":        s3_enabled,
 				"MediaDelivery":    media_delivery,
+				"SkipMedia":        skip_media,
 				"History":          fmt.Sprintf("%d", history),
 				"HmacKeyEncrypted": hmacKeyEncrypted,
 			}}
@@ -831,20 +833,25 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 		var s3Config struct {
 			Enabled       string `db:"s3_enabled"`
 			MediaDelivery string `db:"media_delivery"`
+			SkipMedia     bool   `db:"skip_media"`
 		}
 
 		lastMessageCache.Set(mycli.userID, &evt.Info, cache.DefaultExpiration)
 		myuserinfo, found := userinfocache.Get(mycli.token)
 		if !found {
-			err := mycli.db.Get(&s3Config, "SELECT CASE WHEN s3_enabled = 1 THEN 'true' ELSE 'false' END AS s3_enabled, media_delivery FROM users WHERE id = $1", txtid)
+			err := mycli.db.Get(&s3Config, "SELECT CASE WHEN s3_enabled = 1 THEN 'true' ELSE 'false' END AS s3_enabled, media_delivery, COALESCE(skip_media, 0) AS skip_media FROM users WHERE id = $1", txtid)
 			if err != nil {
 				log.Error().Err(err).Msg("onMessage Failed to get S3 config from DB as it was not on cache")
 				s3Config.Enabled = "false"
 				s3Config.MediaDelivery = "base64"
+				s3Config.SkipMedia = false
 			}
 		} else {
 			s3Config.Enabled = myuserinfo.(Values).Get("S3Enabled")
 			s3Config.MediaDelivery = myuserinfo.(Values).Get("MediaDelivery")
+			// Default to downloading media when the value is missing/unset so the
+			// per-instance toggle preserves the existing behavior.
+			s3Config.SkipMedia = myuserinfo.(Values).Get("SkipMedia") == "true"
 		}
 
 		// Lazy init S3 client if needed (handles reconnect-after-restart when connectOnStartup skipped this user)
@@ -931,7 +938,10 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
         }
     }
     
-		if !*skipMedia {
+		// Skip media download when either the global -skipmedia flag is set or
+		// the per-instance skip_media setting is enabled. Both default to off,
+		// so media is downloaded unless explicitly disabled.
+		if !*skipMedia && !s3Config.SkipMedia {
 
 			isIncoming := !evt.Info.IsFromMe
 			chatJID := evt.Info.Sender.String()

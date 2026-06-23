@@ -56,6 +56,9 @@ document.addEventListener('DOMContentLoaded', function() {
   $('#s3MediaDelivery').dropdown();
   $('#addInstanceS3MediaDelivery').dropdown();
 
+  // Initialize media download toggle
+  $('#skipMediaToggle').checkbox();
+
   // Initialize proxy enabled checkbox with onChange handler
   $('#proxyEnabledToggle').checkbox({
     onChange: function() {
@@ -118,6 +121,9 @@ document.addEventListener('DOMContentLoaded', function() {
       }
     }
   });
+
+  // Initialize add instance skip media toggle
+  $('#addInstanceSkipMediaToggle').checkbox();
 
   // Handle admin login button click
   adminLoginBtn.addEventListener('click', function() {
@@ -298,6 +304,17 @@ document.addEventListener('DOMContentLoaded', function() {
       }
     }).modal('show');
     loadHistoryConfig();
+  });
+
+  // Media Download Configuration
+  document.getElementById('skipMediaConfig').addEventListener('click', function() {
+    $('#modalSkipMediaConfig').modal({
+      onApprove: function() {
+        saveSkipMediaConfig();
+        return false;
+      }
+    }).modal('show');
+    loadSkipMediaConfig();
   });
 
   // Proxy Configuration
@@ -494,6 +511,7 @@ document.addEventListener('DOMContentLoaded', function() {
       $('#addInstanceProxyToggle').checkbox('set unchecked');
       $('#addInstanceS3Toggle').checkbox('set unchecked');
       $('#addInstanceHmacToggle').checkbox('set unchecked');
+      $('#addInstanceSkipMediaToggle').checkbox('set unchecked');
       $('#addInstanceProxyUrlField').hide();
       $('#addInstanceS3Fields').hide();
       $('#addInstanceHmacKeyWarningMessage').hide();
@@ -538,6 +556,8 @@ async function addInstance(data) {
   const hmacEnabled = data.hmac_enabled === 'on' || data.hmac_enabled === true;
   const hmacKey = hmacEnabled ? (data.hmac_key || '') : '';
 
+  const skipMedia = data.skip_media === 'on' || data.skip_media === true;
+
   const payload = {
     name: data.name,
     token: data.token,
@@ -545,6 +565,7 @@ async function addInstance(data) {
     webhook: data.webhook_url || '',
     expiration: 0,
     history: parseInt(data.history) || 0,
+    skipMedia: skipMedia,
     proxyConfig: proxyConfig,
     s3Config: s3Config,
     hmacKey: hmacKey
@@ -1659,6 +1680,65 @@ async function saveHistoryConfig() {
     }
   } catch (error) {
     showError('Error saving history configuration');
+    console.error('Error:', error);
+  }
+}
+
+// Media Download (skip_media) Configuration Functions
+async function loadSkipMediaConfig() {
+  const token = getLocalStorageItem('token');
+  const myHeaders = new Headers();
+  myHeaders.append('token', token);
+
+  try {
+    const res = await fetch(baseUrl + "/session/status", {
+      method: "GET",
+      headers: myHeaders
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      // skip_media defaults to false (media download enabled) when unset.
+      let skipMedia = false;
+      if (data.code === 200 && data.data && typeof data.data.skip_media !== 'undefined') {
+        skipMedia = data.data.skip_media;
+      }
+      // The toggle represents "download media", i.e. the inverse of skip_media.
+      $('#downloadMediaEnabled').prop('checked', !skipMedia);
+    }
+  } catch (error) {
+    console.error('Error loading media download config:', error);
+  }
+}
+
+async function saveSkipMediaConfig() {
+  const token = getLocalStorageItem('token');
+  const myHeaders = new Headers();
+  myHeaders.append('token', token);
+  myHeaders.append('Content-Type', 'application/json');
+
+  const downloadEnabled = $('#downloadMediaEnabled').is(':checked');
+
+  const config = {
+    skip_media: !downloadEnabled,
+  };
+
+  try {
+    const res = await fetch(baseUrl + "/session/skipmedia", {
+      method: "POST",
+      headers: myHeaders,
+      body: JSON.stringify(config)
+    });
+
+    const data = await res.json();
+    if (data.success) {
+      showSuccess('Media download configuration saved successfully');
+      $('#modalSkipMediaConfig').modal('hide');
+    } else {
+      showError('Failed to save media download configuration: ' + (data.error || 'Unknown error'));
+    }
+  } catch (error) {
+    showError('Error saving media download configuration');
     console.error('Error:', error);
   }
 }

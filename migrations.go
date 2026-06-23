@@ -75,6 +75,11 @@ var migrations = []Migration{
 		Name:  "add_whatsmeow_message_secrets_message_id_idx",
 		UpSQL: addWhatsmeowMessageSecretsMessageIDIndexSQL,
 	},
+	{
+		ID:    10,
+		Name:  "add_skip_media",
+		UpSQL: addSkipMediaSQL,
+	},
 }
 
 const changeIDToStringSQL = `
@@ -213,6 +218,21 @@ BEGIN
     -- Add dataJson column to message_history table if it doesn't exist
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'message_history' AND column_name = 'datajson') THEN
         ALTER TABLE message_history ADD COLUMN datajson TEXT;
+    END IF;
+END $$;
+
+-- SQLite version (handled in code)
+`
+
+const addSkipMediaSQL = `
+-- PostgreSQL version
+DO $$
+BEGIN
+    -- Per-instance toggle to skip automatic media download on incoming messages.
+    -- Defaults to FALSE to preserve existing behavior (media is downloaded
+    -- unless explicitly disabled for the instance).
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'skip_media') THEN
+        ALTER TABLE users ADD COLUMN skip_media BOOLEAN DEFAULT FALSE;
     END IF;
 END $$;
 
@@ -453,6 +473,13 @@ func applyMigration(db *sqlx.DB, migration Migration) error {
 	} else if migration.ID == 9 {
 		if db.DriverName() == "sqlite" {
 			err = nil
+		} else {
+			_, err = tx.Exec(migration.UpSQL)
+		}
+	} else if migration.ID == 10 {
+		if db.DriverName() == "sqlite" {
+			// Per-instance skip_media toggle, defaults to disabled (0 = download).
+			err = addColumnIfNotExistsSQLite(tx, "users", "skip_media", "BOOLEAN DEFAULT 0")
 		} else {
 			_, err = tx.Exec(migration.UpSQL)
 		}

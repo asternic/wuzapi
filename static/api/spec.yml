@@ -675,6 +675,89 @@ paths:
           description: Bad request or session not connected
         '500':
           description: Internal server error
+  /session/skipmedia:
+    get:
+      tags:
+        - Session
+      summary: Get media download setting
+      description: >-
+        Returns the per-instance `skip_media` setting. When `true` the server
+        does not automatically download media from incoming messages for this
+        instance. Defaults to `false` (media is downloaded).
+      security:
+        - ApiKeyAuth: []
+      responses:
+        '200':
+          description: Current skip_media setting
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 200
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      skip_media:
+                        type: boolean
+                        example: false
+        '500':
+          description: Internal server error
+    post:
+      tags:
+        - Session
+      summary: Set media download setting
+      description: >-
+        Updates the per-instance `skip_media` setting. Set `skip_media` to
+        `true` to disable automatic media download for incoming messages on this
+        instance, or `false` (the default) to enable it.
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - skip_media
+              properties:
+                skip_media:
+                  type: boolean
+                  description: true to skip downloading media, false to download automatically (default)
+                  example: true
+      responses:
+        '200':
+          description: skip_media setting updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 200
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      Details:
+                        type: string
+                        example: 'Skip media configured successfully'
+                      skip_media:
+                        type: boolean
+                        example: true
+        '400':
+          description: Bad request (missing or invalid skip_media)
+        '500':
+          description: Internal server error
   /session/hmac/config:
     post:
       tags:

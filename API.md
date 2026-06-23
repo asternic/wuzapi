@@ -68,12 +68,16 @@ Response:
 
 You can create a user with optional proxy and S3 storage configuration. All fields are optional and backward compatible. If you do not provide these fields, the user will be created with default settings.
 
+The optional `skipMedia` (boolean) field controls the per-instance media download setting. When `true`, the instance does not automatically download media from incoming messages. It defaults to `false` (media is downloaded) and can be changed later via [`/session/skipmedia`](#user-content-set-media-download-setting).
+
 ### Example Payload
 
 ```json
 {
   "name": "test_user",
   "token": "user_token",
+  "history": 0,
+  "skipMedia": false,
   "proxyConfig": {
     "enabled": true,
     "proxyURL": "socks5://user:pass@host:port"
@@ -480,6 +484,65 @@ Response:
     "QRCode": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAQAAAAEAAQMAAABmvDolAAAABlBMVEX///8AAABVwtN+AAAEw0lEQVR42uyZ..." 
   }, 
   "success": true 
+}
+```
+
+---
+
+## Get Media Download Setting
+
+Retrieves the per-instance `skip_media` setting. When `skip_media` is `true`, the server does not automatically download media (images, audio, documents, etc.) from incoming messages for this instance. It defaults to `false` (media is downloaded), preserving the existing behavior.
+
+This per-instance setting is independent from the global `-skipmedia` flag. Media is only downloaded when both the global flag is unset **and** the instance `skip_media` is `false`.
+
+Endpoint: _/session/skipmedia_
+
+Method: **GET**
+
+```
+curl -s -X GET -H 'Token: 1234ABCD' http://localhost:8080/session/skipmedia
+```
+
+Response:
+
+```json
+{
+  "code": 200,
+  "data": {
+    "skip_media": false
+  },
+  "success": true
+}
+```
+
+---
+
+## Set Media Download Setting
+
+Updates the per-instance `skip_media` setting. Set `skip_media` to `true` to disable automatic media download for incoming messages on this instance, or `false` (the default) to enable it.
+
+Endpoint: _/session/skipmedia_
+
+Method: **POST**
+
+Parameters:
+
+* `skip_media` (boolean, required): `true` to skip downloading media, `false` to download media automatically (default).
+
+```
+curl -s -X POST -H 'Token: 1234ABCD' -H 'Content-Type: application/json' --data '{"skip_media":true}' http://localhost:8080/session/skipmedia
+```
+
+Response:
+
+```json
+{
+  "code": 200,
+  "data": {
+    "Details": "Skip media configured successfully",
+    "skip_media": true
+  },
+  "success": true
 }
 ```
 

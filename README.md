@@ -84,11 +84,16 @@ you can use to alter behaviour
 * -logtype : format for logs, either console (default) or json
 * -color : enable colored output for console logs
 * -osname : Connection OS Name in Whatsapp
-* -skipmedia : Skip downloading media from messages
+* -skipmedia : Skip downloading media from messages (global, applies to all instances)
 * -wadebug : enable whatsmeow debug, either INFO or DEBUG levels are suported
 
 * -sslcertificate : SSL Certificate File
 * -sslprivatekey : SSL Private Key File
+
+> Media download can also be controlled **per instance** via the `/session/skipmedia` endpoint
+> (see [API.md](./API.md)). This setting defaults to `skip_media = false`, preserving the existing
+> behavior (media is downloaded). Media is downloaded only when the global `-skipmedia` flag is
+> unset **and** the instance `skip_media` is `false`.
 
 Example:
 
