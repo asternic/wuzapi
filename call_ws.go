@@ -2,14 +2,18 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"encoding/binary"
 	"encoding/json"
 	"io"
 	"math"
 	"net/http"
+	"strconv"
+	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/patrickmn/go-cache"
 	meowcaller "github.com/purpshell/meowcaller"
 	"github.com/rs/zerolog/log"
 )
@@ -18,6 +22,21 @@ var wsUpgrader = websocket.Upgrader{
 	ReadBufferSize:  8192,
 	WriteBufferSize: 8192,
 	CheckOrigin:     func(r *http.Request) bool { return true },
+}
+
+// wsWriter serializa todas as escritas no WebSocket para evitar race conditions
+// entre sink (audio), ping ticker e frames de controle
+type wsWriter struct {
+	mu   sync.Mutex
+	conn *websocket.Conn
+}
+
+func newWSWriter(conn *websocket.Conn) *wsWriter { return &wsWriter{conn: conn} }
+
+func (w *wsWriter) WriteMessage(msgType int, data []byte) error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.conn.WriteMessage(msgType, data)
 }
 
 // CallWebSocket faz upgrade HTTP→WebSocket e estabelece a ponte de áudio entre
@@ -37,8 +56,39 @@ func (s *server) CallWebSocket() http.HandlerFunc {
 		}
 		userinfo, found := userinfocache.Get(token)
 		if !found {
-			http.Error(w, "unauthorized", http.StatusUnauthorized)
-			return
+			// Cache vazio (ex: reinício do servidor) — busca no banco igual ao middleware HTTP
+			rows, err := s.db.Query("SELECT id,name,webhook,jid,events,proxy_url,qrcode,history,hmac_key IS NOT NULL AND length(hmac_key) > 0,CASE WHEN s3_enabled THEN 'true' ELSE 'false' END,COALESCE(media_delivery, 'base64') FROM users WHERE token=$1 LIMIT 1", token)
+			if err != nil {
+				http.Error(w, "internal error", http.StatusInternalServerError)
+				return
+			}
+			defer rows.Close()
+			var (
+				id, name, webhook, jid, events, proxyURL, qrcode, s3Enabled, mediaDelivery string
+				history                                                                     sql.NullInt64
+				hasHmac                                                                     bool
+			)
+			if rows.Next() {
+				if err = rows.Scan(&id, &name, &webhook, &jid, &events, &proxyURL, &qrcode, &history, &hasHmac, &s3Enabled, &mediaDelivery); err != nil {
+					http.Error(w, "internal error", http.StatusInternalServerError)
+					return
+				}
+				historyStr := "0"
+				if history.Valid {
+					historyStr = strconv.FormatInt(history.Int64, 10)
+				}
+				v := Values{map[string]string{
+					"Id": id, "Name": name, "Jid": jid, "Webhook": webhook, "Token": token,
+					"Proxy": proxyURL, "Events": events, "Qrcode": qrcode, "History": historyStr,
+					"HasHmac": strconv.FormatBool(hasHmac), "S3Enabled": s3Enabled, "MediaDelivery": mediaDelivery,
+				}}
+				userinfocache.Set(token, v, cache.NoExpiration)
+				userinfo = v
+				log.Info().Str("name", name).Msg("[VOIP-WS] User loaded from DB for WebSocket auth")
+			} else {
+				http.Error(w, "unauthorized", http.StatusUnauthorized)
+				return
+			}
 		}
 		txtid := userinfo.(Values).Get("Id")
 
@@ -47,15 +97,17 @@ func (s *server) CallWebSocket() http.HandlerFunc {
 			http.Error(w, "call_id required", http.StatusBadRequest)
 			return
 		}
-		call, ownerID, ok := callManager.Get(callID)
+		entry, ok := callManager.GetEntry(callID)
 		if !ok {
 			http.Error(w, "call not found", http.StatusNotFound)
 			return
 		}
-		if ownerID != txtid {
+		if entry.UserID != txtid {
 			http.Error(w, "forbidden", http.StatusForbidden)
 			return
 		}
+		call := entry.Call
+		isIncoming := entry.IsIncoming
 
 		conn, err := wsUpgrader.Upgrade(w, r, nil)
 		if err != nil {
@@ -68,23 +120,28 @@ func (s *server) CallWebSocket() http.HandlerFunc {
 		ctx, cancel := context.WithCancel(r.Context())
 		defer cancel()
 
+		writer := newWSWriter(conn)
+
 		// Sink: caller → browser (WhatsApp audio frames → WS binary frames)
-		sink := newWSSink(conn)
+		sink := newWSSink(writer, callID)
 		call.Receive(sink)
 
 		// Source: browser → caller (WS binary frames → WhatsApp audio frames)
 		src := newWSSource(ctx)
 		call.Play(src)
 
-		// Atender automaticamente ao conectar o WebSocket
-		if err := call.Answer(); err != nil {
-			log.Warn().Err(err).Str("callId", callID).Msg("[VOIP-WS] Answer failed (may already be answered)")
+		// Atender automaticamente apenas em chamadas entrantes
+		if isIncoming {
+			if err := call.Answer(); err != nil {
+				log.Warn().Err(err).Str("callId", callID).Msg("[VOIP-WS] Answer failed (may already be answered)")
+			}
 		}
 
-		// Cancelar contexto quando a chamada terminar (vinda do lado do WhatsApp)
+		// Quando a chamada terminar pelo lado do WhatsApp:
+		// envia frame de controle ANTES de cancelar o contexto para garantir entrega
 		call.OnEnd(func(reason string) {
+			sendCtrlMsg(writer, "ended", reason)
 			cancel()
-			sendCtrlMsg(conn, "ended", reason)
 		})
 
 		conn.SetReadDeadline(time.Now().Add(30 * time.Second))
@@ -102,7 +159,7 @@ func (s *server) CallWebSocket() http.HandlerFunc {
 				case <-ctx.Done():
 					return
 				case <-ticker.C:
-					if err := conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+					if err := writer.WriteMessage(websocket.PingMessage, nil); err != nil {
 						cancel()
 						return
 					}
@@ -132,9 +189,9 @@ func (s *server) CallWebSocket() http.HandlerFunc {
 	}
 }
 
-func sendCtrlMsg(conn *websocket.Conn, typ, reason string) {
+func sendCtrlMsg(w *wsWriter, typ, reason string) {
 	b, _ := json.Marshal(map[string]string{"type": typ, "reason": reason})
-	_ = conn.WriteMessage(websocket.TextMessage, b)
+	_ = w.WriteMessage(websocket.TextMessage, b)
 }
 
 // ─────────────────────────────────────────────
@@ -142,18 +199,24 @@ func sendCtrlMsg(conn *websocket.Conn, typ, reason string) {
 // ─────────────────────────────────────────────
 
 type wsSink struct {
-	conn *websocket.Conn
+	w       *wsWriter
+	callID  string
+	frames  int
 }
 
-func newWSSink(conn *websocket.Conn) *wsSink { return &wsSink{conn: conn} }
+func newWSSink(w *wsWriter, callID string) *wsSink { return &wsSink{w: w, callID: callID} }
 
 func (s *wsSink) WriteFrame(frame []float32) error {
+	s.frames++
+	if s.frames == 1 || s.frames%500 == 0 {
+		log.Info().Str("callId", s.callID).Int("frames", s.frames).Msg("[VOIP-WS] sink→browser audio frame")
+	}
 	buf := make([]byte, 4+len(frame)*4)
 	binary.LittleEndian.PutUint32(buf[:4], uint32(len(frame)))
 	for i, f := range frame {
 		binary.LittleEndian.PutUint32(buf[4+i*4:], math.Float32bits(f))
 	}
-	return s.conn.WriteMessage(websocket.BinaryMessage, buf)
+	return s.w.WriteMessage(websocket.BinaryMessage, buf)
 }
 
 func (s *wsSink) Close() error { return nil }
