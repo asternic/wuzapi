@@ -2,11 +2,26 @@ package main
 
 import (
 	"database/sql"
+	"encoding/base64"
+	"encoding/json"
 
 	"github.com/jmoiron/sqlx"
 	"github.com/rs/zerolog"
 	"go.mau.fi/whatsmeow"
 )
+
+// parseWebAuthnChallenge extrai o campo "challenge" (base64url) do JSON WebAuthn
+// PublicKeyCredentialRequestOptions que o servidor WhatsApp envia via passkey_request_options.
+func parseWebAuthnChallenge(blob []byte) ([]byte, error) {
+	var opts struct {
+		Challenge string `json:"challenge"`
+	}
+	if err := json.Unmarshal(blob, &opts); err != nil || opts.Challenge == "" {
+		// fallback: usa o blob bruto (mantém compatibilidade se o formato mudar)
+		return blob, nil
+	}
+	return base64.RawURLEncoding.DecodeString(opts.Challenge)
+}
 
 // loadOrCreatePasskeyAuthenticator carrega o VirtualAuthenticator persistido para o usuário,
 // ou cria um novo se ainda não existir. A chave privada é armazenada em JSON na coluna
@@ -20,6 +35,7 @@ func loadOrCreatePasskeyAuthenticator(db *sqlx.DB, userID string, log zerolog.Lo
 	if stored.Valid && stored.String != "" {
 		va, err := whatsmeow.ImportVirtualAuthenticator([]byte(stored.String))
 		if err == nil {
+			va.ParseRequestOptions = parseWebAuthnChallenge
 			log.Debug().Str("userID", userID).Msg("[passkey] loaded existing VirtualAuthenticator from DB")
 			return va
 		}
@@ -31,6 +47,10 @@ func loadOrCreatePasskeyAuthenticator(db *sqlx.DB, userID string, log zerolog.Lo
 		log.Error().Err(err).Str("userID", userID).Msg("[passkey] failed to create VirtualAuthenticator")
 		return nil
 	}
+	// O servidor envia o blob como JSON WebAuthn (PublicKeyCredentialRequestOptions).
+	// O default do VirtualAuthenticator usa o blob bruto como challenge — incorreto.
+	// Aqui extraímos o campo "challenge" em base64url.
+	va.ParseRequestOptions = parseWebAuthnChallenge
 
 	exported, err := va.Export()
 	if err != nil {
