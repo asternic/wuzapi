@@ -2268,6 +2268,204 @@ func (s *server) SendButtons() http.HandlerFunc {
 	}
 }
 
+// SendCarousel sends a WhatsApp carousel message (multiple cards with image, text and buttons).
+func (s *server) SendCarousel() http.HandlerFunc {
+
+	type carouselButtonStruct struct {
+		ID    string `json:"id"`
+		Text  string `json:"text"`
+		Label string `json:"label"` // fallback
+	}
+
+	type carouselCardStruct struct {
+		ImageURL string                `json:"imageUrl"`
+		Image    string                `json:"image"` // base64 fallback
+		Body     string                `json:"body"`
+		Footer   string                `json:"footer"`
+		Buttons  []carouselButtonStruct `json:"buttons"`
+	}
+
+	type sendCarouselStruct struct {
+		Phone string               `json:"Phone"`
+		Cards []carouselCardStruct `json:"Cards"`
+		Id    string               `json:"Id"`
+	}
+
+	return func(w http.ResponseWriter, r *http.Request) {
+		txtid := r.Context().Value("userinfo").(Values).Get("Id")
+		client := clientManager.GetWhatsmeowClient(txtid)
+		if client == nil {
+			s.Respond(w, r, http.StatusInternalServerError, errors.New("no session"))
+			return
+		}
+
+		var t sendCarouselStruct
+		if err := json.NewDecoder(r.Body).Decode(&t); err != nil {
+			s.Respond(w, r, http.StatusBadRequest, errors.New("could not decode payload"))
+			return
+		}
+
+		if t.Phone == "" || len(t.Cards) < 2 {
+			s.Respond(w, r, http.StatusBadRequest, errors.New("Phone and at least 2 Cards are required"))
+			return
+		}
+
+		recipient, err := validateMessageFields(t.Phone, nil, nil)
+		if err != nil {
+			s.Respond(w, r, http.StatusBadRequest, err)
+			return
+		}
+
+		msgid := t.Id
+		if msgid == "" {
+			msgid = client.GenerateMessageID()
+		}
+
+		// Build each card as an InteractiveMessage
+		builtCards := make([]*waE2E.InteractiveMessage, 0, len(t.Cards))
+		for i, card := range t.Cards {
+			body := strings.TrimSpace(card.Body)
+			if body == "" {
+				s.Respond(w, r, http.StatusBadRequest, fmt.Errorf("card %d is missing body text", i+1))
+				return
+			}
+
+			// Build buttons
+			nativeBtns := make([]*waE2E.InteractiveMessage_NativeFlowMessage_NativeFlowButton, 0, len(card.Buttons))
+			for j, btn := range card.Buttons {
+				label := strings.TrimSpace(btn.Text)
+				if label == "" {
+					label = strings.TrimSpace(btn.Label)
+				}
+				if label == "" {
+					continue
+				}
+				if runes := []rune(label); len(runes) > 20 {
+					label = string(runes[:20])
+				}
+				id := strings.TrimSpace(btn.ID)
+				if id == "" {
+					id = fmt.Sprintf("%d_%d", i, j)
+				}
+				paramsJSON, _ := json.Marshal(map[string]string{"display_text": label, "id": id})
+				nativeBtns = append(nativeBtns, &waE2E.InteractiveMessage_NativeFlowMessage_NativeFlowButton{
+					Name:             proto.String("quick_reply"),
+					ButtonParamsJSON: proto.String(string(paramsJSON)),
+				})
+			}
+			if len(nativeBtns) == 0 {
+				s.Respond(w, r, http.StatusBadRequest, fmt.Errorf("card %d has no valid buttons", i+1))
+				return
+			}
+
+			// Build header — try image first
+			header := &waE2E.InteractiveMessage_Header{}
+			imageSource := card.Image
+			if imageSource == "" {
+				imageSource = card.ImageURL
+			}
+			if imageSource != "" {
+				var filedata []byte
+				if len(imageSource) > 10 && imageSource[:10] == "data:image" {
+					if du, decErr := dataurl.DecodeString(imageSource); decErr == nil {
+						filedata = du.Data
+					}
+				} else if isHTTPURL(imageSource) {
+					if data, _, fetchErr := fetchURLBytes(r.Context(), imageSource, openGraphImageMaxBytes); fetchErr == nil {
+						filedata = data
+					}
+				} else {
+					// Try base64
+					if decoded, b64Err := base64.StdEncoding.DecodeString(imageSource); b64Err == nil {
+						filedata = decoded
+					}
+				}
+				if len(filedata) > 0 {
+					uploaded, uploadErr := client.Upload(context.Background(), filedata, whatsmeow.MediaImage)
+					if uploadErr == nil {
+						imgMsg := &waE2E.ImageMessage{
+							URL:           proto.String(uploaded.URL),
+							DirectPath:    proto.String(uploaded.DirectPath),
+							MediaKey:      uploaded.MediaKey,
+							Mimetype:      proto.String(http.DetectContentType(filedata)),
+							FileEncSHA256: uploaded.FileEncSHA256,
+							FileSHA256:    uploaded.FileSHA256,
+							FileLength:    proto.Uint64(uint64(len(filedata))),
+						}
+						header.HasMediaAttachment = proto.Bool(true)
+						header.Media = &waE2E.InteractiveMessage_Header_ImageMessage{ImageMessage: imgMsg}
+					}
+				}
+			}
+
+			cardMsg := &waE2E.InteractiveMessage{
+				Header: header,
+				Body:   &waE2E.InteractiveMessage_Body{Text: proto.String(body)},
+				InteractiveMessage: &waE2E.InteractiveMessage_NativeFlowMessage_{
+					NativeFlowMessage: &waE2E.InteractiveMessage_NativeFlowMessage{
+						Buttons:        nativeBtns,
+						MessageVersion: proto.Int32(1),
+					},
+				},
+			}
+			if card.Footer != "" {
+				cardMsg.Footer = &waE2E.InteractiveMessage_Footer{Text: proto.String(card.Footer)}
+			}
+
+			builtCards = append(builtCards, cardMsg)
+		}
+
+		// Wrap in CarouselMessage
+		finalMsg := &waE2E.Message{
+			InteractiveMessage: &waE2E.InteractiveMessage{
+				InteractiveMessage: &waE2E.InteractiveMessage_CarouselMessage_{
+					CarouselMessage: &waE2E.InteractiveMessage_CarouselMessage{
+						Cards:          builtCards,
+						MessageVersion: proto.Int32(1),
+					},
+				},
+			},
+		}
+
+		extraNodes := []waBinary.Node{{
+			Tag: "biz",
+			Content: []waBinary.Node{{
+				Tag:   "interactive",
+				Attrs: waBinary.Attrs{"type": "native_flow", "v": "1"},
+				Content: []waBinary.Node{{
+					Tag:   "native_flow",
+					Attrs: waBinary.Attrs{"v": "9", "name": "mixed"},
+				}},
+			}},
+		}}
+
+		resp, err := client.SendMessage(context.Background(), recipient, finalMsg,
+			whatsmeow.SendRequestExtra{
+				ID:              msgid,
+				AdditionalNodes: &extraNodes,
+			},
+		)
+		if err != nil {
+			s.Respond(w, r, http.StatusInternalServerError, fmt.Errorf("error sending carousel: %v", err))
+			return
+		}
+
+		historyStr := r.Context().Value("userinfo").(Values).Get("History")
+		historyLimit, _ := strconv.Atoi(historyStr)
+		s.saveOutgoingMessageToHistory(txtid, recipient.String(), msgid, "carousel", t.Cards[0].Body, "", historyLimit)
+
+		token := r.Context().Value("userinfo").(Values).Get("Token")
+		s.publishSentMessageEvent(token, txtid, txtid, recipient, msgid, finalMsg, resp.Timestamp)
+
+		responseJSON, _ := json.Marshal(map[string]interface{}{
+			"Details":   "Sent",
+			"Timestamp": resp.Timestamp.Unix(),
+			"Id":        msgid,
+		})
+		s.Respond(w, r, http.StatusOK, string(responseJSON))
+	}
+}
+
 // SendPix sends a PIX payment message with a copy-code button containing the PIX key/payload.
 func (s *server) SendPix() http.HandlerFunc {
 
