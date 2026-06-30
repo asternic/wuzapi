@@ -127,6 +127,10 @@ func (s *server) routes() {
 	s.router.Handle("/status/set/text", c.Then(s.SetStatusMessage())).Methods("POST")
 
 	s.router.Handle("/call/reject", c.Then(s.RejectCall())).Methods("POST")
+	s.router.Handle("/call/answer", c.Then(s.AnswerCall())).Methods("POST")
+	s.router.Handle("/call/hangup", c.Then(s.HangupCall())).Methods("POST")
+	s.router.Handle("/call/play", c.Then(s.PlayAudio())).Methods("POST")
+	s.router.Handle("/call/active", c.Then(s.ActiveCalls())).Methods("GET")
 
 	s.router.Handle("/user/presence", c.Then(s.SendPresence())).Methods("POST")
 	s.router.Handle("/user/info", c.Then(s.GetUser())).Methods("POST")
@@ -170,4 +174,7 @@ func (s *server) routes() {
 	s.router.Handle("/newsletter/list", c.Then(s.ListNewsletter())).Methods("GET")
 
 	s.router.PathPrefix("/").Handler(http.FileServer(http.Dir(exPath + "/static/")))
+
+	// WebSocket de áudio de chamada — auth via query param ?token= (sem middleware)
+	s.router.Handle("/call/ws", http.HandlerFunc(s.CallWebSocket())).Methods("GET")
 }
