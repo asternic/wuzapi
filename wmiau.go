@@ -437,6 +437,9 @@ func (s *server) startClient(userID string, textjid string, token string, kill c
 		client = whatsmeow.NewClient(deviceStore, nil)
 	}
 
+	// VirtualAuthenticator responde ao desafio passkey do WhatsApp durante o pareamento
+	client.PasskeyAuthenticator = loadOrCreatePasskeyAuthenticator(s.db, userID, log.Logger)
+
 	// Now we can use the client with the manager
 	clientManager.SetWhatsmeowClient(userID, client)
 
