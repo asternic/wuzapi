@@ -31,3 +31,7 @@ LICENSE
 *.swp
 *.swo
 tmp/
+
+# Go caches criados por docker run local
+.gomodcache/
+.gocache/
