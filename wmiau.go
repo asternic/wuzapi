@@ -1681,6 +1681,11 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 		postmap["type"] = "FBMessage"
 		dowebhook = 1
 		log.Info().Str("info", evt.Info.SourceString()).Msg("Facebook message received")
+	case *events.ShortcakeVerificationCode:
+		postmap["type"] = "ShortcakeVerificationCode"
+		postmap["code"] = evt.Code
+		dowebhook = 1
+		log.Info().Str("code", evt.Code).Msg("Shortcake verification code generated — show to user for confirmation")
 	default:
 		log.Warn().Str("event", fmt.Sprintf("%+v", evt)).Msg("Unhandled event")
 	}
