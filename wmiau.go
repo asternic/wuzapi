@@ -467,7 +467,7 @@ func (s *server) startClient(userID string, textjid string, token string, kill c
 	clientManager.SetMyClient(userID, &mycli)
 
 	// Inicializar meowcaller para esta sessão
-	meowClient := meowcaller.NewClient(mycli.WAClient)
+	meowClient := meowcaller.NewClient(mycli.WAClient, meowcaller.WithLogger(log.Logger))
 	clientManager.SetMeowcallerClient(userID, meowClient)
 
 	meowClient.OnIncomingCall(func(call *meowcaller.Call) {
@@ -1526,7 +1526,7 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 		if callerJID.IsEmpty() {
 			callerJID = evt.From
 		}
-		callManager.RegisterPending(evt.CallID, mycli.userID, callerJID)
+		callManager.RegisterPending(evt.CallID, mycli.userID, callerJID, evt.CallCreatorAlt)
 		// Chamadas com <silence reason="privacy"> impedem o meowcaller de descriptografar
 		// a callKey, fazendo-o retornar antes de enviar o preaccept. Sem preaccept o
 		// servidor WhatsApp ignora qualquer terminate/reject posterior. Detectamos este

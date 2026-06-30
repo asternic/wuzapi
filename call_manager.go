@@ -18,8 +18,9 @@ type CallEntry struct {
 // usados como fallback quando meowcaller não consegue descriptografar a callKey
 // (ex: chamadas com <silence reason="privacy"/>).
 type PendingIncomingCall struct {
-	UserID    string
-	CallerJID types.JID
+	UserID       string
+	CallerJID    types.JID // LID (@lid) — roteamento primário
+	CallerAltJID types.JID // JID de telefone (@s.whatsapp.net) — fallback
 }
 
 // callManager é um registry thread-safe de chamadas ativas, keyed por callID.
@@ -66,10 +67,10 @@ func (m *CallManager) Delete(callID string) {
 
 // RegisterPending armazena metadados de uma chamada entrante antes do meowcaller
 // processá-la. Serve de fallback para chamadas com <silence reason="privacy"/>.
-func (m *CallManager) RegisterPending(callID, userID string, callerJID types.JID) {
+func (m *CallManager) RegisterPending(callID, userID string, callerJID, callerAltJID types.JID) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.pending[callID] = &PendingIncomingCall{UserID: userID, CallerJID: callerJID}
+	m.pending[callID] = &PendingIncomingCall{UserID: userID, CallerJID: callerJID, CallerAltJID: callerAltJID}
 }
 
 func (m *CallManager) GetPending(callID string) (*PendingIncomingCall, bool) {

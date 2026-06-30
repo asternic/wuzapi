@@ -100,22 +100,22 @@ func (s *server) HangupCall() http.HandlerFunc {
 			s.Respond(w, r, http.StatusInternalServerError, errors.New("no active session"))
 			return
 		}
-		// Usa BuildTerminate via DangerousInternals — mesmo caminho do meowcaller.
-		// RejectCall do whatsmeow usa sendNode interno que adiciona atributos extras
-		// incompatíveis com chamadas privadas (<silence reason="privacy"/>).
-		term := signaling.BuildTerminate(&signaling.TerminateParams{
-			CallID:      body.CallID,
-			To:          pending.CallerJID,
-			CallCreator: pending.CallerJID,
-		})
-		term.Attrs["id"] = waClient.GenerateMessageID()
-		if err := waClient.DangerousInternals().SendNode(context.Background(), term); err != nil {
-			log.Error().Err(err).Str("callId", body.CallID).Str("callerJID", pending.CallerJID.String()).Msg("[VOIP] terminate fallback failed")
+		// Para chamadas silence/privacy: envia <reject> via DangerousInternals.
+		// Tenta primeiro o JID de telefone (@s.whatsapp.net), depois o LID (@lid),
+		// pois o servidor pode rotear de forma diferente para cada formato.
+		routingJID := pending.CallerJID
+		if !pending.CallerAltJID.IsEmpty() {
+			routingJID = pending.CallerAltJID
+		}
+		rej := signaling.BuildReject(body.CallID, routingJID, pending.CallerJID)
+		rej.Attrs["id"] = waClient.GenerateMessageID()
+		if err := waClient.DangerousInternals().SendNode(context.Background(), rej); err != nil {
+			log.Error().Err(err).Str("callId", body.CallID).Str("routingJID", routingJID.String()).Msg("[VOIP] reject fallback failed")
 			s.Respond(w, r, http.StatusInternalServerError, err)
 			return
 		}
 		callManager.Delete(body.CallID)
-		log.Info().Str("callId", body.CallID).Str("callerJID", pending.CallerJID.String()).Msg("[VOIP] Call terminated via signaling fallback")
+		log.Info().Str("callId", body.CallID).Str("routingJID", routingJID.String()).Msg("[VOIP] Call rejected via signaling fallback")
 		respondJSON(s, w, r, http.StatusOK, map[string]interface{}{"success": true})
 	}
 }
