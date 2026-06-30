@@ -23,6 +23,7 @@ import (
 	"github.com/patrickmn/go-cache"
 	"github.com/rs/zerolog/log"
 	"github.com/skip2/go-qrcode"
+	meowcaller "github.com/purpshell/meowcaller"
 	"go.mau.fi/whatsmeow"
 	"go.mau.fi/whatsmeow/appstate"
 	"go.mau.fi/whatsmeow/proto/waCompanionReg"
@@ -453,6 +454,37 @@ func (s *server) startClient(userID string, textjid string, token string, kill c
 	// Store the MyClient in clientManager
 	clientManager.SetMyClient(userID, &mycli)
 
+	// Inicializar meowcaller para esta sessão
+	meowClient := meowcaller.NewClient(mycli.WAClient)
+	clientManager.SetMeowcallerClient(userID, meowClient)
+
+	meowClient.OnIncomingCall(func(call *meowcaller.Call) {
+		callID := call.ID()
+		callerJID := call.Peer()
+		callerNumber := callerJID.User
+
+		callManager.Register(callID, userID, call)
+
+		call.OnEnd(func(reason string) {
+			callManager.Delete(callID)
+			endMap := map[string]interface{}{
+				"type":   "CallTerminate",
+				"callId": callID,
+				"caller": callerNumber,
+				"reason": reason,
+			}
+			sendEventWithWebHook(&mycli, endMap, "")
+		})
+
+		postmap := map[string]interface{}{
+			"type":   "CallOffer",
+			"callId": callID,
+			"caller": callerNumber,
+		}
+		sendEventWithWebHook(&mycli, postmap, "")
+		log.Info().Str("callId", callID).Str("caller", callerNumber).Msg("[VOIP] Chamada entrante")
+	})
+
 	httpClient := resty.New()
 	httpClient.SetRedirectPolicy(resty.FlexibleRedirectPolicy(15))
 	if *waDebug == "DEBUG" {
@@ -572,6 +604,7 @@ func (s *server) startClient(userID string, textjid string, token string, kill c
 					clientManager.DeleteWhatsmeowClient(userID)
 					clientManager.DeleteMyClient(userID)
 					clientManager.DeleteHTTPClient(userID)
+					clientManager.DeleteMeowcallerClient(userID)
 					signalKill(userID)
 				} else if evt.Event == "success" {
 					log.Info().Msg("QR pairing ok!")
@@ -636,6 +669,7 @@ func (s *server) startClient(userID string, textjid string, token string, kill c
 			clientManager.DeleteWhatsmeowClient(userID)
 			clientManager.DeleteMyClient(userID)
 			clientManager.DeleteHTTPClient(userID)
+			clientManager.DeleteMeowcallerClient(userID)
 
 			sqlStmt := `UPDATE users SET qrcode='', connected=0 WHERE id=$1`
 			_, dbErr := s.db.Exec(sqlStmt, userID)
@@ -666,6 +700,7 @@ func (s *server) startClient(userID string, textjid string, token string, kill c
 	clientManager.DeleteWhatsmeowClient(userID)
 	clientManager.DeleteMyClient(userID)
 	clientManager.DeleteHTTPClient(userID)
+	clientManager.DeleteMeowcallerClient(userID)
 	if _, err := s.db.Exec(`UPDATE users SET qrcode='', connected=0 WHERE id=$1`, userID); err != nil {
 		log.Error().Err(err).Msg("failed to mark user disconnected on kill")
 	}
