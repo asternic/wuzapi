@@ -4,6 +4,7 @@ import (
 	"sync"
 
 	"github.com/go-resty/resty/v2"
+	meowcaller "github.com/purpshell/meowcaller"
 	"go.mau.fi/whatsmeow"
 )
 
@@ -18,15 +19,17 @@ type ClientManager struct {
 	// before emitting the webhook payload. Entries are best-effort and
 	// in-memory only — if wuzapi restarts between send and vote, plaintext
 	// resolution is skipped and the webhook falls back to hashes only.
-	pollOptions map[string]map[string][]string
+	pollOptions      map[string]map[string][]string
+	meowcallerClients map[string]*meowcaller.Client
 }
 
 func NewClientManager() *ClientManager {
 	return &ClientManager{
-		whatsmeowClients: make(map[string]*whatsmeow.Client),
-		httpClients:      make(map[string]*resty.Client),
-		myClients:        make(map[string]*MyClient),
-		pollOptions:      make(map[string]map[string][]string),
+		whatsmeowClients:  make(map[string]*whatsmeow.Client),
+		httpClients:       make(map[string]*resty.Client),
+		myClients:         make(map[string]*MyClient),
+		pollOptions:       make(map[string]map[string][]string),
+		meowcallerClients: make(map[string]*meowcaller.Client),
 	}
 }
 
@@ -113,4 +116,22 @@ func (cm *ClientManager) GetPollOptions(userID, msgID string) []string {
 		return byUser[msgID]
 	}
 	return nil
+}
+
+func (cm *ClientManager) SetMeowcallerClient(userID string, client *meowcaller.Client) {
+	cm.Lock()
+	defer cm.Unlock()
+	cm.meowcallerClients[userID] = client
+}
+
+func (cm *ClientManager) GetMeowcallerClient(userID string) *meowcaller.Client {
+	cm.RLock()
+	defer cm.RUnlock()
+	return cm.meowcallerClients[userID]
+}
+
+func (cm *ClientManager) DeleteMeowcallerClient(userID string) {
+	cm.Lock()
+	defer cm.Unlock()
+	delete(cm.meowcallerClients, userID)
 }
