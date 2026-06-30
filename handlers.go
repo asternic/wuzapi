@@ -274,14 +274,6 @@ func (s *server) Connect() http.HandlerFunc {
 			return
 		}
 
-		if clientManager.GetWhatsmeowClient(txtid) != nil {
-			isConnected := clientManager.GetWhatsmeowClient(txtid).IsConnected()
-			if isConnected == true {
-				s.Respond(w, r, http.StatusInternalServerError, errors.New("already connected"))
-				return
-			}
-		}
-
 		// Resolve which events to subscribe. With no subscribe list, preserve the
 		// user's existing subscriptions instead of overwriting them (issue #305).
 		existingEvents := r.Context().Value("userinfo").(Values).Get("Events")
@@ -297,6 +289,20 @@ func (s *server) Connect() http.HandlerFunc {
 			}
 		} else {
 			log.Info().Str("events", eventstring).Msg("Preserving existing subscribed events")
+		}
+
+		// Se já conectado: atualiza eventos (feito acima) e retorna — sem reconectar
+		if clientManager.GetWhatsmeowClient(txtid) != nil {
+			if clientManager.GetWhatsmeowClient(txtid).IsConnected() {
+				response := map[string]interface{}{"webhook": webhook, "jid": jid, "events": eventstring, "details": "Already connected — events updated"}
+				responseJson, err := json.Marshal(response)
+				if err != nil {
+					s.Respond(w, r, http.StatusInternalServerError, errors.New("could not encode response"))
+					return
+				}
+				s.Respond(w, r, http.StatusOK, string(responseJson))
+				return
+			}
 		}
 
 		log.Info().Str("jid", jid).Msg("Attempt to connect")
