@@ -24,7 +24,9 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/skip2/go-qrcode"
 	meowcaller "github.com/purpshell/meowcaller"
+	"github.com/purpshell/meowcaller/signaling"
 	"go.mau.fi/whatsmeow"
+	waBinary "go.mau.fi/whatsmeow/binary"
 	"go.mau.fi/whatsmeow/appstate"
 	"go.mau.fi/whatsmeow/proto/waCompanionReg"
 	"go.mau.fi/whatsmeow/store"
@@ -1520,12 +1522,35 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 		postmap["type"] = "CallOffer"
 		dowebhook = 1
 		log.Info().Str("event", fmt.Sprintf("%+v", evt)).Msg("Got call offer")
-		// Registra fallback para chamadas onde meowcaller falha (ex: <silence reason="privacy"/>)
 		callerJID := evt.CallCreator
 		if callerJID.IsEmpty() {
 			callerJID = evt.From
 		}
 		callManager.RegisterPending(evt.CallID, mycli.userID, callerJID)
+		// Chamadas com <silence reason="privacy"> impedem o meowcaller de descriptografar
+		// a callKey, fazendo-o retornar antes de enviar o preaccept. Sem preaccept o
+		// servidor WhatsApp ignora qualquer terminate/reject posterior. Detectamos este
+		// caso e enviamos o preaccept manualmente para que o reject funcione.
+		if _, hasSilence := evt.Data.GetOptionalChildByTag("silence"); hasSilence {
+			pre := waBinary.Node{
+				Tag:   "call",
+				Attrs: waBinary.Attrs{"to": callerJID, "id": mycli.WAClient.DangerousInternals().GenerateRequestID()},
+				Content: []waBinary.Node{{
+					Tag:   "preaccept",
+					Attrs: waBinary.Attrs{"call-id": evt.CallID, "call-creator": evt.CallCreator},
+					Content: []waBinary.Node{
+						{Tag: "audio", Attrs: waBinary.Attrs{"enc": "opus", "rate": "16000"}},
+						{Tag: "encopt", Attrs: waBinary.Attrs{"keygen": "2"}},
+						{Tag: "capability", Attrs: waBinary.Attrs{"ver": "1"}, Content: signaling.CapabilityOffer},
+					},
+				}},
+			}
+			if err := mycli.WAClient.DangerousInternals().SendNode(context.Background(), pre); err != nil {
+				log.Warn().Err(err).Str("callId", evt.CallID).Msg("[VOIP] failed to send preaccept for privacy call")
+			} else {
+				log.Info().Str("callId", evt.CallID).Msg("[VOIP] preaccept sent for privacy/silence call")
+			}
+		}
 	case *events.CallAccept:
 		postmap["type"] = "CallAccept"
 		dowebhook = 1
