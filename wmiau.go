@@ -438,6 +438,13 @@ func (s *server) startClient(userID string, textjid string, token string, kill c
 	// Now we can use the client with the manager
 	clientManager.SetWhatsmeowClient(userID, client)
 
+	// Buscar versão mais recente do WhatsApp Web para evitar desconexões por versão desatualizada
+	if latestVer, err := whatsmeow.GetLatestVersion(context.Background(), nil); err == nil {
+		store.SetWAVersion(*latestVer)
+	} else {
+		log.Warn().Err(err).Msg("[WA] failed to fetch latest WA version, using bundled default")
+	}
+
 	store.DeviceProps.PlatformType = getPlatformTypeEnum(*platformType)
 	store.DeviceProps.Os = osName
 
