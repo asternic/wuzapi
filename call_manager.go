@@ -4,6 +4,7 @@ import (
 	"sync"
 
 	meowcaller "github.com/purpshell/meowcaller"
+	"go.mau.fi/whatsmeow/types"
 )
 
 // CallEntry é uma chamada ativa registrada no CallManager.
@@ -13,12 +14,24 @@ type CallEntry struct {
 	IsIncoming bool   // true = entrante (precisa de Answer); false = saída
 }
 
+// PendingIncomingCall armazena metadados de chamadas entrantes ainda não atendidas,
+// usados como fallback quando meowcaller não consegue descriptografar a callKey
+// (ex: chamadas com <silence reason="privacy"/>).
+type PendingIncomingCall struct {
+	UserID    string
+	CallerJID types.JID
+}
+
 // callManager é um registry thread-safe de chamadas ativas, keyed por callID.
-var callManager = &CallManager{calls: make(map[string]*CallEntry)}
+var callManager = &CallManager{
+	calls:   make(map[string]*CallEntry),
+	pending: make(map[string]*PendingIncomingCall),
+}
 
 type CallManager struct {
-	mu    sync.RWMutex
-	calls map[string]*CallEntry
+	mu      sync.RWMutex
+	calls   map[string]*CallEntry
+	pending map[string]*PendingIncomingCall
 }
 
 func (m *CallManager) Register(callID, userID string, call *meowcaller.Call, isIncoming bool) {
@@ -48,6 +61,22 @@ func (m *CallManager) Delete(callID string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	delete(m.calls, callID)
+	delete(m.pending, callID)
+}
+
+// RegisterPending armazena metadados de uma chamada entrante antes do meowcaller
+// processá-la. Serve de fallback para chamadas com <silence reason="privacy"/>.
+func (m *CallManager) RegisterPending(callID, userID string, callerJID types.JID) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.pending[callID] = &PendingIncomingCall{UserID: userID, CallerJID: callerJID}
+}
+
+func (m *CallManager) GetPending(callID string) (*PendingIncomingCall, bool) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	p, ok := m.pending[callID]
+	return p, ok
 }
 
 func (m *CallManager) ListByUser(userID string) []CallEntry {

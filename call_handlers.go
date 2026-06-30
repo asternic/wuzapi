@@ -65,22 +65,47 @@ func (s *server) HangupCall() http.HandlerFunc {
 			s.Respond(w, r, http.StatusBadRequest, errors.New("call_id is required"))
 			return
 		}
+
+		// Caminho principal: chamada gerenciada pelo meowcaller
 		call, ownerID, ok := callManager.Get(body.CallID)
-		if !ok {
+		if ok {
+			if ownerID != txtid {
+				s.Respond(w, r, http.StatusForbidden, errors.New("call belongs to another user"))
+				return
+			}
+			if err := call.Hangup(); err != nil {
+				log.Error().Err(err).Str("callId", body.CallID).Msg("[VOIP] Hangup failed")
+				s.Respond(w, r, http.StatusInternalServerError, err)
+				return
+			}
+			callManager.Delete(body.CallID)
+			log.Info().Str("callId", body.CallID).Msg("[VOIP] Call hung up via meowcaller")
+			respondJSON(s, w, r, http.StatusOK, map[string]interface{}{"success": true})
+			return
+		}
+
+		// Fallback: chamada entrante não capturada pelo meowcaller (ex: <silence reason="privacy"/>)
+		pending, hasPending := callManager.GetPending(body.CallID)
+		if !hasPending {
 			s.Respond(w, r, http.StatusNotFound, errors.New("call not found"))
 			return
 		}
-		if ownerID != txtid {
+		if pending.UserID != txtid {
 			s.Respond(w, r, http.StatusForbidden, errors.New("call belongs to another user"))
 			return
 		}
-		if err := call.Hangup(); err != nil {
-			log.Error().Err(err).Str("callId", body.CallID).Msg("[VOIP] Hangup failed")
+		waClient := clientManager.GetWhatsmeowClient(txtid)
+		if waClient == nil {
+			s.Respond(w, r, http.StatusInternalServerError, errors.New("no active session"))
+			return
+		}
+		if err := waClient.RejectCall(context.Background(), pending.CallerJID, body.CallID); err != nil {
+			log.Error().Err(err).Str("callId", body.CallID).Str("callerJID", pending.CallerJID.String()).Msg("[VOIP] RejectCall fallback failed")
 			s.Respond(w, r, http.StatusInternalServerError, err)
 			return
 		}
 		callManager.Delete(body.CallID)
-		log.Info().Str("callId", body.CallID).Msg("[VOIP] Call hung up")
+		log.Info().Str("callId", body.CallID).Str("callerJID", pending.CallerJID.String()).Msg("[VOIP] Call rejected via RejectCall fallback")
 		respondJSON(s, w, r, http.StatusOK, map[string]interface{}{"success": true})
 	}
 }

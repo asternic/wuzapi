@@ -1520,6 +1520,12 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 		postmap["type"] = "CallOffer"
 		dowebhook = 1
 		log.Info().Str("event", fmt.Sprintf("%+v", evt)).Msg("Got call offer")
+		// Registra fallback para chamadas onde meowcaller falha (ex: <silence reason="privacy"/>)
+		callerJID := evt.CallCreator
+		if callerJID.IsEmpty() {
+			callerJID = evt.From
+		}
+		callManager.RegisterPending(evt.CallID, mycli.userID, callerJID)
 	case *events.CallAccept:
 		postmap["type"] = "CallAccept"
 		dowebhook = 1
@@ -1528,6 +1534,7 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 		postmap["type"] = "CallTerminate"
 		dowebhook = 1
 		log.Info().Str("event", fmt.Sprintf("%+v", evt)).Msg("Got call terminate")
+		callManager.Delete(evt.CallID)
 	case *events.CallOfferNotice:
 		postmap["type"] = "CallOfferNotice"
 		dowebhook = 1
