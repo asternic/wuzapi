@@ -12,6 +12,7 @@ import (
 	"time"
 
 	meowcaller "github.com/purpshell/meowcaller"
+	"github.com/purpshell/meowcaller/signaling"
 	"github.com/rs/zerolog/log"
 )
 
@@ -99,13 +100,22 @@ func (s *server) HangupCall() http.HandlerFunc {
 			s.Respond(w, r, http.StatusInternalServerError, errors.New("no active session"))
 			return
 		}
-		if err := waClient.RejectCall(context.Background(), pending.CallerJID, body.CallID); err != nil {
-			log.Error().Err(err).Str("callId", body.CallID).Str("callerJID", pending.CallerJID.String()).Msg("[VOIP] RejectCall fallback failed")
+		// Usa BuildTerminate via DangerousInternals — mesmo caminho do meowcaller.
+		// RejectCall do whatsmeow usa sendNode interno que adiciona atributos extras
+		// incompatíveis com chamadas privadas (<silence reason="privacy"/>).
+		term := signaling.BuildTerminate(&signaling.TerminateParams{
+			CallID:      body.CallID,
+			To:          pending.CallerJID,
+			CallCreator: pending.CallerJID,
+		})
+		term.Attrs["id"] = waClient.GenerateMessageID()
+		if err := waClient.DangerousInternals().SendNode(context.Background(), term); err != nil {
+			log.Error().Err(err).Str("callId", body.CallID).Str("callerJID", pending.CallerJID.String()).Msg("[VOIP] terminate fallback failed")
 			s.Respond(w, r, http.StatusInternalServerError, err)
 			return
 		}
 		callManager.Delete(body.CallID)
-		log.Info().Str("callId", body.CallID).Str("callerJID", pending.CallerJID.String()).Msg("[VOIP] Call rejected via RejectCall fallback")
+		log.Info().Str("callId", body.CallID).Str("callerJID", pending.CallerJID.String()).Msg("[VOIP] Call terminated via signaling fallback")
 		respondJSON(s, w, r, http.StatusOK, map[string]interface{}{"success": true})
 	}
 }
