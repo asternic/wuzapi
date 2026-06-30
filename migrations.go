@@ -75,6 +75,11 @@ var migrations = []Migration{
 		Name:  "add_whatsmeow_message_secrets_message_id_idx",
 		UpSQL: addWhatsmeowMessageSecretsMessageIDIndexSQL,
 	},
+	{
+		ID:    10,
+		Name:  "add_passkey_authenticator",
+		UpSQL: `ALTER TABLE users ADD COLUMN IF NOT EXISTS passkey_authenticator TEXT DEFAULT NULL;`,
+	},
 }
 
 const changeIDToStringSQL = `
@@ -453,6 +458,12 @@ func applyMigration(db *sqlx.DB, migration Migration) error {
 	} else if migration.ID == 9 {
 		if db.DriverName() == "sqlite" {
 			err = nil
+		} else {
+			_, err = tx.Exec(migration.UpSQL)
+		}
+	} else if migration.ID == 10 {
+		if db.DriverName() == "sqlite" {
+			err = addColumnIfNotExistsSQLite(tx, "users", "passkey_authenticator", "TEXT DEFAULT NULL")
 		} else {
 			_, err = tx.Exec(migration.UpSQL)
 		}
