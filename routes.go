@@ -128,6 +128,7 @@ func (s *server) routes() {
 
 	s.router.Handle("/call/reject", c.Then(s.RejectCall())).Methods("POST")
 	s.router.Handle("/call/answer", c.Then(s.AnswerCall())).Methods("POST")
+	s.router.Handle("/call/dial", c.Then(s.DialCall())).Methods("POST")
 	s.router.Handle("/call/hangup", c.Then(s.HangupCall())).Methods("POST")
 	s.router.Handle("/call/play", c.Then(s.PlayAudio())).Methods("POST")
 	s.router.Handle("/call/active", c.Then(s.ActiveCalls())).Methods("GET")

@@ -152,6 +152,57 @@ func (s *server) PlayAudio() http.HandlerFunc {
 	}
 }
 
+// DialCall inicia uma chamada de saída para o número informado.
+func (s *server) DialCall() http.HandlerFunc {
+	type req struct {
+		Phone string `json:"phone"`
+	}
+	return func(w http.ResponseWriter, r *http.Request) {
+		txtid := r.Context().Value("userinfo").(Values).Get("Id")
+		var body req
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Phone == "" {
+			s.Respond(w, r, http.StatusBadRequest, errors.New("phone is required"))
+			return
+		}
+
+		meowClient := clientManager.GetMeowcallerClient(txtid)
+		if meowClient == nil {
+			s.Respond(w, r, http.StatusServiceUnavailable, errors.New("whatsapp session not connected"))
+			return
+		}
+
+		ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+		defer cancel()
+
+		call, err := meowClient.Call(ctx, body.Phone)
+		if err != nil {
+			log.Error().Err(err).Str("phone", body.Phone).Msg("[VOIP] Dial failed")
+			s.Respond(w, r, http.StatusBadGateway, err)
+			return
+		}
+
+		callID := call.ID()
+		callManager.Register(callID, txtid, call)
+
+		call.OnEnd(func(reason string) {
+			callManager.Delete(callID)
+			mycli := clientManager.GetMyClient(txtid)
+			if mycli != nil {
+				endMap := map[string]interface{}{
+					"type":   "CallTerminate",
+					"callId": callID,
+					"caller": body.Phone,
+					"reason": reason,
+				}
+				sendEventWithWebHook(mycli, endMap, "")
+			}
+		})
+
+		log.Info().Str("callId", callID).Str("phone", body.Phone).Msg("[VOIP] Outgoing call placed")
+		s.Respond(w, r, http.StatusOK, map[string]interface{}{"success": true, "call_id": callID})
+	}
+}
+
 // ActiveCalls lista as chamadas ativas do usuário autenticado.
 func (s *server) ActiveCalls() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
