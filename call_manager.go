@@ -8,8 +8,9 @@ import (
 
 // CallEntry é uma chamada ativa registrada no CallManager.
 type CallEntry struct {
-	Call   *meowcaller.Call
-	UserID string // ID do usuário WuzAPI dono da sessão
+	Call       *meowcaller.Call
+	UserID     string // ID do usuário WuzAPI dono da sessão
+	IsIncoming bool   // true = entrante (precisa de Answer); false = saída
 }
 
 // callManager é um registry thread-safe de chamadas ativas, keyed por callID.
@@ -20,10 +21,10 @@ type CallManager struct {
 	calls map[string]*CallEntry
 }
 
-func (m *CallManager) Register(callID, userID string, call *meowcaller.Call) {
+func (m *CallManager) Register(callID, userID string, call *meowcaller.Call, isIncoming bool) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.calls[callID] = &CallEntry{Call: call, UserID: userID}
+	m.calls[callID] = &CallEntry{Call: call, UserID: userID, IsIncoming: isIncoming}
 }
 
 func (m *CallManager) Get(callID string) (*meowcaller.Call, string, bool) {
@@ -34,6 +35,13 @@ func (m *CallManager) Get(callID string) (*meowcaller.Call, string, bool) {
 		return nil, "", false
 	}
 	return e.Call, e.UserID, true
+}
+
+func (m *CallManager) GetEntry(callID string) (*CallEntry, bool) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	e, ok := m.calls[callID]
+	return e, ok
 }
 
 func (m *CallManager) Delete(callID string) {

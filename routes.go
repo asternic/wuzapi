@@ -174,8 +174,9 @@ func (s *server) routes() {
 
 	s.router.Handle("/newsletter/list", c.Then(s.ListNewsletter())).Methods("GET")
 
-	s.router.PathPrefix("/").Handler(http.FileServer(http.Dir(exPath + "/static/")))
-
 	// WebSocket de áudio de chamada — auth via query param ?token= (sem middleware)
+	// DEVE ficar antes do PathPrefix("/") para não ser capturado pelo file server
 	s.router.Handle("/call/ws", http.HandlerFunc(s.CallWebSocket())).Methods("GET")
+
+	s.router.PathPrefix("/").Handler(http.FileServer(http.Dir(exPath + "/static/")))
 }

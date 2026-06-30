@@ -15,6 +15,15 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+func respondJSON(s *server, w http.ResponseWriter, r *http.Request, status int, v interface{}) {
+	b, err := json.Marshal(v)
+	if err != nil {
+		s.Respond(w, r, http.StatusInternalServerError, errors.New("failed to serialize response"))
+		return
+	}
+	s.Respond(w, r, status, string(b))
+}
+
 func (s *server) AnswerCall() http.HandlerFunc {
 	type req struct {
 		CallID string `json:"call_id"`
@@ -41,7 +50,7 @@ func (s *server) AnswerCall() http.HandlerFunc {
 			return
 		}
 		log.Info().Str("callId", body.CallID).Msg("[VOIP] Call answered")
-		s.Respond(w, r, http.StatusOK, map[string]interface{}{"success": true, "call_id": body.CallID})
+		respondJSON(s, w, r, http.StatusOK, map[string]interface{}{"success": true, "call_id": body.CallID})
 	}
 }
 
@@ -72,7 +81,7 @@ func (s *server) HangupCall() http.HandlerFunc {
 		}
 		callManager.Delete(body.CallID)
 		log.Info().Str("callId", body.CallID).Msg("[VOIP] Call hung up")
-		s.Respond(w, r, http.StatusOK, map[string]interface{}{"success": true})
+		respondJSON(s, w, r, http.StatusOK, map[string]interface{}{"success": true})
 	}
 }
 
@@ -148,7 +157,7 @@ func (s *server) PlayAudio() http.HandlerFunc {
 
 		call.Play(src)
 		log.Info().Str("callId", body.CallID).Str("url", body.AudioURL).Msg("[VOIP] Playing audio")
-		s.Respond(w, r, http.StatusOK, map[string]interface{}{"success": true})
+		respondJSON(s, w, r, http.StatusOK, map[string]interface{}{"success": true})
 	}
 }
 
@@ -182,7 +191,7 @@ func (s *server) DialCall() http.HandlerFunc {
 		}
 
 		callID := call.ID()
-		callManager.Register(callID, txtid, call)
+		callManager.Register(callID, txtid, call, false)
 
 		call.OnEnd(func(reason string) {
 			callManager.Delete(callID)
@@ -199,7 +208,7 @@ func (s *server) DialCall() http.HandlerFunc {
 		})
 
 		log.Info().Str("callId", callID).Str("phone", body.Phone).Msg("[VOIP] Outgoing call placed")
-		s.Respond(w, r, http.StatusOK, map[string]interface{}{"success": true, "call_id": callID})
+		respondJSON(s, w, r, http.StatusOK, map[string]interface{}{"success": true, "call_id": callID})
 	}
 }
 
@@ -221,6 +230,6 @@ func (s *server) ActiveCalls() http.HandlerFunc {
 				State:  fmt.Sprintf("%d", e.Call.State()),
 			})
 		}
-		s.Respond(w, r, http.StatusOK, map[string]interface{}{"calls": result})
+		respondJSON(s, w, r, http.StatusOK, map[string]interface{}{"calls": result})
 	}
 }
