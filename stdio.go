@@ -260,6 +260,9 @@ func (ss *stdioServer) routeRequest(req *jsonRpcRequest) {
 	case "session.pairphone":
 		httpMethod = "POST"
 		httpPath = "/session/pairphone"
+	case "session.import":
+		httpMethod = "POST"
+		httpPath = "/session/import"
 	case "session.history":
 		httpMethod = "GET"
 		httpPath = "/session/history"
