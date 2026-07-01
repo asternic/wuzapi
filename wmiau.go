@@ -360,6 +360,40 @@ func (s *server) connectOnStartup() {
 	}
 }
 
+func forceDisconnectClient(userID string) {
+	client := clientManager.GetWhatsmeowClient(userID)
+	if client == nil {
+		return
+	}
+
+	log.Info().Str("userid", userID).Msg("Force disconnecting client")
+
+	if ch, ok := killchannel[userID]; ok {
+		select {
+		case ch <- true:
+		default:
+		}
+		for i := 0; i < 20; i++ {
+			if clientManager.GetWhatsmeowClient(userID) == nil {
+				return
+			}
+			time.Sleep(100 * time.Millisecond)
+		}
+	}
+
+	client = clientManager.GetWhatsmeowClient(userID)
+	if client == nil {
+		return
+	}
+
+	if client.IsConnected() {
+		client.Disconnect()
+	}
+	clientManager.DeleteWhatsmeowClient(userID)
+	clientManager.DeleteMyClient(userID)
+	clientManager.DeleteHTTPClient(userID)
+}
+
 func parseJID(arg string) (types.JID, bool) {
 	if len(arg) == 0 {
 		return types.EmptyJID, false

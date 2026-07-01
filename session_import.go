@@ -86,13 +86,7 @@ func (s *server) ImportSession() http.HandlerFunc {
 			return
 		}
 
-		if client := clientManager.GetWhatsmeowClient(txtid); client != nil {
-			if client.IsConnected() {
-				s.Respond(w, r, http.StatusConflict, errors.New("disconnect before importing a session"))
-				return
-			}
-			clientManager.DeleteWhatsmeowClient(txtid)
-		}
+		forceDisconnectClient(txtid)
 
 		jid, stats, err := importWhatsAppSession(r.Context(), s.exPath, payload, oldJID)
 		if err != nil {
