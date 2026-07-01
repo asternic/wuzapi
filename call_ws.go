@@ -122,19 +122,20 @@ func (s *server) CallWebSocket() http.HandlerFunc {
 
 		writer := newWSWriter(conn)
 
-		// Sink: caller → browser (WhatsApp audio frames → WS binary frames)
-		sink := newWSSink(writer, callID)
-		call.Receive(sink)
-
 		// Source: browser → caller (WS binary frames → WhatsApp audio frames)
 		src := newWSSource(ctx)
 		call.Play(src)
 
-		// Atender automaticamente apenas em chamadas entrantes
 		if isIncoming {
+			// Chamada entrante: registra sink agora e atende
+			sink := newWSSink(writer, callID)
+			call.Receive(sink)
 			if err := call.Answer(); err != nil {
 				log.Warn().Err(err).Str("callId", callID).Msg("[VOIP-WS] Answer failed (may already be answered)")
 			}
+		} else if entry.PreSink != nil {
+			// Chamada sainte: preSink já registrado no DialCall — bombeia frames para o browser
+			go entry.PreSink.pump(ctx, writer)
 		}
 
 		// Quando a chamada terminar pelo lado do WhatsApp:
@@ -220,6 +221,96 @@ func (s *wsSink) WriteFrame(frame []float32) error {
 }
 
 func (s *wsSink) Close() error { return nil }
+
+// ─────────────────────────────────────────────
+// preSink: buffer para chamadas saintes
+// Registrado imediatamente no DialCall para não perder frames
+// enquanto o agente ainda não abriu o WebSocket.
+// ─────────────────────────────────────────────
+
+type preSink struct {
+	ch     chan []float32
+	callID string
+	frames int
+	done   chan struct{}
+	once   sync.Once
+}
+
+func newPreSink(callID string) *preSink {
+	return &preSink{
+		ch:     make(chan []float32, 1024), // ~60s de áudio a 60ms/frame
+		callID: callID,
+		done:   make(chan struct{}),
+	}
+}
+
+func (s *preSink) WriteFrame(frame []float32) error {
+	s.frames++
+	if s.frames == 1 || s.frames%500 == 0 {
+		log.Info().Str("callId", s.callID).Int("frames", s.frames).Msg("[VOIP] preSink buffering audio frame from caller")
+	}
+	cp := make([]float32, len(frame))
+	copy(cp, frame)
+	select {
+	case s.ch <- cp:
+	default: // buffer cheio — descarta frame mais antigo e insere novo
+		select {
+		case <-s.ch:
+		default:
+		}
+		select {
+		case s.ch <- cp:
+		default:
+		}
+	}
+	return nil
+}
+
+func (s *preSink) Close() error {
+	s.once.Do(func() { close(s.done) })
+	return nil
+}
+
+// pump lê frames do preSink e os envia via WebSocket ao browser.
+// Deve ser executado em goroutine separada após o agente conectar.
+func (s *preSink) pump(ctx context.Context, w *wsWriter) {
+	total := 0
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-s.done:
+			// drena o que ainda estiver no canal antes de sair
+			for {
+				select {
+				case frame := <-s.ch:
+					encodeAndSend(w, frame)
+					total++
+				default:
+					log.Info().Str("callId", s.callID).Int("total", total).Msg("[VOIP-WS] preSink pump exiting")
+					return
+				}
+			}
+		case frame := <-s.ch:
+			if err := encodeAndSend(w, frame); err != nil {
+				return
+			}
+			total++
+			if total == 1 || total%500 == 0 {
+				log.Info().Str("callId", s.callID).Int("frames", total).Msg("[VOIP-WS] preSink→browser audio frame")
+			}
+		}
+	}
+}
+
+func encodeAndSend(w *wsWriter, frame []float32) error {
+	buf := make([]byte, 4+len(frame)*4)
+	binary.LittleEndian.PutUint32(buf[:4], uint32(len(frame)))
+	for i, f := range frame {
+		binary.LittleEndian.PutUint32(buf[4+i*4:], math.Float32bits(f))
+	}
+	return w.WriteMessage(websocket.BinaryMessage, buf)
+}
 
 // ─────────────────────────────────────────────
 // wsSource: meowcaller.AudioSource — browser → caller

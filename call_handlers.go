@@ -226,9 +226,19 @@ func (s *server) DialCall() http.HandlerFunc {
 		}
 
 		callID := call.ID()
-		callManager.Register(callID, txtid, call, false)
+
+		// Registra preSink antes de armazenar no callManager para garantir
+		// que frames do contato não sejam perdidos antes do WebSocket conectar.
+		pre := newPreSink(callID)
+		call.Receive(pre)
+
+		entry := &CallEntry{Call: call, UserID: txtid, IsIncoming: false, PreSink: pre}
+		callManager.mu.Lock()
+		callManager.calls[callID] = entry
+		callManager.mu.Unlock()
 
 		call.OnEnd(func(reason string) {
+			pre.Close()
 			callManager.Delete(callID)
 			mycli := clientManager.GetMyClient(txtid)
 			if mycli != nil {

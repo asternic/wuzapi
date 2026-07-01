@@ -10,8 +10,9 @@ import (
 // CallEntry é uma chamada ativa registrada no CallManager.
 type CallEntry struct {
 	Call       *meowcaller.Call
-	UserID     string // ID do usuário WuzAPI dono da sessão
-	IsIncoming bool   // true = entrante (precisa de Answer); false = saída
+	UserID     string    // ID do usuário WuzAPI dono da sessão
+	IsIncoming bool      // true = entrante (precisa de Answer); false = saída
+	PreSink    *preSink  // não-nil para chamadas saintes: buffer de frames até o WS conectar
 }
 
 // PendingIncomingCall armazena metadados de chamadas entrantes ainda não atendidas,
