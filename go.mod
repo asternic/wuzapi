@@ -81,4 +81,4 @@ require (
 	rsc.io/qr v0.2.0 // indirect
 )
 
-replace go.mau.fi/whatsmeow => github.com/jobasfernandes/whatsmeow v0.0.0-20260630225600-3c69e5274a93
+replace go.mau.fi/whatsmeow => github.com/tulir/whatsmeow v0.0.0-20260630180629-b572e5bcb92b
