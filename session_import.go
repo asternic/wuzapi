@@ -67,10 +67,34 @@ func (s *server) ImportSession() http.HandlerFunc {
 			return
 		}
 
-		noisePriv, err := decodeB64(payload.NoiseCandidates[0].Private)
-		if err != nil || len(noisePriv) != 32 {
-			s.Respond(w, r, http.StatusBadRequest, errors.New("invalid noiseKey: must be 32 bytes"))
-			return
+		// Find the correct noise candidate by verifying the keypair mathematically:
+		// derive the public key from the private key and compare with the provided public key.
+		var noiseKeyPair *keys.KeyPair
+		for i, candidate := range payload.NoiseCandidates {
+			priv, err := decodeB64(candidate.Private)
+			if err != nil || len(priv) != 32 {
+				continue
+			}
+			pub, err := decodeB64(candidate.Public)
+			if err != nil || len(pub) != 32 {
+				continue
+			}
+			derived := keys.NewKeyPairFromPrivateKey(*(*[32]byte)(priv))
+			if string(derived.Pub[:]) == string(pub) {
+				noiseKeyPair = derived
+				log.Info().Int("candidateIndex", i).Str("userid", txtid).Msg("Noise keypair candidate verified mathematically")
+				break
+			}
+		}
+		if noiseKeyPair == nil {
+			// Fallback to last candidate if none matched
+			lastPriv, err := decodeB64(payload.NoiseCandidates[len(payload.NoiseCandidates)-1].Private)
+			if err != nil || len(lastPriv) != 32 {
+				s.Respond(w, r, http.StatusBadRequest, errors.New("invalid noiseKey: no valid candidate found"))
+				return
+			}
+			noiseKeyPair = keys.NewKeyPairFromPrivateKey(*(*[32]byte)(lastPriv))
+			log.Warn().Str("userid", txtid).Msg("No noise candidate matched mathematically; using last as fallback")
 		}
 
 		identPriv, err := decodeB64(payload.IdentityKey.Private)
@@ -105,7 +129,6 @@ func (s *server) ImportSession() http.HandlerFunc {
 			lid, _ = types.ParseJID(payload.LID)
 		}
 
-		noiseKeyPair := keys.NewKeyPairFromPrivateKey(*(*[32]byte)(noisePriv))
 		identKeyPair := keys.NewKeyPairFromPrivateKey(*(*[32]byte)(identPriv))
 
 		device := container.NewDevice()
