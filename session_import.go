@@ -7,6 +7,7 @@ import (
 	"errors"
 	"net/http"
 
+	"github.com/rs/zerolog/log"
 	"go.mau.fi/whatsmeow/proto/waAdv"
 	"go.mau.fi/whatsmeow/types"
 	"go.mau.fi/whatsmeow/util/keys"
