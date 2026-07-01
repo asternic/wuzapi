@@ -56,13 +56,15 @@ var (
 
 type qrChannel struct {
 	sync.Mutex
-	cli       *Client
-	log       waLog.Logger
-	ctx       context.Context
-	handlerID uint32
-	closed    atomic.Bool
-	output    chan<- QRChannelItem
-	stopQRs   chan struct{}
+	cli            *Client
+	log            waLog.Logger
+	ctx            context.Context
+	handlerID      uint32
+	closed         atomic.Bool
+	output         chan<- QRChannelItem
+	stopQRs        chan struct{}
+	stopQRsOnce    sync.Once
+	passkeyStarted atomic.Bool
 }
 
 func (qrc *qrChannel) close() bool {
@@ -73,6 +75,10 @@ func (qrc *qrChannel) emitQRs(codes []string) {
 	var nextCode string
 	for {
 		if len(codes) == 0 {
+			if qrc.passkeyStarted.Load() {
+				qrc.log.Debugf("Ran out of QR codes but passkey flow is active, keeping connection alive")
+				return
+			}
 			if qrc.close() {
 				qrc.log.Debugf("Ran out of QR codes, closing channel with status %s and disconnecting client", QRChannelTimeout)
 				qrc.output <- QRChannelTimeout
@@ -139,6 +145,8 @@ func (qrc *qrChannel) handleEvent(rawEvt any) {
 		qrc.output <- QRChannelScannedWithoutMultidevice
 		return
 	case *events.PairPasskeyRequest:
+		qrc.passkeyStarted.Store(true)
+		qrc.stopQRsOnce.Do(func() { close(qrc.stopQRs) })
 		qrc.output <- QRChannelItem{
 			Event:          QRChannelEventPasskeyRequest,
 			PasskeyRequest: evt,
@@ -183,7 +191,7 @@ func (qrc *qrChannel) handleEvent(rawEvt any) {
 	default:
 		return
 	}
-	close(qrc.stopQRs)
+	qrc.stopQRsOnce.Do(func() { close(qrc.stopQRs) })
 	if qrc.close() {
 		qrc.log.Debugf("Closing channel with status %+v", outputType)
 		qrc.output <- outputType
