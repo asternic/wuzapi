@@ -12,7 +12,7 @@ require (
 	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/rs/zerolog v1.35.1
 	github.com/skip2/go-qrcode v0.0.0-20200617195104-da1b6568686e
-	go.mau.fi/whatsmeow v0.0.0-20260630154606-8ca7102478b5
+	go.mau.fi/whatsmeow v0.0.0-20260630225600-3c69e5274a93
 	google.golang.org/protobuf v1.36.11
 )
 
@@ -81,4 +81,4 @@ require (
 	rsc.io/qr v0.2.0 // indirect
 )
 
-replace go.mau.fi/whatsmeow => github.com/w3nder/whatsmeow v0.0.0-20260630154606-8ca7102478b5
+replace go.mau.fi/whatsmeow => github.com/jobasfernandes/whatsmeow v0.0.0-20260630225600-3c69e5274a93

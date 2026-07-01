@@ -437,9 +437,6 @@ func (s *server) startClient(userID string, textjid string, token string, kill c
 		client = whatsmeow.NewClient(deviceStore, nil)
 	}
 
-	// VirtualAuthenticator responde ao desafio passkey do WhatsApp durante o pareamento
-	client.PasskeyAuthenticator = loadOrCreatePasskeyAuthenticator(s.db, userID, log.Logger)
-
 	// Now we can use the client with the manager
 	clientManager.SetWhatsmeowClient(userID, client)
 
@@ -1681,11 +1678,34 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 		postmap["type"] = "FBMessage"
 		dowebhook = 1
 		log.Info().Str("info", evt.Info.SourceString()).Msg("Facebook message received")
-	case *events.ShortcakeVerificationCode:
-		postmap["type"] = "ShortcakeVerificationCode"
-		postmap["code"] = evt.Code
-		dowebhook = 1
-		log.Info().Str("code", evt.Code).Msg("Shortcake verification code generated — show to user for confirmation")
+	case *events.PairPasskeyRequest:
+		cred, err := loadOrCreatePasskeyCredential(mycli.db, txtid, log.Logger)
+		if err != nil {
+			log.Error().Err(err).Str("userID", txtid).Msg("[passkey] failed to load credential")
+			break
+		}
+		resp, err := buildPasskeyResponse(cred, evt.PublicKey)
+		if err != nil {
+			log.Error().Err(err).Str("userID", txtid).Msg("[passkey] failed to build WebAuthn response")
+			break
+		}
+		if err := mycli.WAClient.SendPasskeyResponse(context.Background(), resp); err != nil {
+			log.Error().Err(err).Str("userID", txtid).Msg("[passkey] failed to send response")
+		}
+	case *events.PairPasskeyConfirmation:
+		if !evt.SkipHandoffUX {
+			postmap["type"] = "ShortcakeVerificationCode"
+			postmap["code"] = evt.Code
+			dowebhook = 1
+			log.Info().Str("code", evt.Code).Msg("[passkey] verification code — show to user")
+		} else {
+			log.Info().Str("code", evt.Code).Msg("[passkey] handoff ux skipped, confirming automatically")
+		}
+		if err := mycli.WAClient.SendPasskeyConfirmation(context.Background()); err != nil {
+			log.Error().Err(err).Str("userID", txtid).Msg("[passkey] failed to send confirmation")
+		}
+	case *events.PairPasskeyError:
+		log.Error().Err(evt.Error).Bool("continuation", evt.Continuation).Str("userID", txtid).Msg("[passkey] pairing error")
 	default:
 		log.Warn().Str("event", fmt.Sprintf("%+v", evt)).Msg("Unhandled event")
 	}
