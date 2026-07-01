@@ -2,6 +2,7 @@ FROM golang:alpine AS builder
 WORKDIR /app
 RUN apk add --no-cache gcc musl-dev sqlite-dev
 COPY go.mod go.sum ./
+COPY whatsmeow/ ./whatsmeow/
 ENV GONOSUMDB=github.com/w3nder
 ENV GOFLAGS=-mod=mod
 RUN go mod download
