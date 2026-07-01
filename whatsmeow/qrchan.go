@@ -79,6 +79,20 @@ func (qrc *qrChannel) emitQRs(codes []string) {
 				qrc.log.Debugf("Ran out of QR codes but passkey flow is active, keeping connection alive")
 				return
 			}
+			// Grace period: the user may have scanned the last QR code just as it expired.
+			// Wait up to 30s for a PairPasskeyRequest before disconnecting.
+			qrc.log.Debugf("Ran out of QR codes, waiting 30s grace period for passkey initiation")
+			select {
+			case <-time.After(30 * time.Second):
+			case <-qrc.stopQRs:
+				qrc.log.Debugf("Got stop signal during passkey grace period, passkey flow must be active")
+				return
+			case <-qrc.ctx.Done():
+			}
+			if qrc.passkeyStarted.Load() {
+				qrc.log.Debugf("Passkey started during grace period, keeping connection alive")
+				return
+			}
 			if qrc.close() {
 				qrc.log.Debugf("Ran out of QR codes, closing channel with status %s and disconnecting client", QRChannelTimeout)
 				qrc.output <- QRChannelTimeout
