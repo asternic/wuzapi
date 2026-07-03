@@ -1587,9 +1587,11 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 				"PushName":     evt.Info.PushName,
 				"Timestamp":    evt.Info.Timestamp,
 			},
+			"IsUnavailable":   evt.IsUnavailable,
+			"UnavailableType": string(evt.UnavailableType),
 		}
 		dowebhook = 1
-		log.Warn().Str("info", evt.Info.SourceString()).Msg("Undecryptable message received")
+		log.Warn().Str("info", evt.Info.SourceString()).Str("unavailableType", string(evt.UnavailableType)).Msg("Undecryptable message received")
 	case *events.MediaRetry:
 		postmap["type"] = "MediaRetry"
 		dowebhook = 1
