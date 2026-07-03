@@ -632,7 +632,17 @@ func (s *server) GetQR() http.HandlerFunc {
 		}
 
 		log.Info().Str("instance", txtid).Str("qrcode", code).Msg("Get QR successful")
-		response := map[string]interface{}{"QRCode": fmt.Sprintf("%s", code)}
+		response := map[string]interface{}{
+			"QRCode":         fmt.Sprintf("%s", code),
+			"passkeyPending": false,
+			"publicKey":      nil,
+		}
+
+		if pk := peekPendingPasskey(txtid); pk != nil && pk.Request != nil {
+			response["passkeyPending"] = true
+			response["publicKey"] = pk.Request.PublicKey
+		}
+
 		responseJson, err := json.Marshal(response)
 		if err != nil {
 			s.Respond(w, r, http.StatusInternalServerError, err)
@@ -744,6 +754,106 @@ func (s *server) PairPhone() http.HandlerFunc {
 	}
 }
 
+// PasskeyResponse receives a WebAuthn response from the frontend and sends it to WhatsApp
+func (s *server) PasskeyResponse() http.HandlerFunc {
+	type passkeyResponseStruct struct {
+		Response *types.WebAuthnResponse `json:"response"`
+	}
+
+	return func(w http.ResponseWriter, r *http.Request) {
+		txtid := r.Context().Value("userinfo").(Values).Get("Id")
+
+		state := getAndConsumePendingPasskey(txtid)
+		if state == nil || state.Request == nil {
+			s.Respond(w, r, http.StatusBadRequest, errors.New("no pending passkey request"))
+			return
+		}
+
+		decoder := json.NewDecoder(r.Body)
+		var t passkeyResponseStruct
+		err := decoder.Decode(&t)
+		if err != nil {
+			storePendingPasskey(txtid, state) // put it back so user can retry
+			s.Respond(w, r, http.StatusBadRequest, errors.New("could not decode Payload"))
+			return
+		}
+
+		if t.Response == nil {
+			storePendingPasskey(txtid, state) // put it back
+			s.Respond(w, r, http.StatusBadRequest, errors.New("missing response in Payload"))
+			return
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		err = state.Client.SendPasskeyResponse(ctx, t.Response)
+		if err != nil {
+			log.Error().Err(err).Str("userID", txtid).Msg("Failed to send passkey response")
+			s.Respond(w, r, http.StatusInternalServerError, err)
+			return
+		}
+
+		log.Info().Str("userID", txtid).Msg("Passkey response sent successfully")
+		s.Respond(w, r, http.StatusOK, map[string]interface{}{"status": "passkey_response_sent"})
+	}
+}
+
+// PasskeyConfirm confirms the passkey pairing code was shown to the user.
+// Unlike PasskeyResponse, this uses peek (non-consuming read) because the
+// confirmation step does not require exclusive ownership of the state — the
+// state is only removed after a successful SendPasskeyConfirmation call.
+func (s *server) PasskeyConfirm() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		txtid := r.Context().Value("userinfo").(Values).Get("Id")
+
+		state := peekPendingPasskey(txtid)
+		if state == nil || state.Client == nil {
+			s.Respond(w, r, http.StatusBadRequest, errors.New("no pending passkey confirmation"))
+			return
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		err := state.Client.SendPasskeyConfirmation(ctx)
+		if err != nil {
+			log.Error().Err(err).Str("userID", txtid).Msg("Failed to send passkey confirmation")
+			s.Respond(w, r, http.StatusInternalServerError, err)
+			return
+		}
+
+		// Now consume the state — the confirmation was sent successfully.
+		deletePendingPasskey(txtid)
+
+		log.Info().Str("userID", txtid).Msg("Passkey confirmation sent successfully")
+		s.Respond(w, r, http.StatusOK, map[string]interface{}{"status": "passkey_confirmed"})
+	}
+}
+
+// GetPasskeyStatus returns whether there is a pending passkey request for this session
+func (s *server) GetPasskeyStatus() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		txtid := r.Context().Value("userinfo").(Values).Get("Id")
+
+		pk := peekPendingPasskey(txtid)
+		response := map[string]interface{}{
+			"passkeyPending": pk != nil && pk.Request != nil,
+			"publicKey":      nil,
+		}
+		if pk != nil && pk.Request != nil {
+			response["publicKey"] = pk.Request.PublicKey
+		}
+
+		responseJson, err := json.Marshal(response)
+		if err != nil {
+			s.Respond(w, r, http.StatusInternalServerError, err)
+		} else {
+			s.Respond(w, r, http.StatusOK, string(responseJson))
+		}
+	}
+}
+
 // Gets Connected and LoggedIn Status
 func (s *server) GetStatus() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -821,6 +931,13 @@ func (s *server) GetStatus() http.HandlerFunc {
 		}
 		proxyConfig := proxyConfigResponse(proxyURL, webhookUseProxy)
 
+		passkeyPending := false
+		var publicKey interface{} = nil
+		if pk := peekPendingPasskey(txtid); pk != nil && pk.Request != nil {
+			passkeyPending = true
+			publicKey = pk.Request.PublicKey
+		}
+
 		response := map[string]interface{}{
 			"id":              txtid,
 			"name":            userInfo.Get("Name"),
@@ -832,6 +949,8 @@ func (s *server) GetStatus() http.HandlerFunc {
 			"events":          userInfo.Get("Events"),
 			"proxy_url":       userInfo.Get("Proxy"),
 			"qrcode":          userInfo.Get("Qrcode"),
+			"passkeyPending":  passkeyPending,
+			"publicKey":       publicKey,
 			"history":         userInfo.Get("History"),
 			"proxy_config":    proxyConfig,
 			"s3_config":       s3Config,

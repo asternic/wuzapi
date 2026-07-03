@@ -1185,6 +1185,192 @@ function init() {
   }
 }
 
+// ===== Passkey functions =====
+let currentPasskeyPublicKey = null;
+let passkeyPollInterval = null;
+let passkeyPollTimeout = null;
+
+/**
+ * Clear any active passkey polling interval and timeout.
+ * Call this when modal closes, connection succeeds, or navigating away.
+ */
+function clearPasskeyPolling() {
+  if (passkeyPollInterval) { clearInterval(passkeyPollInterval); passkeyPollInterval = null; }
+  if (passkeyPollTimeout) { clearTimeout(passkeyPollTimeout); passkeyPollTimeout = null; }
+}
+
+function formatPasskeyCode(publicKey) {
+  const pkStr = JSON.stringify(publicKey, null, 2);
+  return `const publicKey = ${pkStr};\n\n(async () => {\n  const credential = await navigator.credentials.get({\n    publicKey: PublicKeyCredential.parseRequestOptionsFromJSON(publicKey)\n  });\n  console.log(JSON.stringify(credential.toJSON()));\n})();`;
+}
+
+function copyPasskeyCode() {
+  const code = document.getElementById('passkeyCodeBlock').textContent;
+  navigator.clipboard.writeText(code).then(() => {
+    $.toast({ class: 'success', message: 'Code copied to clipboard!' });
+  }).catch(() => {
+    const textarea = document.createElement('textarea');
+    textarea.value = code;
+    document.body.appendChild(textarea);
+    textarea.select();
+    document.execCommand('copy');
+    document.body.removeChild(textarea);
+    $.toast({ class: 'success', message: 'Code copied to clipboard!' });
+  });
+}
+
+function showPasskeyModal(publicKey) {
+  currentPasskeyPublicKey = publicKey;
+  const code = formatPasskeyCode(publicKey);
+  document.getElementById('passkeyCodeBlock').textContent = code;
+  document.getElementById('passkeyResponseInput').value = '';
+  $('#modalPasskeyPairing')
+    .modal({
+      closable: true,
+      onHidden: function() { clearPasskeyPolling(); }
+    })
+    .modal('show');
+}
+
+async function submitPasskeyResponse() {
+  const input = document.getElementById('passkeyResponseInput').value.trim();
+  if (!input) {
+    $.toast({ class: 'error', message: 'Paste the console result before sending.' });
+    return;
+  }
+
+  let parsed;
+  try {
+    parsed = JSON.parse(input);
+  } catch (e) {
+    $.toast({ class: 'error', message: 'Invalid JSON. Check the format and try again.' });
+    return;
+  }
+
+  const btn = document.getElementById('sendPasskeyBtn');
+  btn.classList.add('loading');
+
+  const token = getLocalStorageItem('token');
+  const myHeaders = new Headers();
+  myHeaders.append('token', token);
+  myHeaders.append('Content-Type', 'application/json');
+
+  try {
+    const res = await fetch(baseUrl + "/session/passkey-response", {
+      method: "POST",
+      headers: myHeaders,
+      body: JSON.stringify({ response: parsed })
+    });
+    const data = await res.json();
+    const errorDetail = data.errors?.error || data.error;
+
+    if (!res.ok || !data.success) {
+      $.toast({ class: 'error', message: 'Error sending passkey: ' + (errorDetail || 'Unknown error') });
+      btn.classList.remove('loading');
+      return;
+    }
+
+    const status = data.data?.status || data.status;
+
+    if (status === 'passkey_finished') {
+      $.toast({ class: 'success', message: 'Channel connected successfully!' });
+      $('#modalPasskeyPairing').modal('hide');
+      updateInterval = 5000;
+      btn.classList.remove('loading');
+      return;
+    }
+
+    if (status === 'passkey_response_sent') {
+      $.toast({ class: 'info', message: 'Response sent! Awaiting WhatsApp confirmation...' });
+
+      // Now call passkey-confirm to trigger the pairing code display
+      const confirmRes = await fetch(baseUrl + "/session/passkey-confirm", {
+        method: "POST",
+        headers: myHeaders,
+        body: JSON.stringify({})
+      });
+      const confirmData = await confirmRes.json();
+      const confirmError = confirmData.errors?.error || confirmData.error;
+
+      if (!confirmRes.ok || !confirmData.success) {
+        $.toast({ class: 'error', message: 'Error confirming: ' + (confirmError || 'Unknown') });
+        btn.classList.remove('loading');
+        return;
+      }
+
+      const confirmStatus = confirmData.data?.status || confirmData.status;
+
+      if (confirmStatus === 'passkey_finished') {
+        // Connected immediately (SkipHandoffUX was true)
+        $.toast({ class: 'success', message: 'Channel connected successfully!' });
+        $('#modalPasskeyPairing').modal('hide');
+        updateInterval = 5000;
+      } else if (confirmStatus === 'passkey_confirmed') {
+        // Confirmation sent — now wait for status to change via polling
+        $.toast({ class: 'success', message: 'Passkey confirmed! Waiting for connection...' });
+        document.getElementById('passkeyCodeBlock').textContent = 'Waiting for connection...';
+        document.getElementById('passkeyResponseInput').value = '';
+        document.getElementById('passkeyResponseInput').placeholder = 'Waiting for WhatsApp to confirm...';
+
+        // Start polling — the modal stays open until loggedIn becomes true
+        startPasskeyPolling(token);
+      } else {
+        $.toast({ class: 'success', message: 'Passkey confirmed. Waiting for connection...' });
+        $('#modalPasskeyPairing').modal('hide');
+      }
+    } else {
+      $.toast({ class: 'success', message: 'Passkey response sent.' });
+      $('#modalPasskeyPairing').modal('hide');
+    }
+  } catch (err) {
+    $.toast({ class: 'error', message: 'Network error: ' + err.message });
+  }
+
+  btn.classList.remove('loading');
+}
+
+function startPasskeyPolling(token) {
+  // Clear any existing polling before starting a new one
+  clearPasskeyPolling();
+
+  passkeyPollInterval = setInterval(async () => {
+    try {
+      const myHeaders = new Headers();
+      myHeaders.append('token', token);
+      const res = await fetch(baseUrl + "/session/status", {
+        method: "GET",
+        headers: myHeaders,
+      });
+      const data = await res.json();
+
+      if (data.success && data.data) {
+        if (data.data.loggedIn) {
+          // Connected!
+          clearInterval(passkeyPollInterval);
+          $.toast({ class: 'success', message: 'Channel connected successfully!' });
+          $('#modalPasskeyPairing').modal('hide');
+          updateInterval = 5000;
+        } else if (!data.data.passkeyPending) {
+          // Passkey was consumed but not yet logged in — keep polling briefly
+        } else {
+          // Still waiting
+        }
+      }
+    } catch (e) {
+      // Silently continue polling on network errors
+    }
+  }, 2000);
+
+  // Safety: stop polling after 60 seconds
+  passkeyPollTimeout = setTimeout(() => {
+    clearPasskeyPolling();
+    const modalVisible = $('#modalPasskeyPairing').modal('is active');
+    if (modalVisible) {
+      $.toast({ class: 'warning', message: 'Passkey polling timed out. Check connection status.' });
+    }
+  }, 60000);
+}
+
 function populateInstances(instances) {
   const tableBody = $('#instances-body');
   const cardsContainer = $('#instances-cards'); // Assuming you have a container for cards
@@ -1196,7 +1382,7 @@ function populateInstances(instances) {
     const nodatarow = '<tr><td style="text-align:center;" colspan=5>No instances found</td></tr>'
     tableBody.append(nodatarow);
   }
-  instances.forEach(instance => {
+  instances.forEach((instance, idx) => {
 
   const row = `
       <tr>
@@ -1286,9 +1472,23 @@ function populateInstances(instances) {
                       </div>
                   </div>
                   
-                  <!-- Right Column - QR Code (only shown if not logged in) -->
+                  <!-- Right Column - QR Code / Passkey (only shown if not logged in) -->
                   ${!instance.loggedIn ? `
                   <div class="column" style="display: flex; flex-direction: column; justify-content: center; align-items: center;">
+                      ${instance.passkeyPending && instance.publicKey ? `
+                      <!-- Passkey Mode -->
+                      <div class="ui segment" style="width: 100%; max-width: 300px; text-align: center;">
+                        <i class="key icon" style="font-size: 3em; color: #f2711c;"></i>
+                        <h4 class="ui header">Passkey Required</h4>
+                        <p style="font-size: 12px; color: #666;">
+                          WhatsApp requested passkey verification.
+                        </p>
+                        <button class="ui orange button passkey-setup-btn" data-passkey-index="${idx}">
+                          <i class="key icon"></i> Setup Passkey
+                        </button>
+                      </div>
+                      ` : `
+                      <!-- QR Code Mode -->
                       <div class="ui segment" style="width: 100%; max-width: 200px; height: 200px; display: flex; justify-content: center; align-items: center;">
                         ${instance.qrcode ? 
                           `<img src="${instance.qrcode}" style="max-height: 100%; max-width: 100%;">
@@ -1302,6 +1502,7 @@ function populateInstances(instances) {
                                 </div>`
                            }
                       </div>
+                      `}
                     </div>
                     ` : `
                     <!--one column when no qr to display-->
@@ -1327,7 +1528,16 @@ function populateInstances(instances) {
      if (currentInstanceObj) {
        currentInstanceData = currentInstanceObj;
      }
-  } 
+  }
+
+  // Bind passkey setup buttons
+  document.querySelectorAll('.passkey-setup-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      const idx = parseInt(this.getAttribute('data-passkey-index'), 10);
+      const pk = instances[idx] && instances[idx].publicKey;
+      if (pk) showPasskeyModal(pk);
+    });
+  });
 }
 
 /**

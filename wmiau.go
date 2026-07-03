@@ -32,6 +32,7 @@ import (
 	"go.mau.fi/whatsmeow/types/events"
 	waLog "go.mau.fi/whatsmeow/util/log"
 	"golang.org/x/net/proxy"
+	"sync"
 )
 
 // db field declaration as *sqlx.DB
@@ -61,6 +62,82 @@ func safeGo(name string, fn func()) {
 		}()
 		fn()
 	}()
+}
+
+// PendingPasskeyState holds the state of an in-progress passkey pairing.
+type PendingPasskeyState struct {
+	Request   *events.PairPasskeyRequest
+	Client    *whatsmeow.Client
+	CreatedAt time.Time
+}
+
+// passkeyStateTTL is how long a pending passkey request lives before being
+// automatically cleaned up. WhatsApp challenges typically expire after
+// ~10 minutes; we keep a generous margin.
+const passkeyStateTTL = 15 * time.Minute
+
+var (
+	pendingPasskeyMu       sync.Mutex
+	pendingPasskeyRequests = make(map[string]*PendingPasskeyState) // keyed by userID
+)
+
+// startPasskeyCleanup runs a background goroutine that periodically removes
+// stale pending passkey states. Call this once during server initialization.
+func startPasskeyCleanup() {
+	go func() {
+		ticker := time.NewTicker(5 * time.Minute)
+		defer ticker.Stop()
+		for range ticker.C {
+			pendingPasskeyMu.Lock()
+			now := time.Now()
+			for userID, state := range pendingPasskeyRequests {
+				if now.Sub(state.CreatedAt) > passkeyStateTTL {
+					delete(pendingPasskeyRequests, userID)
+					log.Info().Str("userID", userID).Msg("Passkey state expired and cleaned up")
+				}
+			}
+			pendingPasskeyMu.Unlock()
+		}
+	}()
+}
+
+func storePendingPasskey(userID string, state *PendingPasskeyState) {
+	state.CreatedAt = time.Now()
+	pendingPasskeyMu.Lock()
+	pendingPasskeyRequests[userID] = state
+	pendingPasskeyMu.Unlock()
+}
+
+func getAndConsumePendingPasskey(userID string) *PendingPasskeyState {
+	pendingPasskeyMu.Lock()
+	state, ok := pendingPasskeyRequests[userID]
+	if ok {
+		delete(pendingPasskeyRequests, userID)
+	}
+	pendingPasskeyMu.Unlock()
+	if !ok {
+		return nil
+	}
+	return state
+}
+
+func deletePendingPasskey(userID string) {
+	pendingPasskeyMu.Lock()
+	delete(pendingPasskeyRequests, userID)
+	pendingPasskeyMu.Unlock()
+}
+
+// peekPendingPasskey checks if there is a pending passkey request for this user
+// WITHOUT consuming it. Used by /session/qr, /session/passkey-status, and
+// /session/passkey-confirm.
+func peekPendingPasskey(userID string) *PendingPasskeyState {
+	pendingPasskeyMu.Lock()
+	state, ok := pendingPasskeyRequests[userID]
+	pendingPasskeyMu.Unlock()
+	if !ok {
+		return nil
+	}
+	return state
 }
 
 // ensureS3ClientForUser loads S3 config from DB and initializes client if not already present (lazy init for reconnect-after-restart)
@@ -598,6 +675,42 @@ func (s *server) startClient(userID string, textjid string, token string, kill c
 							userinfocache.Set(token, v, cache.NoExpiration)
 						}
 					}
+				} else if evt.Event == "passkey-request" {
+					if evt.PasskeyRequest != nil {
+						storePendingPasskey(userID, &PendingPasskeyState{
+							Request: evt.PasskeyRequest,
+							Client:  client,
+						})
+						postmap := make(map[string]interface{})
+						postmap["event"] = "passkey-request"
+						postmap["type"] = "PasskeyRequest"
+						postmap["publicKey"] = evt.PasskeyRequest.PublicKey
+						sendEventWithWebHook(&mycli, postmap, "")
+						log.Info().Msg("Passkey request received, sent to frontend")
+					}
+				} else if evt.Event == "passkey-confirmation" {
+					if evt.PasskeyConfirmation != nil {
+						if evt.PasskeyConfirmation.SkipHandoffUX {
+							log.Info().Msg("Passkey confirmation: SkipHandoffUX=true, auto-confirming")
+						} else {
+							postmap := make(map[string]interface{})
+							postmap["event"] = "passkey-confirmation"
+							postmap["type"] = "PasskeyConfirmation"
+							postmap["code"] = evt.PasskeyConfirmation.Code
+							postmap["skipHandoffUX"] = evt.PasskeyConfirmation.SkipHandoffUX
+							sendEventWithWebHook(&mycli, postmap, "")
+							log.Info().Str("code", evt.PasskeyConfirmation.Code).Msg("Passkey confirmation code sent to frontend")
+						}
+					}
+				} else if evt.Event == "error" {
+					log.Error().Str("event", evt.Event).Interface("error", evt.Error).Msg("QR channel error")
+					postmap := make(map[string]interface{})
+					postmap["event"] = "error"
+					postmap["type"] = "PairError"
+					if evt.Error != nil {
+						postmap["error"] = evt.Error.Error()
+					}
+					sendEventWithWebHook(&mycli, postmap, "")
 				} else {
 					log.Info().Str("event", evt.Event).Msg("Login event")
 				}
@@ -1580,6 +1693,27 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 		postmap["type"] = "FBMessage"
 		dowebhook = 1
 		log.Info().Str("info", evt.Info.SourceString()).Msg("Facebook message received")
+	case *events.PairPasskeyRequest:
+		storePendingPasskey(mycli.userID, &PendingPasskeyState{
+			Request: evt,
+			Client:  mycli.WAClient,
+		})
+		postmap["type"] = "PasskeyRequest"
+		postmap["publicKey"] = evt.PublicKey
+		dowebhook = 1
+		log.Info().Msg("Passkey request received (event handler)")
+	case *events.PairPasskeyConfirmation:
+		postmap["type"] = "PasskeyConfirmation"
+		postmap["code"] = evt.Code
+		postmap["skipHandoffUX"] = evt.SkipHandoffUX
+		dowebhook = 1
+		log.Info().Str("code", evt.Code).Bool("skipHandoffUX", evt.SkipHandoffUX).Msg("Passkey confirmation received")
+	case *events.PairPasskeyError:
+		postmap["type"] = "PairPasskeyError"
+		postmap["error"] = evt.Error.Error()
+		postmap["continuation"] = evt.Continuation
+		dowebhook = 1
+		log.Warn().Err(evt.Error).Bool("continuation", evt.Continuation).Msg("Passkey pairing error")
 	default:
 		log.Warn().Str("event", fmt.Sprintf("%+v", evt)).Msg("Unhandled event")
 	}
