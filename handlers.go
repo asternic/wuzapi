@@ -764,7 +764,7 @@ func (s *server) PasskeyResponse() http.HandlerFunc {
 		txtid := r.Context().Value("userinfo").(Values).Get("Id")
 
 		state := getAndConsumePendingPasskey(txtid)
-		if state == nil || state.Request == nil {
+		if state == nil || state.Request == nil || state.Client == nil {
 			s.Respond(w, r, http.StatusBadRequest, errors.New("no pending passkey request"))
 			return
 		}
