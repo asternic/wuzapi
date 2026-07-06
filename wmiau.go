@@ -692,6 +692,15 @@ func (s *server) startClient(userID string, textjid string, token string, kill c
 					if evt.PasskeyConfirmation != nil {
 						if evt.PasskeyConfirmation.SkipHandoffUX {
 							log.Info().Msg("Passkey confirmation: SkipHandoffUX=true, auto-confirming")
+							go func() {
+								ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+								defer cancel()
+								if err := client.SendPasskeyConfirmation(ctx); err != nil {
+									log.Error().Err(err).Msg("Failed to auto-confirm passkey")
+								} else {
+									log.Info().Msg("Auto-confirmed passkey successfully")
+								}
+							}()
 						} else {
 							postmap := make(map[string]interface{})
 							postmap["event"] = "passkey-confirmation"

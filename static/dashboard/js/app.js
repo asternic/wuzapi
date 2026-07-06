@@ -1346,7 +1346,7 @@ function startPasskeyPolling(token) {
       if (data.success && data.data) {
         if (data.data.loggedIn) {
           // Connected!
-          clearInterval(passkeyPollInterval);
+          clearPasskeyPolling();
           $.toast({ class: 'success', message: 'Channel connected successfully!' });
           $('#modalPasskeyPairing').modal('hide');
           updateInterval = 5000;

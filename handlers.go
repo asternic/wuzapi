@@ -764,7 +764,7 @@ func (s *server) PasskeyResponse() http.HandlerFunc {
 		txtid := r.Context().Value("userinfo").(Values).Get("Id")
 
 		state := getAndConsumePendingPasskey(txtid)
-		if state == nil || state.Request == nil || state.Client == nil {
+		if state == nil || state.Request == nil {
 			s.Respond(w, r, http.StatusBadRequest, errors.New("no pending passkey request"))
 			return
 		}
@@ -781,6 +781,12 @@ func (s *server) PasskeyResponse() http.HandlerFunc {
 		if t.Response == nil {
 			storePendingPasskey(txtid, state) // put it back
 			s.Respond(w, r, http.StatusBadRequest, errors.New("missing response in Payload"))
+			return
+		}
+
+		if state.Client == nil {
+			storePendingPasskey(txtid, state) // put it back
+			s.Respond(w, r, http.StatusInternalServerError, errors.New("passkey client unavailable"))
 			return
 		}
 

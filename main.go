@@ -492,6 +492,9 @@ func main() {
 
 	s.connectOnStartup()
 
+	// Start background cleanup of stale passkey pairing states (needed for both modes)
+	startPasskeyCleanup()
+
 	if serverMode == Stdio {
 		startStdioMode(s)
 	} else {
@@ -557,9 +560,6 @@ func startHTTPMode(s *server) {
 		}
 	}()
 	log.Info().Str("address", *address).Str("port", *port).Msg("Server started. Waiting for connections...")
-
-	// Start background cleanup of stale passkey pairing states
-	startPasskeyCleanup()
 
 	select {}
 }
