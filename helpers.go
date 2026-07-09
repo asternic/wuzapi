@@ -765,6 +765,12 @@ func encodeJPEGThumbnail(img image.Image) []byte {
 }
 
 func fetchOpenGraphImage(ctx context.Context, pageURL *url.URL, imageURLStr string, result *openGraphResult) {
+	// No image found on the page; an empty string would resolve to the page
+	// URL itself and we would try to decode HTML as an image.
+	if imageURLStr == "" {
+		return
+	}
+
 	imageURL, err := url.Parse(imageURLStr)
 	if err != nil {
 		log.Warn().Err(err).Str("imageURL", imageURLStr).Msg("Failed to parse Open Graph image URL")
