@@ -805,13 +805,15 @@ func fetchOpenGraphImage(ctx context.Context, pageURL *url.URL, imageURLStr stri
 		return
 	}
 
-	result.ImageData = encodeJPEGThumbnail(resize.Thumbnail(openGraphThumbnailWidth, openGraphThumbnailHeight, img, resize.Lanczos3))
-
 	hqThumb := resize.Thumbnail(openGraphHQThumbnailDim, openGraphHQThumbnailDim, img, resize.Lanczos3)
 	result.HQImageData = encodeJPEGThumbnail(hqThumb)
 	bounds := hqThumb.Bounds()
 	result.HQWidth = uint32(bounds.Dx())
 	result.HQHeight = uint32(bounds.Dy())
+
+	// Downscale the inline thumbnail from hqThumb (max 600px) instead of
+	// resizing the original image (up to 4000px) a second time.
+	result.ImageData = encodeJPEGThumbnail(resize.Thumbnail(openGraphThumbnailWidth, openGraphThumbnailHeight, hqThumb, resize.Lanczos3))
 }
 
 func runFFmpegConversion(input []byte, inputExt string, ffmpegArgs func(inPath, outPath string) []string, errMsg string) ([]byte, error) {

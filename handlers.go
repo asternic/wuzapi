@@ -2671,7 +2671,7 @@ func (s *server) SendMessage() http.HandlerFunc {
 		// Upload the high-res thumbnail so clients render the large preview
 		// card; without these fields only the small inline thumbnail shows.
 		if len(og.HQImageData) > 0 {
-			uploaded, upErr := clientManager.GetWhatsmeowClient(txtid).Upload(context.Background(), og.HQImageData, whatsmeow.MediaLinkThumbnail)
+			uploaded, upErr := clientManager.GetWhatsmeowClient(txtid).Upload(r.Context(), og.HQImageData, whatsmeow.MediaLinkThumbnail)
 			if upErr != nil {
 				log.Warn().Err(upErr).Str("url", url).Msg("Failed to upload link preview thumbnail, sending inline thumbnail only")
 			} else {
