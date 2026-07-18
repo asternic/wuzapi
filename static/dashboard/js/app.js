@@ -62,11 +62,14 @@ document.addEventListener('DOMContentLoaded', function() {
       const enabled = $('#proxyEnabled').is(':checked');
       if (enabled) {
         $('#proxyUrlField').addClass('show');
+        $('#proxyWebhookUseProxyField').addClass('show');
       } else {
         $('#proxyUrlField').removeClass('show');
+        $('#proxyWebhookUseProxyField').removeClass('show');
       }
     }
   });
+  $('#proxyWebhookUseProxyToggle').checkbox();
 
   // Initialize add instance proxy toggle
   $('#addInstanceProxyToggle').checkbox({
@@ -74,12 +77,15 @@ document.addEventListener('DOMContentLoaded', function() {
       const enabled = $('input[name="proxy_enabled"]').is(':checked');
       if (enabled) {
         $('#addInstanceProxyUrlField').show();
+        $('#addInstanceProxyWebhookUseProxyField').show();
       } else {
         $('#addInstanceProxyUrlField').hide();
+        $('#addInstanceProxyWebhookUseProxyField').hide();
         $('input[name="proxy_url"]').val('');
       }
     }
   });
+  $('#addInstanceProxyWebhookUseProxyToggle').checkbox();
 
   // Initialize add instance S3 toggle
   $('#addInstanceS3Toggle').checkbox({
@@ -495,6 +501,8 @@ document.addEventListener('DOMContentLoaded', function() {
       $('#addInstanceS3Toggle').checkbox('set unchecked');
       $('#addInstanceHmacToggle').checkbox('set unchecked');
       $('#addInstanceProxyUrlField').hide();
+      $('#addInstanceProxyWebhookUseProxyField').hide();
+      $('#addInstanceProxyWebhookUseProxyToggle').checkbox('set checked');
       $('#addInstanceS3Fields').hide();
       $('#addInstanceHmacKeyWarningMessage').hide();
       $('#addInstanceHmacKeyField').hide();
@@ -513,9 +521,11 @@ async function addInstance(data) {
 
   // Build proxy configuration
   const proxyEnabled = data.proxy_enabled === 'on' || data.proxy_enabled === true;
+  const proxyWebhookUseProxy = data.proxy_webhook_use_proxy === 'on' || data.proxy_webhook_use_proxy === true;
   const proxyConfig = {
     enabled: proxyEnabled,
-    proxyURL: proxyEnabled ? (data.proxy_url || '') : ''
+    proxyURL: proxyEnabled ? (data.proxy_url || '') : '',
+    webhookUseProxy: proxyEnabled ? proxyWebhookUseProxy : true
   };
   
   // Build S3 configuration
@@ -1262,6 +1272,10 @@ function populateInstances(instances) {
                               <div class="content">${instance.proxy_config.proxy_url || 'Not configured'}</div>
                           </div>
                           <div class="item">
+                              <div class="header">Webhook Proxy</div>
+                              <div class="content">${instance.proxy_config.webhook_use_proxy === false ? 'Bypass proxy' : 'Use proxy'}</div>
+                          </div>
+                          <div class="item">
                               <div class="header">S3</div>
                               <div class="content">${instance.s3_config.enabled ? 'Enabled' : 'Disabled'}</div>
                           </div>
@@ -1682,6 +1696,7 @@ async function loadProxyConfig() {
         const proxyConfig = data.data.proxy_config;
         const proxyUrl = proxyConfig.proxy_url || '';
         const enabled = proxyConfig.enabled || false;
+        const webhookUseProxy = proxyConfig.webhook_use_proxy !== false;
         
         // Set checkbox state
         $('#proxyEnabled').prop('checked', enabled);
@@ -1689,12 +1704,17 @@ async function loadProxyConfig() {
         
         // Set proxy URL
         $('#proxyUrl').val(proxyUrl);
+
+        $('#proxyWebhookUseProxy').prop('checked', webhookUseProxy);
+        $('#proxyWebhookUseProxyToggle').checkbox(webhookUseProxy ? 'set checked' : 'set unchecked');
         
         // Show/hide URL field based on enabled state
         if (enabled) {
           $('#proxyUrlField').addClass('show');
+          $('#proxyWebhookUseProxyField').addClass('show');
         } else {
           $('#proxyUrlField').removeClass('show');
+          $('#proxyWebhookUseProxyField').removeClass('show');
         }
       } else {
         // No proxy config, set defaults
@@ -1702,6 +1722,9 @@ async function loadProxyConfig() {
         $('#proxyEnabledToggle').checkbox('set unchecked');
         $('#proxyUrl').val('');
         $('#proxyUrlField').removeClass('show');
+        $('#proxyWebhookUseProxy').prop('checked', true);
+        $('#proxyWebhookUseProxyToggle').checkbox('set checked');
+        $('#proxyWebhookUseProxyField').removeClass('show');
       }
     }
   } catch (error) {
@@ -1717,12 +1740,14 @@ async function saveProxyConfig() {
   
   const enabled = $('#proxyEnabled').is(':checked');
   const proxyUrl = $('#proxyUrl').val().trim();
+  const webhookUseProxy = $('#proxyWebhookUseProxy').is(':checked');
   
   // If proxy is disabled, send disable request
   if (!enabled) {
     const config = {
       enable: false,
-      proxy_url: ''
+      proxy_url: '',
+      webhook_use_proxy: webhookUseProxy
     };
     
     try {
@@ -1760,7 +1785,8 @@ async function saveProxyConfig() {
   
   const config = {
     enable: true,
-    proxy_url: proxyUrl
+    proxy_url: proxyUrl,
+    webhook_use_proxy: webhookUseProxy
   };
   
   try {

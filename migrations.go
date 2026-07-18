@@ -80,6 +80,11 @@ var migrations = []Migration{
 		Name:  "add_passkey_authenticator",
 		UpSQL: `ALTER TABLE users ADD COLUMN IF NOT EXISTS passkey_authenticator TEXT DEFAULT NULL;`,
 	},
+	{
+		ID:    11,
+		Name:  "add_webhook_use_proxy",
+		UpSQL: addWebhookUseProxySQL,
+	},
 }
 
 const changeIDToStringSQL = `
@@ -231,6 +236,18 @@ BEGIN
 	CREATE INDEX IF NOT EXISTS whatsmeow_message_secrets_message_id_idx
 	ON whatsmeow_message_secrets (message_id);
 END $$;
+-- SQLite version (handled in code)
+`
+
+const addWebhookUseProxySQL = `
+-- PostgreSQL version
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'webhook_use_proxy') THEN
+        ALTER TABLE users ADD COLUMN webhook_use_proxy BOOLEAN DEFAULT TRUE;
+    END IF;
+END $$;
+
 -- SQLite version (handled in code)
 `
 
@@ -464,6 +481,12 @@ func applyMigration(db *sqlx.DB, migration Migration) error {
 	} else if migration.ID == 10 {
 		if db.DriverName() == "sqlite" {
 			err = addColumnIfNotExistsSQLite(tx, "users", "passkey_authenticator", "TEXT DEFAULT NULL")
+		} else {
+			_, err = tx.Exec(migration.UpSQL)
+		}
+	} else if migration.ID == 11 {
+		if db.DriverName() == "sqlite" {
+			err = addColumnIfNotExistsSQLite(tx, "users", "webhook_use_proxy", "BOOLEAN DEFAULT 1")
 		} else {
 			_, err = tx.Exec(migration.UpSQL)
 		}

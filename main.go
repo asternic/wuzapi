@@ -69,6 +69,7 @@ var (
 	webhookRetryCount        = flag.Int("retrycount", 5, "Number of times to retry failed webhooks")
 	webhookRetryDelaySeconds = flag.Int("retrydelay", 30, "Delay in seconds between webhook retries")
 	webhookErrorQueueName    = flag.String("errorqueue", "webhook_errors", "RabbitMQ queue name for failed webhooks")
+	globalWebhookUseProxy    = flag.Bool("webhookuseproxy", true, "Route webhook deliveries through the per-user proxy when configured")
 
 	container        *sqlstore.Container
 	clientManager    = NewClientManager()
@@ -291,6 +292,13 @@ func main() {
 	if v := os.Getenv("WEBHOOK_ERROR_QUEUE_NAME"); v != "" {
 		*webhookErrorQueueName = v
 	}
+	if v := os.Getenv("WUZAPI_WEBHOOK_USE_PROXY"); v != "" {
+		*globalWebhookUseProxy = strings.ToLower(v) == "true" || v == "1"
+	}
+
+	log.Info().
+		Bool("use_proxy", *globalWebhookUseProxy).
+		Msg("Webhook Proxy Configured")
 
 	log.Info().
 		Bool("enabled", *webhookRetryEnabled).

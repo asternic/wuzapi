@@ -130,7 +130,7 @@
       <div class="purple card hidden widget" style="cursor: pointer;" id="proxyConfig">
         <div class="content"><a class="ui purple right ribbon label">Config</a>
           <div class="header">Proxy Settings</div>
-          <div class="description">Configure proxy for WhatsApp connections.</div>
+          <div class="description">Configure proxy for WhatsApp and webhook delivery.</div>
         </div>
       </div>
       <div class="purple card hidden widget" style="cursor: pointer;" id="webhookConfig">
@@ -492,7 +492,7 @@
     <div class="content">
       <div class="ui info message">
         <div class="header">Proxy Settings</div>
-        <p>Configure HTTP/HTTPS or SOCKS5 proxy for WhatsApp connections. Useful for network restrictions or enhanced privacy.</p>
+        <p>Configure HTTP/HTTPS or SOCKS5 proxy for WhatsApp connections. Optionally route webhook deliveries through the same proxy or send them directly to your backend.</p>
       </div>
       <div class="ui form">
         <div class="field">
@@ -506,6 +506,13 @@
           <label>Proxy URL</label>
           <input id="proxyUrl" type="text" placeholder="http://proxy.example.com:8080 or socks5://user:pass@proxy.example.com:1080">
           <small>Include protocol (http://, https://, or socks5://) and port. Authentication can be included in URL format.</small>
+        </div>
+        <div class="field" id="proxyWebhookUseProxyField">
+          <div class="ui toggle checkbox" id="proxyWebhookUseProxyToggle">
+            <input type="checkbox" id="proxyWebhookUseProxy" checked>
+            <label>Use proxy for webhook delivery</label>
+          </div>
+          <small>When enabled, outgoing webhook POSTs use the configured proxy. Disable to reach your application backend directly while WhatsApp traffic still uses the proxy.</small>
         </div>
       </div>
     </div>
@@ -663,6 +670,13 @@
           <label>Proxy URL</label>
           <input type="text" name="proxy_url" placeholder="http://proxy.example.com:8080 or socks5://user:pass@proxy.example.com:1080">
           <small>Include protocol (http://, https://, or socks5://) and port. Authentication can be included in URL format.</small>
+        </div>
+        <div class="field" id="addInstanceProxyWebhookUseProxyField" style="display: none;">
+          <div class="ui toggle checkbox" id="addInstanceProxyWebhookUseProxyToggle">
+            <input type="checkbox" name="proxy_webhook_use_proxy" checked>
+            <label>Use proxy for webhook delivery</label>
+          </div>
+          <small>Disable to send webhooks directly to your backend while WhatsApp traffic uses the proxy.</small>
         </div>
 
         <!-- S3 Configuration -->

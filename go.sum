@@ -106,6 +106,8 @@ github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZb
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/purpshell/meowcaller v0.0.0-20260626012300-0f1265d7ebee h1:hZW+KsLLjUVNwJv9hrOJSBmSyjoHBO36cZJgAjoG070=
 github.com/purpshell/meowcaller v0.0.0-20260626012300-0f1265d7ebee/go.mod h1:FA3k7L98Dy2km9hvcdKJH1HMKPpi8bCONlA7R84NpN4=
+github.com/purpshell/meowcaller v0.0.0-20260717112041-9769d5aaaeca h1:+uzrOYKlA136UcamZaFxQS43KdXbNiko8ojqKY8xCoc=
+github.com/purpshell/meowcaller v0.0.0-20260717112041-9769d5aaaeca/go.mod h1:FA3k7L98Dy2km9hvcdKJH1HMKPpi8bCONlA7R84NpN4=
 github.com/rabbitmq/amqp091-go v1.10.0 h1:STpn5XsHlHGcecLmMFCtg7mqq0RnD+zFr4uzukfVhBw=
 github.com/rabbitmq/amqp091-go v1.10.0/go.mod h1:Hy4jKW5kQART1u+JkDTF9YYOQUHXqMuhrgxOEeS7G4o=
 github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec h1:W09IVJc94icq4NjY3clb7Lk8O1qJ8BdBEF8z0ibU0rE=

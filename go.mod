@@ -22,7 +22,7 @@ require (
 	github.com/justinas/alice v1.2.0
 	github.com/lib/pq v1.10.9
 	github.com/nfnt/resize v0.0.0-20180221191011-83c6a9932646
-	github.com/purpshell/meowcaller v0.0.0-20260626012300-0f1265d7ebee
+	github.com/purpshell/meowcaller v0.0.0-20260717112041-9769d5aaaeca
 	github.com/rabbitmq/amqp091-go v1.10.0
 	github.com/vincent-petithory/dataurl v1.0.0
 	golang.org/x/image v0.32.0

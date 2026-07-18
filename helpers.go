@@ -90,6 +90,29 @@ type WebhookErrorPayload struct {
 	AttemptTime      time.Time              `json:"attemptTime"`
 	ErrorMessage     string                 `json:"errorMessage"`
 }
+
+// ProxyConfig holds per-user proxy settings for WhatsApp and webhook delivery.
+type ProxyConfig struct {
+	Enabled         bool  `json:"enabled"`
+	ProxyURL        string `json:"proxyURL"`
+	WebhookUseProxy *bool `json:"webhookUseProxy,omitempty"`
+}
+
+func resolveWebhookUseProxy(perUser *bool) bool {
+	if perUser != nil {
+		return *perUser
+	}
+	return *globalWebhookUseProxy
+}
+
+func proxyConfigResponse(proxyURL string, webhookUseProxy bool) map[string]interface{} {
+	return map[string]interface{}{
+		"enabled":           proxyURL != "",
+		"proxy_url":         proxyURL,
+		"webhook_use_proxy": webhookUseProxy,
+	}
+}
+
 type openGraphResult struct {
 	Title       string
 	Description string
