@@ -252,6 +252,19 @@ func (s *server) DialCall() http.HandlerFunc {
 			}
 		})
 
+		call.OnPeerAccept(func() {
+			mycli := clientManager.GetMyClient(txtid)
+			if mycli != nil {
+				acceptMap := map[string]interface{}{
+					"type":   "CallAccept",
+					"callId": callID,
+					"caller": body.Phone,
+				}
+				sendEventWithWebHook(mycli, acceptMap, "")
+			}
+			log.Info().Str("callId", callID).Msg("[VOIP] Peer accepted outgoing call")
+		})
+
 		log.Info().Str("callId", callID).Str("phone", body.Phone).Msg("[VOIP] Outgoing call placed")
 		respondJSON(s, w, r, http.StatusOK, map[string]interface{}{"success": true, "call_id": callID})
 	}
