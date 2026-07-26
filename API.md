@@ -895,7 +895,7 @@ curl -X POST -H 'Token: 1234ABCD' -H 'Content-Type: application/json' --data '{"
 
 ## Send Document Message
 
-Sends a Document message. Any mime type can be attached. A FileName must be supplied in the request body. The Document must be passed as octet-stream in base64 embedded format.
+Sends a Document message. A `FileName` must be supplied in the request body. `MimeType` is optional; when provided, it overrides automatic MIME type detection. Otherwise, the endpoint considers the data URL MIME type, an HTTP URL response's `Content-Type`, the `FileName` extension, and finally the file bytes.
 
 Endpoint: _/chat/send/document_
 
@@ -904,6 +904,17 @@ Method: **POST**
 
 ```
 curl -X POST -H 'Token: 1234ABCD' -H 'Content-Type: application/json' --data '{"Phone":"5491155554444","FileName":"hola.txt","Document":"data:application/octet-stream;base64,aG9sYSBxdWUgdGFsCg=="}' http://localhost:8080/chat/send/document
+```
+
+Example sending an Excel workbook with an explicit MIME type:
+
+```json
+{
+  "Phone": "31612345678",
+  "FileName": "report.xlsx",
+  "MimeType": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "Document": "data:application/octet-stream;base64,UEsDB..."
+}
 ```
 
 ---

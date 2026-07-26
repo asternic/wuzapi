@@ -189,12 +189,7 @@ func fetchURLBytes(ctx context.Context, resourceURL string, limit int64) ([]byte
 		return nil, "", fmt.Errorf("response exceeds allowed size (%d bytes)", limit)
 	}
 
-	contentType := resp.Header.Get("Content-Type")
-	if contentType == "" {
-		contentType = http.DetectContentType(data)
-	}
-
-	return data, contentType, nil
+	return data, resp.Header.Get("Content-Type"), nil
 }
 
 func getOpenGraphData(ctx context.Context, urlStr string, userID string) (title, description string, imageData []byte) {

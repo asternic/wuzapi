@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"image"
 	"image/jpeg"
+	"mime"
 	"net/http"
 	"net/url"
 	"os"
@@ -847,6 +848,56 @@ func (s *server) GetStatus() http.HandlerFunc {
 	}
 }
 
+func resolveDocumentMimeType(
+	explicitMimeType string,
+	dataURLMimeType string,
+	httpContentType string,
+	fileName string,
+	fileData []byte,
+) string {
+	normalize := func(value string) string {
+		mediaType, _, err := mime.ParseMediaType(strings.TrimSpace(value))
+		if err != nil {
+			return ""
+		}
+		typeAndSubtype := strings.Split(mediaType, "/")
+		if len(typeAndSubtype) != 2 || typeAndSubtype[0] == "" || typeAndSubtype[1] == "" {
+			return ""
+		}
+		return mediaType
+	}
+	isGeneric := func(mediaType string) bool {
+		switch mediaType {
+		case "application/octet-stream", "binary/octet-stream":
+			return true
+		default:
+			return false
+		}
+	}
+
+	if mediaType := normalize(explicitMimeType); mediaType != "" {
+		return mediaType
+	}
+
+	for _, candidate := range []string{dataURLMimeType, httpContentType} {
+		if mediaType := normalize(candidate); mediaType != "" && !isGeneric(mediaType) {
+			return mediaType
+		}
+	}
+
+	extensionMimeType := mime.TypeByExtension(strings.ToLower(filepath.Ext(fileName)))
+	if mediaType := normalize(extensionMimeType); mediaType != "" && !isGeneric(mediaType) {
+		return mediaType
+	}
+
+	detectedMimeType := normalize(http.DetectContentType(fileData))
+	if detectedMimeType != "" && !isGeneric(detectedMimeType) {
+		return detectedMimeType
+	}
+
+	return "application/octet-stream"
+}
+
 // Sends a document/attachment message
 func (s *server) SendDocument() http.HandlerFunc {
 
@@ -911,6 +962,8 @@ func (s *server) SendDocument() http.HandlerFunc {
 
 		var uploaded whatsmeow.UploadResponse
 		var filedata []byte
+		var dataURLMimeType string
+		var httpContentType string
 
 		if strings.HasPrefix(t.Document, "data:") {
 			var dataURL, err = dataurl.DecodeString(t.Document)
@@ -919,25 +972,27 @@ func (s *server) SendDocument() http.HandlerFunc {
 				return
 			}
 			filedata = dataURL.Data
+			dataURLMimeType = dataURL.MediaType.ContentType()
 		} else if isHTTPURL(t.Document) {
 			data, ct, err := fetchURLBytes(r.Context(), t.Document, fetchDocumentMaxBytes)
 			if err != nil {
 				s.Respond(w, r, http.StatusBadRequest, errors.New(fmt.Sprintf("failed to fetch document from url: %v", err)))
 				return
 			}
-			if t.MimeType == "" {
-				t.MimeType = ct
-			}
 			filedata = data
+			httpContentType = ct
 		} else {
 			s.Respond(w, r, http.StatusBadRequest, errors.New("document data should start with \"data:\" or be a valid HTTP URL"))
 			return
 		}
 
-		mimeType := t.MimeType
-		if mimeType == "" {
-			mimeType = http.DetectContentType(filedata)
-		}
+		resolvedMimeType := resolveDocumentMimeType(
+			t.MimeType,
+			dataURLMimeType,
+			httpContentType,
+			t.FileName,
+			filedata,
+		)
 
 		uploaded, err = clientManager.GetWhatsmeowClient(txtid).Upload(context.Background(), filedata, whatsmeow.MediaDocument)
 		if err != nil {
@@ -946,16 +1001,11 @@ func (s *server) SendDocument() http.HandlerFunc {
 		}
 
 		msg := &waE2E.Message{DocumentMessage: &waE2E.DocumentMessage{
-			URL:        proto.String(uploaded.URL),
-			FileName:   &t.FileName,
-			DirectPath: proto.String(uploaded.DirectPath),
-			MediaKey:   uploaded.MediaKey,
-			Mimetype: proto.String(func() string {
-				if t.MimeType != "" {
-					return t.MimeType
-				}
-				return http.DetectContentType(filedata)
-			}()),
+			URL:           proto.String(uploaded.URL),
+			FileName:      &t.FileName,
+			DirectPath:    proto.String(uploaded.DirectPath),
+			MediaKey:      uploaded.MediaKey,
+			Mimetype:      proto.String(resolvedMimeType),
 			FileEncSHA256: uploaded.FileEncSHA256,
 			FileSHA256:    uploaded.FileSHA256,
 			FileLength:    proto.Uint64(uint64(len(filedata))),
