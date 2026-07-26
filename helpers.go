@@ -274,6 +274,34 @@ func updateUserInfo(values interface{}, field string, value string) interface{} 
 	return Values{m: m}
 }
 
+// setUserInfoField updates ONE field of a token's cached user info, reading the
+// current entry immediately before writing it back. Reports whether the entry
+// existed. Long-lived goroutines must use this instead of capturing the Values
+// once and reusing it: updateUserInfo copies every field from the snapshot it
+// is handed, so writing from a stale one silently reverts fields that other
+// code changed in the meantime.
+//
+// The QR loop is the case that motivated it. It captured the user info before
+// pairing (when Jid is still empty) and rewrote the cache on every new QR code.
+// A code emitted after PairSuccess therefore restored the empty Jid, and the
+// next /session/connect found no JID, built a fresh device and asked for a new
+// QR — as if the pairing had never happened, while the real device sat intact
+// in the store.
+//
+// This is a read-modify-write and is not atomic: two goroutines updating
+// DIFFERENT fields of the same token concurrently can still lose one update.
+// That is the pre-existing behaviour of every userinfocache.Set caller; the
+// point here is narrowing the window from "the whole life of a goroutine" to
+// "two adjacent statements".
+func setUserInfoField(token string, field string, value string) bool {
+	current, found := userinfocache.Get(token)
+	if !found {
+		return false
+	}
+	userinfocache.Set(token, updateUserInfo(current, field, value), cache.NoExpiration)
+	return true
+}
+
 // webhook for regular messages
 func callHook(myurl string, payload map[string]string, userID string) {
 	callHookWithHmac(myurl, payload, userID, nil)
