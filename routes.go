@@ -133,6 +133,9 @@ func (s *server) routes() {
 	s.router.Handle("/call/hangup", c.Then(s.HangupCall())).Methods("POST")
 	s.router.Handle("/call/play", c.Then(s.PlayAudio())).Methods("POST")
 	s.router.Handle("/call/active", c.Then(s.ActiveCalls())).Methods("GET")
+	s.router.Handle("/call/video/start", c.Then(s.StartVideoCall())).Methods("POST")
+	s.router.Handle("/call/video/accept", c.Then(s.AcceptVideoCall())).Methods("POST")
+	s.router.Handle("/call/video/stop", c.Then(s.StopVideoCall())).Methods("POST")
 
 	s.router.Handle("/user/presence", c.Then(s.SendPresence())).Methods("POST")
 	s.router.Handle("/user/presence/subscribe", c.Then(s.SubscribePresence())).Methods("POST")

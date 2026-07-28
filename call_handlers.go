@@ -120,6 +120,101 @@ func (s *server) HangupCall() http.HandlerFunc {
 	}
 }
 
+// StartVideoCall pede upgrade de áudio para vídeo numa chamada em andamento.
+func (s *server) StartVideoCall() http.HandlerFunc {
+	type req struct {
+		CallID string `json:"call_id"`
+	}
+	return func(w http.ResponseWriter, r *http.Request) {
+		txtid := r.Context().Value("userinfo").(Values).Get("Id")
+		var body req
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.CallID == "" {
+			s.Respond(w, r, http.StatusBadRequest, errors.New("call_id is required"))
+			return
+		}
+		call, ownerID, ok := callManager.Get(body.CallID)
+		if !ok {
+			s.Respond(w, r, http.StatusNotFound, errors.New("call not found"))
+			return
+		}
+		if ownerID != txtid {
+			s.Respond(w, r, http.StatusForbidden, errors.New("call belongs to another user"))
+			return
+		}
+		if err := call.StartVideo(); err != nil {
+			s.Respond(w, r, http.StatusInternalServerError, err)
+			return
+		}
+		// orientation=0 (enviado automaticamente por StartVideo) resultou em vídeo
+		// deitado no teste ao vivo — testando 1 como próxima hipótese.
+		if err := call.SetVideoOrientation(1); err != nil {
+			log.Warn().Err(err).Str("callId", body.CallID).Msg("[VOIP] Failed to announce video orientation")
+		}
+		respondJSON(s, w, r, http.StatusOK, map[string]interface{}{"success": true})
+	}
+}
+
+// AcceptVideoCall aceita o pedido de upgrade de vídeo enviado pelo contato.
+func (s *server) AcceptVideoCall() http.HandlerFunc {
+	type req struct {
+		CallID string `json:"call_id"`
+	}
+	return func(w http.ResponseWriter, r *http.Request) {
+		txtid := r.Context().Value("userinfo").(Values).Get("Id")
+		var body req
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.CallID == "" {
+			s.Respond(w, r, http.StatusBadRequest, errors.New("call_id is required"))
+			return
+		}
+		call, ownerID, ok := callManager.Get(body.CallID)
+		if !ok {
+			s.Respond(w, r, http.StatusNotFound, errors.New("call not found"))
+			return
+		}
+		if ownerID != txtid {
+			s.Respond(w, r, http.StatusForbidden, errors.New("call belongs to another user"))
+			return
+		}
+		if err := call.AcceptVideo(); err != nil {
+			s.Respond(w, r, http.StatusInternalServerError, err)
+			return
+		}
+		if err := call.SetVideoOrientation(1); err != nil {
+			log.Warn().Err(err).Str("callId", body.CallID).Msg("[VOIP] Failed to announce video orientation")
+		}
+		respondJSON(s, w, r, http.StatusOK, map[string]interface{}{"success": true})
+	}
+}
+
+// StopVideoCall volta a chamada para só áudio.
+func (s *server) StopVideoCall() http.HandlerFunc {
+	type req struct {
+		CallID string `json:"call_id"`
+	}
+	return func(w http.ResponseWriter, r *http.Request) {
+		txtid := r.Context().Value("userinfo").(Values).Get("Id")
+		var body req
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.CallID == "" {
+			s.Respond(w, r, http.StatusBadRequest, errors.New("call_id is required"))
+			return
+		}
+		call, ownerID, ok := callManager.Get(body.CallID)
+		if !ok {
+			s.Respond(w, r, http.StatusNotFound, errors.New("call not found"))
+			return
+		}
+		if ownerID != txtid {
+			s.Respond(w, r, http.StatusForbidden, errors.New("call belongs to another user"))
+			return
+		}
+		if err := call.StopVideo(); err != nil {
+			s.Respond(w, r, http.StatusInternalServerError, err)
+			return
+		}
+		respondJSON(s, w, r, http.StatusOK, map[string]interface{}{"success": true})
+	}
+}
+
 // PlayAudio faz download do audio_url para um arquivo temp e toca para o caller.
 func (s *server) PlayAudio() http.HandlerFunc {
 	type req struct {
@@ -200,6 +295,7 @@ func (s *server) PlayAudio() http.HandlerFunc {
 func (s *server) DialCall() http.HandlerFunc {
 	type req struct {
 		Phone string `json:"phone"`
+		Video bool   `json:"video"`
 	}
 	return func(w http.ResponseWriter, r *http.Request) {
 		txtid := r.Context().Value("userinfo").(Values).Get("Id")
@@ -218,7 +314,7 @@ func (s *server) DialCall() http.HandlerFunc {
 		ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 		defer cancel()
 
-		call, err := meowClient.Call(ctx, body.Phone)
+		call, err := meowClient.CallWithOptions(ctx, body.Phone, meowcaller.CallOptions{Video: body.Video})
 		if err != nil {
 			log.Error().Err(err).Str("phone", body.Phone).Msg("[VOIP] Dial failed")
 			s.Respond(w, r, http.StatusBadGateway, err)
