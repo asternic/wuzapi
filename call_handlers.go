@@ -232,14 +232,11 @@ func (s *server) DialCall() http.HandlerFunc {
 		pre := newPreSink(callID)
 		call.Receive(pre)
 
-		entry := &CallEntry{Call: call, UserID: txtid, IsIncoming: false, PreSink: pre}
-		callManager.mu.Lock()
-		callManager.calls[callID] = entry
-		callManager.mu.Unlock()
+		entry := callManager.Register(callID, txtid, call, false)
+		entry.PreSink = pre
 
-		call.OnEnd(func(reason string) {
+		callManager.AddEndListener(callID, func(reason string) {
 			pre.Close()
-			callManager.Delete(callID)
 			mycli := clientManager.GetMyClient(txtid)
 			if mycli != nil {
 				endMap := map[string]interface{}{

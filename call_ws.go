@@ -139,8 +139,12 @@ func (s *server) CallWebSocket() http.HandlerFunc {
 		}
 
 		// Quando a chamada terminar pelo lado do WhatsApp:
-		// envia frame de controle ANTES de cancelar o contexto para garantir entrega
-		call.OnEnd(func(reason string) {
+		// envia frame de controle ANTES de cancelar o contexto para garantir entrega.
+		// Usa AddEndListener (não call.OnEnd direto) porque a lib meowcaller só
+		// guarda um callback por chamada — chamar OnEnd aqui sobrescreveria o
+		// registro já feito em DialCall/OnIncomingCall e o backend nunca saberia
+		// que a chamada terminou.
+		callManager.AddEndListener(callID, func(reason string) {
 			sendCtrlMsg(writer, "ended", reason)
 			cancel()
 		})

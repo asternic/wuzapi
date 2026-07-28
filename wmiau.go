@@ -475,7 +475,7 @@ func (s *server) startClient(userID string, textjid string, token string, kill c
 
 		callManager.Register(callID, userID, call, true)
 
-		call.OnEnd(func(reason string) {
+		callManager.AddEndListener(callID, func(reason string) {
 			callManager.Delete(callID)
 			endMap := map[string]interface{}{
 				"type":   "CallTerminate",
@@ -1570,7 +1570,11 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 		postmap["type"] = "CallTerminate"
 		dowebhook = 1
 		log.Info().Str("event", fmt.Sprintf("%+v", evt)).Msg("Got call terminate")
-		callManager.Delete(evt.CallID)
+		// Não chama callManager.Delete aqui: a remoção é feita pelos listeners
+		// registrados via CallManager.AddEndListener (disparados pelo único
+		// call.OnEnd wired em Register), evitando apagar a chamada do registro
+		// antes desses listeners rodarem (este handler roda antes do handler
+		// interno do meowcaller, pela ordem de registro em AddEventHandler).
 	case *events.CallOfferNotice:
 		postmap["type"] = "CallOfferNotice"
 		dowebhook = 1
