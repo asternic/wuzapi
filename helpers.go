@@ -44,10 +44,15 @@ import (
 
 const (
 	openGraphFetchTimeout    = 5 * time.Second
-	openGraphPageMaxBytes    = 2 * 1024 * 1024  // 2MB
-	openGraphImageMaxBytes   = 10 * 1024 * 1024 // 10MB
-	openGraphThumbnailWidth  = 100
-	openGraphThumbnailHeight = 100
+	fetchImageMaxBytes       = 16 * 1024 * 1024  // 16MB
+	fetchVideoMaxBytes       = 100 * 1024 * 1024 // 100MB
+	fetchAudioMaxBytes       = 16 * 1024 * 1024  // 16MB
+	fetchDocumentMaxBytes    = 100 * 1024 * 1024 // 100MB
+	openGraphPageMaxBytes    = 2 * 1024 * 1024   // 2MB
+	openGraphImageMaxBytes   = 10 * 1024 * 1024  // 10MB
+	openGraphThumbnailWidth  = 192
+	openGraphThumbnailHeight = 192
+	openGraphHQThumbnailDim  = 600 // Max dimension of the uploaded thumbnail used for the large preview card
 	openGraphJpegQuality     = 80
 	openGraphMaxImageDim     = 4000 // Max width or height for Open Graph images
 	openGraphUserFetchLimit  = 20   // Limit concurrent Open Graph fetches per user
@@ -86,10 +91,36 @@ type WebhookErrorPayload struct {
 	AttemptTime      time.Time              `json:"attemptTime"`
 	ErrorMessage     string                 `json:"errorMessage"`
 }
+
+// ProxyConfig holds per-user proxy settings for WhatsApp and webhook delivery.
+type ProxyConfig struct {
+	Enabled         bool   `json:"enabled"`
+	ProxyURL        string `json:"proxyURL"`
+	WebhookUseProxy *bool  `json:"webhookUseProxy,omitempty"`
+}
+
+func resolveWebhookUseProxy(perUser *bool) bool {
+	if perUser != nil {
+		return *perUser
+	}
+	return *globalWebhookUseProxy
+}
+
+func proxyConfigResponse(proxyURL string, webhookUseProxy bool) map[string]interface{} {
+	return map[string]interface{}{
+		"enabled":           proxyURL != "",
+		"proxy_url":         proxyURL,
+		"webhook_use_proxy": webhookUseProxy,
+	}
+}
+
 type openGraphResult struct {
 	Title       string
 	Description string
-	ImageData   []byte
+	ImageData   []byte // small inline thumbnail (JPEGThumbnail field)
+	HQImageData []byte // larger thumbnail uploaded to WA media servers for the big preview card
+	HQWidth     uint32
+	HQHeight    uint32
 }
 
 type UserSemaphoreManager struct {
@@ -136,11 +167,21 @@ func isHTTPURL(input string) bool {
 	}
 	return parsed.Host != ""
 }
+
 func fetchURLBytes(ctx context.Context, resourceURL string, limit int64) ([]byte, string, error) {
 	req, err := http.NewRequestWithContext(ctx, "GET", resourceURL, nil)
 	if err != nil {
 		return nil, "", err
 	}
+
+	// Sites with bot protection (e.g. Mercado Livre) return 403 to Go's
+	// default "Go-http-client" agent; WhatsApp's own preview fetcher UA is
+	// widely allowed since sites want their links previewed in WhatsApp.
+	req.Header.Set("User-Agent", "WhatsApp/2.23.20.0")
+	// Do not advertise image/avif: CDNs then serve AVIF, which Go's image
+	// package cannot decode (gif/png/jpeg/webp decoders are registered).
+	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8")
+	req.Header.Set("Accept-Language", "pt-BR,pt;q=0.9,en;q=0.8")
 
 	resp, err := globalHTTPClient.Do(req)
 	if err != nil {
@@ -169,12 +210,12 @@ func fetchURLBytes(ctx context.Context, resourceURL string, limit int64) ([]byte
 	return data, contentType, nil
 }
 
-func getOpenGraphData(ctx context.Context, urlStr string, userID string) (title, description string, imageData []byte) {
+func getOpenGraphData(ctx context.Context, urlStr string, userID string) openGraphResult {
 	// Check cache first
 	if cachedData, found := openGraphCache.Get(urlStr); found {
 		if data, ok := cachedData.(openGraphResult); ok {
 			log.Debug().Str("url", urlStr).Msg("Open Graph data fetched from cache")
-			return data.Title, data.Description, data.ImageData
+			return data
 		}
 	}
 
@@ -206,32 +247,43 @@ func getOpenGraphData(ctx context.Context, urlStr string, userID string) (title,
 		}()
 
 		// Fetch Open Graph data
-		title, description, imageData := fetchOpenGraphData(ctx, urlStr)
+		result := fetchOpenGraphData(ctx, urlStr)
 
 		// Store in cache
-		openGraphCache.Set(urlStr, openGraphResult{title, description, imageData}, cache.DefaultExpiration)
+		openGraphCache.Set(urlStr, result, cache.DefaultExpiration)
 
-		return openGraphResult{title, description, imageData}, nil
+		return result, nil
 	})
 
 	if err != nil {
 		log.Error().Err(err).Str("url", urlStr).Msg("Error fetching Open Graph data via singleflight")
-		return "", "", nil
+		return openGraphResult{}
 	}
 
 	if v == nil {
-		return "", "", nil
+		return openGraphResult{}
 	}
 
-	data := v.(openGraphResult)
-	return data.Title, data.Description, data.ImageData
+	return v.(openGraphResult)
 }
 
 // Update entry in User map
 func updateUserInfo(values interface{}, field string, value string) interface{} {
 	log.Debug().Str("field", field).Str("value", value).Msg("User info updated")
-	values.(Values).m[field] = value
-	return values
+	// Copy-on-write: the map inside Values is shared — it lives in
+	// userinfocache and is handed to request goroutines via the request
+	// context. Mutating it in place races with concurrent readers (Values.Get)
+	// and can crash the process with "concurrent map read and map write".
+	// Build a fresh map and return a new Values; callers persist it via
+	// userinfocache.Set. Use a comma-ok assertion so a nil or unexpected value
+	// can't panic — it falls back to the zero Values (nil map), handled below.
+	old, _ := values.(Values)
+	m := make(map[string]string, len(old.m)+1)
+	for k, v := range old.m {
+		m[k] = v
+	}
+	m[field] = value
+	return Values{m: m}
 }
 
 // webhookLogUserName returns users.name for webhook error logs; falls back to payload instanceName.
@@ -275,6 +327,10 @@ func callHookWithHmac(myurl string, payload map[string]string, userID string, en
 	log.Info().Str("url", myurl).Str("userID", userID).Msg("Sending POST to client with retry logic")
 
 	client := clientManager.GetHTTPClient(userID)
+	if client == nil {
+		log.Warn().Str("url", myurl).Str("userID", userID).Msg("HTTP client is nil for user, skipping webhook")
+		return
+	}
 
 	// Retry settings
 	maxRetries := 1
@@ -433,6 +489,10 @@ func callHookFileWithHmac(myurl string, payload map[string]string, userID string
 	log.Info().Str("file", file).Str("url", myurl).Msg("Sending POST with retry logic")
 
 	client := clientManager.GetHTTPClient(userID)
+	if client == nil {
+		log.Warn().Str("url", myurl).Str("userID", userID).Msg("HTTP client is nil for user, skipping file webhook")
+		return fmt.Errorf("http client is nil for user %s", userID)
+	}
 
 	maxRetries := 1
 	if *webhookRetryEnabled {
@@ -682,17 +742,17 @@ func extractFirstURL(text string) string {
 
 	return match
 }
-func fetchOpenGraphData(ctx context.Context, urlStr string) (string, string, []byte) {
+func fetchOpenGraphData(ctx context.Context, urlStr string) openGraphResult {
 	pageData, _, err := fetchURLBytes(ctx, urlStr, openGraphPageMaxBytes)
 	if err != nil {
 		log.Warn().Err(err).Str("url", urlStr).Msg("Failed to fetch URL for Open Graph data")
-		return "", "", nil
+		return openGraphResult{}
 	}
 
 	doc, err := goquery.NewDocumentFromReader(bytes.NewReader(pageData))
 	if err != nil {
 		log.Warn().Err(err).Str("url", urlStr).Msg("Failed to parse HTML for Open Graph data")
-		return "", "", nil
+		return openGraphResult{}
 	}
 
 	title := doc.Find(`meta[property="og:title"]`).AttrOr("content", "")
@@ -723,34 +783,51 @@ func fetchOpenGraphData(ctx context.Context, urlStr string) (string, string, []b
 		}
 	}
 
+	result := openGraphResult{Title: title, Description: description}
+
 	pageURL, err := url.Parse(urlStr)
 	if err != nil {
 		log.Warn().Err(err).Str("url", urlStr).Msg("Failed to parse page URL for resolving image URL")
-		return title, description, nil
+		return result
 	}
 
-	imageData := fetchOpenGraphImage(ctx, pageURL, imageURLStr)
-	return title, description, imageData
+	fetchOpenGraphImage(ctx, pageURL, imageURLStr, &result)
+	return result
 }
 
-func fetchOpenGraphImage(ctx context.Context, pageURL *url.URL, imageURLStr string) []byte {
+func encodeJPEGThumbnail(img image.Image) []byte {
+	var buf bytes.Buffer
+	if err := jpeg.Encode(&buf, img, &jpeg.Options{Quality: openGraphJpegQuality}); err != nil {
+		log.Warn().Err(err).Msg("Failed to encode thumbnail to JPEG")
+		return nil
+	}
+	return buf.Bytes()
+}
+
+func fetchOpenGraphImage(ctx context.Context, pageURL *url.URL, imageURLStr string, result *openGraphResult) {
+	// No image found on the page; an empty string would resolve to the page
+	// URL itself and we would try to decode HTML as an image.
+	if imageURLStr == "" {
+		return
+	}
+
 	imageURL, err := url.Parse(imageURLStr)
 	if err != nil {
 		log.Warn().Err(err).Str("imageURL", imageURLStr).Msg("Failed to parse Open Graph image URL")
-		return nil
+		return
 	}
 
 	resolvedImageURL := pageURL.ResolveReference(imageURL).String()
 	imgBytes, _, err := fetchURLBytes(ctx, resolvedImageURL, openGraphImageMaxBytes)
 	if err != nil {
 		log.Warn().Err(err).Str("imageURL", resolvedImageURL).Msg("Failed to fetch Open Graph image")
-		return nil
+		return
 	}
 
 	imgConfig, _, err := image.DecodeConfig(bytes.NewReader(imgBytes))
 	if err != nil {
 		log.Warn().Err(err).Str("imageURL", resolvedImageURL).Msg("Failed to decode Open Graph image config")
-		return nil
+		return
 	}
 
 	if imgConfig.Width > openGraphMaxImageDim || imgConfig.Height > openGraphMaxImageDim {
@@ -759,23 +836,24 @@ func fetchOpenGraphImage(ctx context.Context, pageURL *url.URL, imageURLStr stri
 			Int("height", imgConfig.Height).
 			Str("imageURL", resolvedImageURL).
 			Msg("Open Graph image dimensions too large")
-		return nil
+		return
 	}
 
 	img, _, err := image.Decode(bytes.NewReader(imgBytes))
 	if err != nil {
 		log.Warn().Err(err).Str("imageURL", resolvedImageURL).Msg("Failed to decode Open Graph image")
-		return nil
+		return
 	}
 
-	thumbnail := resize.Thumbnail(openGraphThumbnailWidth, openGraphThumbnailHeight, img, resize.Lanczos3)
-	var buf bytes.Buffer
-	if err := jpeg.Encode(&buf, thumbnail, &jpeg.Options{Quality: openGraphJpegQuality}); err != nil {
-		log.Warn().Err(err).Msg("Failed to encode thumbnail to JPEG")
-		return nil
-	}
+	hqThumb := resize.Thumbnail(openGraphHQThumbnailDim, openGraphHQThumbnailDim, img, resize.Lanczos3)
+	result.HQImageData = encodeJPEGThumbnail(hqThumb)
+	bounds := hqThumb.Bounds()
+	result.HQWidth = uint32(bounds.Dx())
+	result.HQHeight = uint32(bounds.Dy())
 
-	return buf.Bytes()
+	// Downscale the inline thumbnail from hqThumb (max 600px) instead of
+	// resizing the original image (up to 4000px) a second time.
+	result.ImageData = encodeJPEGThumbnail(resize.Thumbnail(openGraphThumbnailWidth, openGraphThumbnailHeight, hqThumb, resize.Lanczos3))
 }
 
 func runFFmpegConversion(input []byte, inputExt string, ffmpegArgs func(inPath, outPath string) []string, errMsg string) ([]byte, error) {

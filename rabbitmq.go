@@ -11,12 +11,12 @@ import (
 )
 
 var (
-	rabbitConn     *amqp091.Connection
-	rabbitChannel  *amqp091.Channel
-	rabbitEnabled  bool
-	rabbitOnce     sync.Once
-	rabbitQueue    string
-	lastRabbitErr  error // último erro de conexão, para log quando evento não é publicado
+	rabbitConn    *amqp091.Connection
+	rabbitChannel *amqp091.Channel
+	rabbitEnabled bool
+	rabbitOnce    sync.Once
+	rabbitQueue   string
+	lastRabbitErr error // último erro de conexão, para log quando evento não é publicado
 )
 
 const (

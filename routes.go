@@ -133,12 +133,18 @@ func (s *server) routes() {
 	s.router.Handle("/call/reject", c.Then(s.RejectCall())).Methods("POST")
 
 	s.router.Handle("/user/presence", c.Then(s.SendPresence())).Methods("POST")
+	s.router.Handle("/user/presence/subscribe", c.Then(s.SubscribePresence())).Methods("POST")
 	s.router.Handle("/user/info", c.Then(s.GetUser())).Methods("POST")
 	s.router.Handle("/user/check", c.Then(s.CheckUser())).Methods("POST")
 	s.router.Handle("/user/avatar", c.Then(s.GetAvatar())).Methods("POST")
 	s.router.Handle("/user/contacts", c.Then(s.GetContacts())).Methods("GET")
 	s.router.Handle("/user/parse-lid", c.Then(s.ParseLID())).Methods("POST")
+	s.router.Handle("/user/block", c.Then(s.BlockUser())).Methods("POST")
+	s.router.Handle("/user/unblock", c.Then(s.UnblockUser())).Methods("POST")
+	s.router.Handle("/user/blocklist", c.Then(s.GetBlocklist())).Methods("GET")
 	s.router.Handle("/user/lid/{jid}", c.Then(s.GetUserLID())).Methods("GET")
+	s.router.Handle("/user/privacy", c.Then(s.GetPrivacySettings())).Methods("GET")
+	s.router.Handle("/user/privacy", c.Then(s.SetPrivacySetting())).Methods("POST")
 
 	s.router.Handle("/chat/presence", c.Then(s.ChatPresence())).Methods("POST")
 	s.router.Handle("/chat/markread", c.Then(s.MarkRead())).Methods("POST")
@@ -166,6 +172,9 @@ func (s *server) routes() {
 	s.router.Handle("/group/join", c.Then(s.GroupJoin())).Methods("POST")
 	s.router.Handle("/group/inviteinfo", c.Then(s.GetGroupInviteInfo())).Methods("POST")
 	s.router.Handle("/group/updateparticipants", c.Then(s.UpdateGroupParticipants())).Methods("POST")
+	s.router.Handle("/group/requestparticipants", c.Then(s.GetGroupRequestParticipants())).Methods("GET")
+	s.router.Handle("/group/updaterequestparticipants", c.Then(s.UpdateGroupRequestParticipants())).Methods("POST")
+	s.router.Handle("/group/joinapprovalmode", c.Then(s.SetGroupJoinApprovalMode())).Methods("POST")
 
 	s.router.Handle("/newsletter/list", c.Then(s.ListNewsletter())).Methods("GET")
 

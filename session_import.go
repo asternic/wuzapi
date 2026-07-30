@@ -21,26 +21,26 @@ import (
 )
 
 type sessionImportPayload struct {
-	Device      sessionDeviceImport       `json:"device"`
-	Sessions    []sessionRecordImport     `json:"sessions"`
-	Identities  []sessionIdentityImport   `json:"identities"`
-	PreKeys     []sessionPreKeyImport     `json:"pre_keys"`
-	SenderKeys  []sessionSenderKeyImport  `json:"sender_keys"`
+	Device     sessionDeviceImport      `json:"device"`
+	Sessions   []sessionRecordImport    `json:"sessions"`
+	Identities []sessionIdentityImport  `json:"identities"`
+	PreKeys    []sessionPreKeyImport    `json:"pre_keys"`
+	SenderKeys []sessionSenderKeyImport `json:"sender_keys"`
 }
 
 type sessionDeviceImport struct {
-	JID              string  `json:"jid"`
-	LID              string  `json:"lid"`
-	RegistrationID   uint32  `json:"registration_id"`
-	IdentityKey      string  `json:"identity_key"`
-	NoiseKey         *string `json:"noise_key"`
-	SignedPreKeyID   uint32  `json:"signed_pre_key_id"`
-	SignedPreKey     string  `json:"signed_pre_key"`
-	SignedPreKeySig  string  `json:"signed_pre_key_sig"`
-	AdvSecretKey     string  `json:"adv_secret_key"`
-	AdvSignedIdentity string `json:"adv_signed_identity"`
-	Platform         string  `json:"platform"`
-	PushName         string  `json:"push_name"`
+	JID               string  `json:"jid"`
+	LID               string  `json:"lid"`
+	RegistrationID    uint32  `json:"registration_id"`
+	IdentityKey       string  `json:"identity_key"`
+	NoiseKey          *string `json:"noise_key"`
+	SignedPreKeyID    uint32  `json:"signed_pre_key_id"`
+	SignedPreKey      string  `json:"signed_pre_key"`
+	SignedPreKeySig   string  `json:"signed_pre_key_sig"`
+	AdvSecretKey      string  `json:"adv_secret_key"`
+	AdvSignedIdentity string  `json:"adv_signed_identity"`
+	Platform          string  `json:"platform"`
+	PushName          string  `json:"push_name"`
 }
 
 type sessionRecordImport struct {

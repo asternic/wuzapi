@@ -378,6 +378,12 @@ func (ss *stdioServer) routeRequest(req *jsonRpcRequest) {
 	case "user.avatar":
 		httpMethod = "POST"
 		httpPath = "/user/avatar"
+	case "user.block":
+		httpMethod = "POST"
+		httpPath = "/user/block"
+	case "user.unblock":
+		httpMethod = "POST"
+		httpPath = "/user/unblock"
 	case "user.lid":
 		httpMethod = "GET"
 		jid, ok := req.Params["jid"].(string)

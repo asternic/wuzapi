@@ -9,10 +9,10 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/jmoiron/sqlx"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+	"github.com/jmoiron/sqlx"
 	"github.com/rs/zerolog/log"
 )
 
@@ -216,6 +216,10 @@ func (m *S3Manager) GenerateS3Key(userID, contactJID, messageID string, mimeType
 		ext = ".opus"
 	case strings.Contains(mimeType, "pdf"):
 		ext = ".pdf"
+	case strings.Contains(mimeType, "spreadsheetml"):
+		ext = ".xlsx"
+	case strings.Contains(mimeType, "excel"):
+		ext = ".xls"
 	case strings.Contains(mimeType, "doc"):
 		if strings.Contains(mimeType, "docx") {
 			ext = ".docx"
@@ -359,11 +363,19 @@ func (m *S3Manager) ProcessMediaForS3(ctx context.Context, userID, contactJID, m
 	// Generate public URL
 	publicURL := m.GetPublicURL(userID, key)
 
+	// Read the bucket through GetClient, which acquires the read lock — this
+	// avoids racing with a concurrent reconfigure/removal of the configs map and
+	// the nil deref the previous unlocked read could hit.
+	bucket := ""
+	if _, config, ok := m.GetClient(userID); ok && config != nil {
+		bucket = config.Bucket
+	}
+
 	// Return S3 metadata
 	s3Data := map[string]interface{}{
 		"url":      publicURL,
 		"key":      key,
-		"bucket":   m.configs[userID].Bucket,
+		"bucket":   bucket,
 		"size":     len(data),
 		"mimeType": mimeType,
 		"fileName": fileName,

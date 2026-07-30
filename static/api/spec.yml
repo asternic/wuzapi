@@ -371,6 +371,14 @@ paths:
             application/json:
               schema:
                 example: { "code": 200, "data": { "Details": "Disconnected" }, "success": true }
+      parameters:
+        - name: clear
+          in: query
+          required: false
+          description: If true, also clears the user's event subscriptions on disconnect. Defaults to false, which preserves them.
+          schema:
+            type: boolean
+            example: false
   /session/logout:
     post:
       tags:
@@ -460,6 +468,10 @@ paths:
                 enable:
                   type: boolean
                   description: Whether to enable or disable the proxy.
+                webhook_use_proxy:
+                  type: boolean
+                  description: Whether webhook deliveries use the configured proxy. When omitted, the existing per-user value is preserved.
+                  example: true
               required:
                 - proxy_url
                 - enable
@@ -477,6 +489,9 @@ paths:
                   ProxyURL:
                     type: string
                     example: socks5://user:pass@host:port
+                  webhook_use_proxy:
+                    type: boolean
+                    example: true
         "400":
           description: Bad Request
         "500":
@@ -884,6 +899,63 @@ paths:
           description: No mapping found for the provided LID
         500:
           description: Internal error when querying the mapping table
+  /user/block:
+    post:
+      tags:
+        - User
+      summary: Block a WhatsApp user
+      description: Blocks a WhatsApp user and returns the updated blocklist.
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/definitions/BlocklistUpdate'
+      responses:
+        200:
+          description: User blocked
+          content:
+            application/json:
+              schema:
+                example: { "code": 200, "data": { "Details": "User blocked", "JID": "5491155553935@s.whatsapp.net", "Blocklist": [ "5491155553935@s.whatsapp.net" ], "DHash": "1234567890" }, "success": true }
+  /user/unblock:
+    post:
+      tags:
+        - User
+      summary: Unblock a WhatsApp user
+      description: Unblocks a WhatsApp user and returns the updated blocklist.
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/definitions/BlocklistUpdate'
+      responses:
+        200:
+          description: User unblocked
+          content:
+            application/json:
+              schema:
+                example: { "code": 200, "data": { "Details": "User unblocked", "JID": "5491155553935@s.whatsapp.net", "Blocklist": [], "DHash": "1234567891" }, "success": true }
+  /user/blocklist:
+    get:
+      tags:
+        - User
+      summary: Get the current blocklist
+      description: Returns the list of WhatsApp users currently blocked by the session.
+      security:
+        - ApiKeyAuth: []
+      responses:
+        200:
+          description: Current blocklist
+          content:
+            application/json:
+              schema:
+                example: { "code": 200, "data": { "Blocklist": [ "5491155553935@s.whatsapp.net" ], "DHash": "1234567890" }, "success": true }
   /user/lid/{phone}:
     get:
       tags:
@@ -924,6 +996,48 @@ paths:
           description: Invalid or missing token
         404:
           description: User not found
+  /user/privacy:
+    get:
+      tags:
+        - User
+      summary: Get privacy settings
+      description: Returns the account's current privacy settings (last seen, profile photo, status, read receipts, online, groups, calls).
+      security:
+        - ApiKeyAuth: []
+      responses:
+        200:
+          description: Current privacy settings
+          content:
+            application/json:
+              schema:
+                example: { "code": 200, "data": { "GroupAdd": "contacts", "LastSeen": "all", "Status": "contacts", "Profile": "all", "ReadReceipts": "all", "CallAdd": "all", "Online": "all", "Messages": "all", "Defense": "off", "Stickers": "contacts" }, "success": true }
+    post:
+      tags:
+        - User
+      summary: Set a privacy setting
+      description: |
+        Updates a single privacy setting. Valid Name/Value combinations:
+        <br>`groupadd`, `last`, `status`, `profile`: `all`, `contacts`, `contact_blacklist`, `none`
+        <br>`readreceipts`: `all`, `none`
+        <br>`online`: `all`, `match_last_seen`
+        <br>`calladd`: `all`, `known`
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              example: { "Name": "last", "Value": "contacts" }
+      responses:
+        200:
+          description: Updated privacy settings
+          content:
+            application/json:
+              schema:
+                example: { "code": 200, "data": { "LastSeen": "contacts" }, "success": true }
+        400:
+          description: Invalid privacy setting name or value
   /chat/delete:
     post:
       tags:
@@ -2266,6 +2380,70 @@ paths:
             application/json:
               schema:
                 example: { "code": 200, "data": { "Details": "Participants updated successfully" }, "success": true }
+  /group/requestparticipants:
+    get:
+      tags:
+        - Group
+      summary: List pending join requests
+      description: Lists participants who have requested to join the group. Requires join approval mode to be enabled and the session to be an admin of the group.
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - in: query
+          name: groupJID
+          schema:
+            type: string
+          required: true
+          description: The JID of the group
+      responses:
+        200:
+          description: Success
+          content:
+            application/json:
+              schema:
+                example: { "code": 200, "data": [ { "JID": "70072425046185@lid", "RequestedAt": "2026-05-27T00:34:40-03:00" } ], "success": true }
+  /group/updaterequestparticipants:
+    post:
+      tags:
+        - Group
+      summary: Approve or reject pending join requests
+      description: Approves or rejects participants who requested to join the group.
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/definitions/UpdateGroupRequestParticipants'
+      responses:
+        200:
+          description: Success
+          content:
+            application/json:
+              schema:
+                example: { "code": 200, "data": { "Details": "Group request participants updated successfully" }, "success": true }
+  /group/joinapprovalmode:
+    post:
+      tags:
+        - Group
+      summary: Toggle group join approval mode
+      description: Enables or disables the requirement that new members be approved by an admin before joining the group.
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/definitions/SetGroupJoinApprovalMode'
+      responses:
+        200:
+          description: Success
+          content:
+            application/json:
+              schema:
+                example: { "code": 200, "data": { "Details": "Group join approval mode updated successfully" }, "success": true }
 
 definitions:
   ContextInfo:
@@ -2291,6 +2469,18 @@ definitions:
         example:
           ["5491155553935@s.whatsapp.net", "5491155553936@s.whatsapp.net"]
         description: "Array of JIDs to mention in the message. Use full WhatsApp JID format (number@s.whatsapp.net)."
+  QuotedMessageExtendedText:
+    type: object
+    properties:
+      text:
+        type: string
+        example: "Original message text"
+  QuotedMessage:
+    type: object
+    description: "Optional quoted message payload for custom reply preview using extendedTextMessage."
+    properties:
+      extendedTextMessage:
+        $ref: "#/definitions/QuotedMessageExtendedText"
   User:
     type: object
     properties:
@@ -2318,6 +2508,10 @@ definitions:
           proxy_url:
             type: string
             example: "https://serverproxy.com:9080"
+          webhook_use_proxy:
+            type: boolean
+            example: true
+            description: "Whether webhook deliveries use the configured proxy"
       s3_config:
         type: object
         properties:
@@ -2380,6 +2574,10 @@ definitions:
             type: string
             example: "https://serverproxy.com:9080"
             description: "Proxy URL to use for the user. Format: socks5://user:pass@host:port or http://host:port"
+          webhookUseProxy:
+            type: boolean
+            example: true
+            description: "Route webhook deliveries through the configured proxy. Defaults to the WUZAPI_WEBHOOK_USE_PROXY server setting (true)."
       s3Config:
         type: object
         properties:
@@ -2557,6 +2755,20 @@ definitions:
       type:
         type: string
         example: available
+  BlocklistUpdate:
+    type: object
+    properties:
+      Phone:
+        type: string
+        example: "5491155553935"
+      JID:
+        type: string
+        example: "5491155553935@s.whatsapp.net"
+    oneOf:
+      - required:
+          - Phone
+      - required:
+          - JID
   MessageContact:
     type: object
     required: 
@@ -2578,6 +2790,8 @@ definitions:
         example: "BEGIN:VCARD\nVERSION:3.0\nN:Doe;John;;;\nFN:John Doe\nORG:Example.com Inc.;\nTITLE:Imaginary test person\nEMAIL;type=INTERNET;type=WORK;type=pref:johnDoe@example.org\nTEL;type=WORK;type=pref:+1 617 555 1212\nTEL;type=WORK:+1 (617) 555-1234\nTEL;type=CELL:+1 781 555 1212\nTEL;type=HOME:+1 202 555 1212\nitem1.ADR;type=WORK:;;2 Enterprise Avenue;Worktown;NY;01111;USA\nitem1.X-ABADR:us\nitem2.ADR;type=HOME;type=pref:;;3 Acacia Avenue;Hoitem2.X-ABADR:us\nEND:VCARD"
       ContextInfo:
         $ref: "#/definitions/ContextInfo"
+      QuotedMessage:
+        $ref: "#/definitions/QuotedMessage"
 
 
   MessageLocation:
@@ -2604,6 +2818,8 @@ definitions:
         example: 2.294481
       ContextInfo:
         $ref: "#/definitions/ContextInfo"
+      QuotedMessage:
+        $ref: "#/definitions/QuotedMessage"
   ReactionText:
     type: object
     required: 
@@ -2839,6 +3055,8 @@ definitions:
         type: string
         description: "Text content of the message being replied to (for displaying quote preview)"
         example: "Original message text"
+      QuotedMessage:
+        $ref: "#/definitions/QuotedMessage"
   MessageImage:
     type: object
     required: 
@@ -2859,6 +3077,8 @@ definitions:
         example: "ABCDABCD1234"
       ContextInfo:
         $ref: "#/definitions/ContextInfo"
+      QuotedMessage:
+        $ref: "#/definitions/QuotedMessage"
   FileUploadBase64Image:
     type: object
     required:
@@ -2910,6 +3130,8 @@ definitions:
         example: [0, 0, 0, 12, 20, 20, 22, 10, 5, 0, 0, 0]
       ContextInfo:
         $ref: "#/definitions/ContextInfo"
+      QuotedMessage:
+        $ref: "#/definitions/QuotedMessage"
   MessageVideo:
     type: object
     required: 
@@ -2933,6 +3155,8 @@ definitions:
         example: "AA00D010"
       ContextInfo:
         $ref: "#/definitions/ContextInfo"
+      QuotedMessage:
+        $ref: "#/definitions/QuotedMessage"
   MessageSticker:
     type: object
     required: 
@@ -2971,6 +3195,8 @@ definitions:
       ContextInfo:
         $ref: "#/definitions/ContextInfo"
         description: "Optional context info for replies, mentions, and forwarding"
+      QuotedMessage:
+        $ref: "#/definitions/QuotedMessage"
   MessageDocument:
     type: object
     required: 
@@ -2992,6 +3218,8 @@ definitions:
         example: "ABCDABCD1234"
       ContextInfo:
         $ref: "#/definitions/ContextInfo"
+      QuotedMessage:
+        $ref: "#/definitions/QuotedMessage"
   MessageTemplate:
     type: object
     required: 
@@ -3241,6 +3469,44 @@ definitions:
           type: string
           description: List of participant JIDs (e.g., 5491112345678@s.whatsapp.net or 5491112345678)
         example: [ "5491112345678", "5491123456789@s.whatsapp.net" ]
+
+  UpdateGroupRequestParticipants:
+    type: object
+    required:
+      - GroupJID
+      - Action
+      - Phone
+    properties:
+      GroupJID:
+        type: string
+        description: The JID of the group
+        example: 120363312246943103@g.us
+      Action:
+        type: string
+        description: Action to perform ("approve" to accept join requests, "reject" to decline them)
+        enum: [approve, reject]
+        example: approve
+      Phone:
+        type: array
+        items:
+          type: string
+          description: List of requesting participant JIDs as returned by /group/requestparticipants (e.g. 70072425046185@lid)
+        example: [ "70072425046185@lid" ]
+
+  SetGroupJoinApprovalMode:
+    type: object
+    required:
+      - groupjid
+      - mode
+    properties:
+      groupjid:
+        type: string
+        description: The JID of the group
+        example: 120363312246943103@g.us
+      mode:
+        type: boolean
+        description: true to require admin approval for new members, false to disable it
+        example: true
 
   CreateGroup:
     type: object
