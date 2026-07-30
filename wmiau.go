@@ -386,7 +386,7 @@ func forceDisconnectClient(userID string) {
 
 	log.Info().Str("userid", userID).Msg("Force disconnecting client")
 
-	if ch, ok := killchannel[userID]; ok {
+	if ch, ok := getKillChannel(userID); ok {
 		select {
 		case ch <- true:
 		default:
