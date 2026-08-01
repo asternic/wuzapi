@@ -177,7 +177,17 @@ func (s *server) routes() {
 	s.router.Handle("/group/updaterequestparticipants", c.Then(s.UpdateGroupRequestParticipants())).Methods("POST")
 	s.router.Handle("/group/joinapprovalmode", c.Then(s.SetGroupJoinApprovalMode())).Methods("POST")
 
+	s.router.Handle("/community/create", c.Then(s.CreateCommunity())).Methods("POST")
+	s.router.Handle("/community/link", c.Then(s.LinkCommunityGroup())).Methods("POST")
+	s.router.Handle("/community/unlink", c.Then(s.UnlinkCommunityGroup())).Methods("POST")
+	s.router.Handle("/community/subgroups", c.Then(s.GetCommunitySubGroups())).Methods("GET")
+
 	s.router.Handle("/newsletter/list", c.Then(s.ListNewsletter())).Methods("GET")
+	s.router.Handle("/newsletter/create", c.Then(s.CreateNewsletter())).Methods("POST")
+	s.router.Handle("/newsletter/info", c.Then(s.GetNewsletterInfo())).Methods("GET")
+	s.router.Handle("/newsletter/follow", c.Then(s.FollowNewsletter())).Methods("POST")
+	s.router.Handle("/newsletter/unfollow", c.Then(s.UnfollowNewsletter())).Methods("POST")
+	s.router.Handle("/newsletter/mute", c.Then(s.MuteNewsletter())).Methods("POST")
 
 	// WebSocket de áudio de chamada — auth via query param ?token= (sem middleware)
 	// DEVE ficar antes do PathPrefix("/") para não ser capturado pelo file server
