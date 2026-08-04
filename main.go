@@ -82,7 +82,7 @@ var (
 
 var privateIPBlocks []*net.IPNet
 
-const version = "1.0.6"
+const version = "1.0.7"
 
 // killchannel maps a userID to its session goroutine's kill channel. It is
 // accessed from HTTP request goroutines (Connect/Disconnect/logout/delete) and
@@ -492,6 +492,9 @@ func main() {
 
 	s.connectOnStartup()
 
+	// Start background cleanup of stale passkey pairing states (needed for both modes)
+	startPasskeyCleanup()
+
 	if serverMode == Stdio {
 		startStdioMode(s)
 	} else {
@@ -557,6 +560,7 @@ func startHTTPMode(s *server) {
 		}
 	}()
 	log.Info().Str("address", *address).Str("port", *port).Msg("Server started. Waiting for connections...")
+
 	select {}
 }
 

@@ -632,7 +632,17 @@ func (s *server) GetQR() http.HandlerFunc {
 		}
 
 		log.Info().Str("instance", txtid).Str("qrcode", code).Msg("Get QR successful")
-		response := map[string]interface{}{"QRCode": fmt.Sprintf("%s", code)}
+		response := map[string]interface{}{
+			"QRCode":         fmt.Sprintf("%s", code),
+			"passkeyPending": false,
+			"publicKey":      nil,
+		}
+
+		if pk := peekPendingPasskey(txtid); pk != nil && pk.Request != nil {
+			response["passkeyPending"] = true
+			response["publicKey"] = pk.Request.PublicKey
+		}
+
 		responseJson, err := json.Marshal(response)
 		if err != nil {
 			s.Respond(w, r, http.StatusInternalServerError, err)
@@ -744,6 +754,112 @@ func (s *server) PairPhone() http.HandlerFunc {
 	}
 }
 
+// PasskeyResponse receives a WebAuthn response from the frontend and sends it to WhatsApp
+func (s *server) PasskeyResponse() http.HandlerFunc {
+	type passkeyResponseStruct struct {
+		Response *types.WebAuthnResponse `json:"response"`
+	}
+
+	return func(w http.ResponseWriter, r *http.Request) {
+		txtid := r.Context().Value("userinfo").(Values).Get("Id")
+
+		state := getAndConsumePendingPasskey(txtid)
+		if state == nil || state.Request == nil {
+			s.Respond(w, r, http.StatusBadRequest, errors.New("no pending passkey request"))
+			return
+		}
+
+		decoder := json.NewDecoder(r.Body)
+		var t passkeyResponseStruct
+		err := decoder.Decode(&t)
+		if err != nil {
+			storePendingPasskey(txtid, state) // put it back so user can retry
+			s.Respond(w, r, http.StatusBadRequest, errors.New("could not decode Payload"))
+			return
+		}
+
+		if t.Response == nil {
+			storePendingPasskey(txtid, state) // put it back
+			s.Respond(w, r, http.StatusBadRequest, errors.New("missing response in Payload"))
+			return
+		}
+
+		if state.Client == nil {
+			storePendingPasskey(txtid, state) // put it back
+			s.Respond(w, r, http.StatusInternalServerError, errors.New("passkey client unavailable"))
+			return
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		err = state.Client.SendPasskeyResponse(ctx, t.Response)
+		if err != nil {
+			log.Error().Err(err).Str("userID", txtid).Msg("Failed to send passkey response")
+			s.Respond(w, r, http.StatusInternalServerError, err)
+			return
+		}
+
+		log.Info().Str("userID", txtid).Msg("Passkey response sent successfully")
+		s.Respond(w, r, http.StatusOK, map[string]interface{}{"status": "passkey_response_sent"})
+	}
+}
+
+// PasskeyConfirm confirms the passkey pairing code was shown to the user.
+// Unlike PasskeyResponse, this uses peek (non-consuming read) because the
+// confirmation step does not require exclusive ownership of the state — the
+// state is only removed after a successful SendPasskeyConfirmation call.
+func (s *server) PasskeyConfirm() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		txtid := r.Context().Value("userinfo").(Values).Get("Id")
+
+		state := peekPendingPasskey(txtid)
+		if state == nil || state.Client == nil {
+			s.Respond(w, r, http.StatusBadRequest, errors.New("no pending passkey confirmation"))
+			return
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		err := state.Client.SendPasskeyConfirmation(ctx)
+		if err != nil {
+			log.Error().Err(err).Str("userID", txtid).Msg("Failed to send passkey confirmation")
+			s.Respond(w, r, http.StatusInternalServerError, err)
+			return
+		}
+
+		// Now consume the state — the confirmation was sent successfully.
+		deletePendingPasskey(txtid)
+
+		log.Info().Str("userID", txtid).Msg("Passkey confirmation sent successfully")
+		s.Respond(w, r, http.StatusOK, map[string]interface{}{"status": "passkey_confirmed"})
+	}
+}
+
+// GetPasskeyStatus returns whether there is a pending passkey request for this session
+func (s *server) GetPasskeyStatus() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		txtid := r.Context().Value("userinfo").(Values).Get("Id")
+
+		pk := peekPendingPasskey(txtid)
+		response := map[string]interface{}{
+			"passkeyPending": pk != nil && pk.Request != nil,
+			"publicKey":      nil,
+		}
+		if pk != nil && pk.Request != nil {
+			response["publicKey"] = pk.Request.PublicKey
+		}
+
+		responseJson, err := json.Marshal(response)
+		if err != nil {
+			s.Respond(w, r, http.StatusInternalServerError, err)
+		} else {
+			s.Respond(w, r, http.StatusOK, string(responseJson))
+		}
+	}
+}
+
 // Gets Connected and LoggedIn Status
 func (s *server) GetStatus() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -821,6 +937,13 @@ func (s *server) GetStatus() http.HandlerFunc {
 		}
 		proxyConfig := proxyConfigResponse(proxyURL, webhookUseProxy)
 
+		passkeyPending := false
+		var publicKey interface{} = nil
+		if pk := peekPendingPasskey(txtid); pk != nil && pk.Request != nil {
+			passkeyPending = true
+			publicKey = pk.Request.PublicKey
+		}
+
 		response := map[string]interface{}{
 			"id":              txtid,
 			"name":            userInfo.Get("Name"),
@@ -832,6 +955,8 @@ func (s *server) GetStatus() http.HandlerFunc {
 			"events":          userInfo.Get("Events"),
 			"proxy_url":       userInfo.Get("Proxy"),
 			"qrcode":          userInfo.Get("Qrcode"),
+			"passkeyPending":  passkeyPending,
+			"publicKey":       publicKey,
 			"history":         userInfo.Get("History"),
 			"proxy_config":    proxyConfig,
 			"s3_config":       s3Config,
@@ -896,7 +1021,7 @@ func (s *server) SendDocument() http.HandlerFunc {
 			return
 		}
 
-		recipient, err := validateMessageFields(t.Phone, t.ContextInfo.StanzaID, t.ContextInfo.Participant)
+		recipient, err := validateMessageFields(r.Context(), clientManager.GetWhatsmeowClient(txtid), t.Phone, t.ContextInfo.StanzaID, t.ContextInfo.Participant)
 		if err != nil {
 			log.Error().Msg(fmt.Sprintf("%s", err))
 			s.Respond(w, r, http.StatusBadRequest, err)
@@ -1066,7 +1191,7 @@ func (s *server) SendAudio() http.HandlerFunc {
 			return
 		}
 
-		recipient, err := validateMessageFields(t.Phone, t.ContextInfo.StanzaID, t.ContextInfo.Participant)
+		recipient, err := validateMessageFields(r.Context(), clientManager.GetWhatsmeowClient(txtid), t.Phone, t.ContextInfo.StanzaID, t.ContextInfo.Participant)
 		if err != nil {
 			log.Error().Msg(fmt.Sprintf("%s", err))
 			s.Respond(w, r, http.StatusBadRequest, err)
@@ -1272,7 +1397,7 @@ func (s *server) SendImage() http.HandlerFunc {
 			return
 		}
 
-		recipient, err := validateMessageFields(t.Phone, t.ContextInfo.StanzaID, t.ContextInfo.Participant)
+		recipient, err := validateMessageFields(r.Context(), clientManager.GetWhatsmeowClient(txtid), t.Phone, t.ContextInfo.StanzaID, t.ContextInfo.Participant)
 		if err != nil {
 			log.Error().Msg(fmt.Sprintf("%s", err))
 			s.Respond(w, r, http.StatusBadRequest, err)
@@ -1465,7 +1590,7 @@ func (s *server) SendSticker() http.HandlerFunc {
 			return
 		}
 
-		recipient, err := validateMessageFields(t.Phone, t.ContextInfo.StanzaID, t.ContextInfo.Participant)
+		recipient, err := validateMessageFields(r.Context(), clientManager.GetWhatsmeowClient(txtid), t.Phone, t.ContextInfo.StanzaID, t.ContextInfo.Participant)
 		if err != nil {
 			log.Error().Msg(fmt.Sprintf("%s", err))
 			s.Respond(w, r, http.StatusBadRequest, err)
@@ -1630,7 +1755,7 @@ func (s *server) SendVideo() http.HandlerFunc {
 			return
 		}
 
-		recipient, err := validateMessageFields(t.Phone, t.ContextInfo.StanzaID, t.ContextInfo.Participant)
+		recipient, err := validateMessageFields(r.Context(), clientManager.GetWhatsmeowClient(txtid), t.Phone, t.ContextInfo.StanzaID, t.ContextInfo.Participant)
 		if err != nil {
 			log.Error().Msg(fmt.Sprintf("%s", err))
 			s.Respond(w, r, http.StatusBadRequest, err)
@@ -1805,7 +1930,7 @@ func (s *server) SendContact() http.HandlerFunc {
 			return
 		}
 
-		recipient, err := validateMessageFields(t.Phone, t.ContextInfo.StanzaID, t.ContextInfo.Participant)
+		recipient, err := validateMessageFields(r.Context(), clientManager.GetWhatsmeowClient(txtid), t.Phone, t.ContextInfo.StanzaID, t.ContextInfo.Participant)
 		if err != nil {
 			log.Error().Msg(fmt.Sprintf("%s", err))
 			s.Respond(w, r, http.StatusBadRequest, err)
@@ -1928,7 +2053,7 @@ func (s *server) SendLocation() http.HandlerFunc {
 			return
 		}
 
-		recipient, err := validateMessageFields(t.Phone, t.ContextInfo.StanzaID, t.ContextInfo.Participant)
+		recipient, err := validateMessageFields(r.Context(), clientManager.GetWhatsmeowClient(txtid), t.Phone, t.ContextInfo.StanzaID, t.ContextInfo.Participant)
 		if err != nil {
 			log.Error().Msg(fmt.Sprintf("%s", err))
 			s.Respond(w, r, http.StatusBadRequest, err)
@@ -2127,7 +2252,7 @@ func (s *server) SendButtons() http.HandlerFunc {
 		}
 
 		// --- Destinatário e Mensagem ID ---
-		recipient, err := validateMessageFields(t.Phone, t.ContextInfo.StanzaID, t.ContextInfo.Participant)
+		recipient, err := validateMessageFields(r.Context(), clientManager.GetWhatsmeowClient(txtid), t.Phone, t.ContextInfo.StanzaID, t.ContextInfo.Participant)
 		if err != nil {
 			s.Respond(w, r, http.StatusBadRequest, err)
 			return
@@ -2427,7 +2552,7 @@ func (s *server) SendList() http.HandlerFunc {
 
 		// ── 4. Validate recipient ────────────────────────────────────────────
 
-		recipient, err := validateMessageFields(req.Phone, req.ContextInfo.StanzaID, req.ContextInfo.Participant)
+		recipient, err := validateMessageFields(r.Context(), clientManager.GetWhatsmeowClient(txtid), req.Phone, req.ContextInfo.StanzaID, req.ContextInfo.Participant)
 		if err != nil {
 			s.Respond(w, r, http.StatusBadRequest, err)
 			return
@@ -2638,7 +2763,7 @@ func (s *server) SendMessage() http.HandlerFunc {
 			s.Respond(w, r, http.StatusBadRequest, errors.New("missing Body in Payload"))
 			return
 		}
-		recipient, err := validateMessageFields(t.Phone, t.ContextInfo.StanzaID, t.ContextInfo.Participant)
+		recipient, err := validateMessageFields(r.Context(), clientManager.GetWhatsmeowClient(txtid), t.Phone, t.ContextInfo.StanzaID, t.ContextInfo.Participant)
 		if err != nil {
 			log.Error().Msg(fmt.Sprintf("%s", err))
 			s.Respond(w, r, http.StatusBadRequest, err)
@@ -2795,7 +2920,7 @@ func (s *server) SendPoll() http.HandlerFunc {
 			msgid = req.Id
 		}
 
-		recipient, err := validateMessageFields(req.Group, nil, nil)
+		recipient, err := validateMessageFields(r.Context(), clientManager.GetWhatsmeowClient(txtid), req.Group, nil, nil)
 		if err != nil {
 			s.Respond(w, r, http.StatusBadRequest, err)
 			return
@@ -2934,7 +3059,7 @@ func (s *server) SendEditMessage() http.HandlerFunc {
 			return
 		}
 
-		recipient, err := validateMessageFields(t.Phone, t.ContextInfo.StanzaID, t.ContextInfo.Participant)
+		recipient, err := validateMessageFields(r.Context(), clientManager.GetWhatsmeowClient(txtid), t.Phone, t.ContextInfo.StanzaID, t.ContextInfo.Participant)
 		if err != nil {
 			log.Error().Msg(fmt.Sprintf("%s", err))
 			s.Respond(w, r, http.StatusBadRequest, err)
@@ -6039,12 +6164,70 @@ func (s *server) Respond(w http.ResponseWriter, r *http.Request, status int, dat
 	}
 }
 
-// Validate message fields
-func validateMessageFields(phone string, stanzaid *string, participant *string) (types.JID, error) {
+type messageLIDStore interface {
+	GetPNForLID(context.Context, types.JID) (types.JID, error)
+	GetLIDForPN(context.Context, types.JID) (types.JID, error)
+}
 
-	recipient, ok := parseJID(phone)
-	if !ok {
-		return types.NewJID("", types.DefaultUserServer), errors.New("could not parse Phone")
+// resolveMessageRecipient preserves explicit JIDs. For a bare numeric ID, it
+// checks both directions of whatsmeow's cached PN/LID map. If the ID is a known
+// LID, the LID is returned. If it is a known PN, its mapped LID is returned.
+// Unknown IDs retain the historical phone-number JID fallback.
+func resolveMessageRecipient(ctx context.Context, lidStore messageLIDStore, phone string) (types.JID, error) {
+	phone = strings.TrimSpace(phone)
+	if phone == "" {
+		return types.EmptyJID, errors.New("Phone is empty")
+	}
+
+	if strings.ContainsRune(phone, '@') {
+		recipient, ok := parseJID(phone)
+		if !ok {
+			return types.EmptyJID, errors.New("could not parse Phone")
+		}
+		return recipient, nil
+	}
+
+	bareID := strings.TrimPrefix(phone, "+")
+	if lidStore == nil {
+		return types.NewJID(bareID, types.DefaultUserServer), nil
+	}
+
+	lidCandidate := types.NewJID(bareID, types.HiddenUserServer)
+	pnForLID, err := lidStore.GetPNForLID(ctx, lidCandidate)
+	if err != nil {
+		return types.EmptyJID, fmt.Errorf("failed to look up PN for LID %s: %w", lidCandidate, err)
+	}
+
+	pnCandidate := types.NewJID(bareID, types.DefaultUserServer)
+	lidForPN, err := lidStore.GetLIDForPN(ctx, pnCandidate)
+	if err != nil {
+		return types.EmptyJID, fmt.Errorf("failed to look up LID for PN %s: %w", pnCandidate, err)
+	}
+
+	if !pnForLID.IsEmpty() && !lidForPN.IsEmpty() {
+		return types.EmptyJID, fmt.Errorf("ambiguous bare identifier %q: it is mapped as both a PN and a LID; include @lid or @s.whatsapp.net", bareID)
+	}
+	if !pnForLID.IsEmpty() {
+		log.Debug().Str("input", phone).Str("recipient", lidCandidate.String()).Str("pn", pnForLID.String()).Msg("Resolved bare message recipient as LID")
+		return lidCandidate, nil
+	}
+	if !lidForPN.IsEmpty() {
+		log.Debug().Str("input", phone).Str("recipient", lidForPN.String()).Str("pn", pnCandidate.String()).Msg("Resolved bare message recipient PN to LID")
+		return lidForPN, nil
+	}
+	return pnCandidate, nil
+}
+
+// Validate message fields and resolve bare PN/LID recipients from the client's
+// cached whatsmeow mapping store.
+func validateMessageFields(ctx context.Context, client *whatsmeow.Client, phone string, stanzaid *string, participant *string) (types.JID, error) {
+	var lidStore messageLIDStore
+	if client != nil && client.Store != nil {
+		lidStore = client.Store.LIDs
+	}
+	recipient, err := resolveMessageRecipient(ctx, lidStore, phone)
+	if err != nil {
+		return types.EmptyJID, err
 	}
 
 	if stanzaid != nil {

@@ -1309,6 +1309,44 @@
     </div>
   </div>
 
+  <!-- Passkey Pairing Modal -->
+  <div class="ui modal" id="modalPasskeyPairing"><i class="close icon"></i>
+    <div class="header">
+      <i class="key icon"></i> Passkey Pairing
+    </div>
+    <div class="content">
+      <div class="ui warning message">
+        <div class="header">
+          <i class="info circle icon"></i> Passkey Authentication Required
+        </div>
+        <p>After scanning the QR code, WhatsApp requested passkey verification. Follow the steps below to complete the connection.</p>
+      </div>
+
+      <h4 class="ui header">Step 1 — Copy and run the code in your browser console</h4>
+      <p>Open <strong>https://web.whatsapp.com</strong>, press <kbd style="padding:2px 6px;border:1px solid #ccc;border-radius:3px;background:#f5f5f5;">F12</kbd>, paste in the console and press <kbd style="padding:2px 6px;border:1px solid #ccc;border-radius:3px;background:#f5f5f5;">Enter</kbd>.</p>
+      <div class="ui segment" style="position:relative;">
+        <pre id="passkeyCodeBlock" style="max-height:200px;overflow:auto;white-space:pre-wrap;word-break:break-all;background:#1e1e1e;color:#d4d4d4;padding:12px;border-radius:4px;font-size:12px;">Loading...</pre>
+        <button class="ui small button" style="position:absolute;top:8px;right:8px;" onclick="copyPasskeyCode()">
+          <i class="copy icon"></i> Copy
+        </button>
+      </div>
+
+      <h4 class="ui header" style="margin-top:20px;">Step 2 — Paste the console result here</h4>
+      <div class="ui form">
+        <div class="field">
+          <textarea id="passkeyResponseInput" rows="4" placeholder='Paste the JSON returned by the console here...'></textarea>
+        </div>
+      </div>
+    </div>
+    <div class="actions">
+      <div class="ui cancel button secondary">Close</div>
+      <div class="ui positive right labeled icon button" id="sendPasskeyBtn" onclick="submitPasskeyResponse()">
+        Send Response
+        <i class="checkmark icon"></i>
+      </div>
+    </div>
+  </div>
+
   <script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/fomantic-ui@2.9.4/dist/semantic.min.js"></script>
   <script src="js/app.js"></script>
