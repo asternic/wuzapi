@@ -1021,7 +1021,7 @@ func (s *server) SendDocument() http.HandlerFunc {
 			return
 		}
 
-		recipient, err := validateMessageFields(t.Phone, t.ContextInfo.StanzaID, t.ContextInfo.Participant)
+		recipient, err := validateMessageFields(r.Context(), clientManager.GetWhatsmeowClient(txtid), t.Phone, t.ContextInfo.StanzaID, t.ContextInfo.Participant)
 		if err != nil {
 			log.Error().Msg(fmt.Sprintf("%s", err))
 			s.Respond(w, r, http.StatusBadRequest, err)
@@ -1191,7 +1191,7 @@ func (s *server) SendAudio() http.HandlerFunc {
 			return
 		}
 
-		recipient, err := validateMessageFields(t.Phone, t.ContextInfo.StanzaID, t.ContextInfo.Participant)
+		recipient, err := validateMessageFields(r.Context(), clientManager.GetWhatsmeowClient(txtid), t.Phone, t.ContextInfo.StanzaID, t.ContextInfo.Participant)
 		if err != nil {
 			log.Error().Msg(fmt.Sprintf("%s", err))
 			s.Respond(w, r, http.StatusBadRequest, err)
@@ -1397,7 +1397,7 @@ func (s *server) SendImage() http.HandlerFunc {
 			return
 		}
 
-		recipient, err := validateMessageFields(t.Phone, t.ContextInfo.StanzaID, t.ContextInfo.Participant)
+		recipient, err := validateMessageFields(r.Context(), clientManager.GetWhatsmeowClient(txtid), t.Phone, t.ContextInfo.StanzaID, t.ContextInfo.Participant)
 		if err != nil {
 			log.Error().Msg(fmt.Sprintf("%s", err))
 			s.Respond(w, r, http.StatusBadRequest, err)
@@ -1590,7 +1590,7 @@ func (s *server) SendSticker() http.HandlerFunc {
 			return
 		}
 
-		recipient, err := validateMessageFields(t.Phone, t.ContextInfo.StanzaID, t.ContextInfo.Participant)
+		recipient, err := validateMessageFields(r.Context(), clientManager.GetWhatsmeowClient(txtid), t.Phone, t.ContextInfo.StanzaID, t.ContextInfo.Participant)
 		if err != nil {
 			log.Error().Msg(fmt.Sprintf("%s", err))
 			s.Respond(w, r, http.StatusBadRequest, err)
@@ -1755,7 +1755,7 @@ func (s *server) SendVideo() http.HandlerFunc {
 			return
 		}
 
-		recipient, err := validateMessageFields(t.Phone, t.ContextInfo.StanzaID, t.ContextInfo.Participant)
+		recipient, err := validateMessageFields(r.Context(), clientManager.GetWhatsmeowClient(txtid), t.Phone, t.ContextInfo.StanzaID, t.ContextInfo.Participant)
 		if err != nil {
 			log.Error().Msg(fmt.Sprintf("%s", err))
 			s.Respond(w, r, http.StatusBadRequest, err)
@@ -1930,7 +1930,7 @@ func (s *server) SendContact() http.HandlerFunc {
 			return
 		}
 
-		recipient, err := validateMessageFields(t.Phone, t.ContextInfo.StanzaID, t.ContextInfo.Participant)
+		recipient, err := validateMessageFields(r.Context(), clientManager.GetWhatsmeowClient(txtid), t.Phone, t.ContextInfo.StanzaID, t.ContextInfo.Participant)
 		if err != nil {
 			log.Error().Msg(fmt.Sprintf("%s", err))
 			s.Respond(w, r, http.StatusBadRequest, err)
@@ -2053,7 +2053,7 @@ func (s *server) SendLocation() http.HandlerFunc {
 			return
 		}
 
-		recipient, err := validateMessageFields(t.Phone, t.ContextInfo.StanzaID, t.ContextInfo.Participant)
+		recipient, err := validateMessageFields(r.Context(), clientManager.GetWhatsmeowClient(txtid), t.Phone, t.ContextInfo.StanzaID, t.ContextInfo.Participant)
 		if err != nil {
 			log.Error().Msg(fmt.Sprintf("%s", err))
 			s.Respond(w, r, http.StatusBadRequest, err)
@@ -2252,7 +2252,7 @@ func (s *server) SendButtons() http.HandlerFunc {
 		}
 
 		// --- Destinatário e Mensagem ID ---
-		recipient, err := validateMessageFields(t.Phone, t.ContextInfo.StanzaID, t.ContextInfo.Participant)
+		recipient, err := validateMessageFields(r.Context(), clientManager.GetWhatsmeowClient(txtid), t.Phone, t.ContextInfo.StanzaID, t.ContextInfo.Participant)
 		if err != nil {
 			s.Respond(w, r, http.StatusBadRequest, err)
 			return
@@ -2552,7 +2552,7 @@ func (s *server) SendList() http.HandlerFunc {
 
 		// ── 4. Validate recipient ────────────────────────────────────────────
 
-		recipient, err := validateMessageFields(req.Phone, req.ContextInfo.StanzaID, req.ContextInfo.Participant)
+		recipient, err := validateMessageFields(r.Context(), clientManager.GetWhatsmeowClient(txtid), req.Phone, req.ContextInfo.StanzaID, req.ContextInfo.Participant)
 		if err != nil {
 			s.Respond(w, r, http.StatusBadRequest, err)
 			return
@@ -2763,7 +2763,7 @@ func (s *server) SendMessage() http.HandlerFunc {
 			s.Respond(w, r, http.StatusBadRequest, errors.New("missing Body in Payload"))
 			return
 		}
-		recipient, err := validateMessageFields(t.Phone, t.ContextInfo.StanzaID, t.ContextInfo.Participant)
+		recipient, err := validateMessageFields(r.Context(), clientManager.GetWhatsmeowClient(txtid), t.Phone, t.ContextInfo.StanzaID, t.ContextInfo.Participant)
 		if err != nil {
 			log.Error().Msg(fmt.Sprintf("%s", err))
 			s.Respond(w, r, http.StatusBadRequest, err)
@@ -2905,7 +2905,7 @@ func (s *server) SendPoll() http.HandlerFunc {
 			msgid = req.Id
 		}
 
-		recipient, err := validateMessageFields(req.Group, nil, nil)
+		recipient, err := validateMessageFields(r.Context(), clientManager.GetWhatsmeowClient(txtid), req.Group, nil, nil)
 		if err != nil {
 			s.Respond(w, r, http.StatusBadRequest, err)
 			return
@@ -3044,7 +3044,7 @@ func (s *server) SendEditMessage() http.HandlerFunc {
 			return
 		}
 
-		recipient, err := validateMessageFields(t.Phone, t.ContextInfo.StanzaID, t.ContextInfo.Participant)
+		recipient, err := validateMessageFields(r.Context(), clientManager.GetWhatsmeowClient(txtid), t.Phone, t.ContextInfo.StanzaID, t.ContextInfo.Participant)
 		if err != nil {
 			log.Error().Msg(fmt.Sprintf("%s", err))
 			s.Respond(w, r, http.StatusBadRequest, err)
@@ -6149,12 +6149,70 @@ func (s *server) Respond(w http.ResponseWriter, r *http.Request, status int, dat
 	}
 }
 
-// Validate message fields
-func validateMessageFields(phone string, stanzaid *string, participant *string) (types.JID, error) {
+type messageLIDStore interface {
+	GetPNForLID(context.Context, types.JID) (types.JID, error)
+	GetLIDForPN(context.Context, types.JID) (types.JID, error)
+}
 
-	recipient, ok := parseJID(phone)
-	if !ok {
-		return types.NewJID("", types.DefaultUserServer), errors.New("could not parse Phone")
+// resolveMessageRecipient preserves explicit JIDs. For a bare numeric ID, it
+// checks both directions of whatsmeow's cached PN/LID map. If the ID is a known
+// LID, the LID is returned. If it is a known PN, its mapped LID is returned.
+// Unknown IDs retain the historical phone-number JID fallback.
+func resolveMessageRecipient(ctx context.Context, lidStore messageLIDStore, phone string) (types.JID, error) {
+	phone = strings.TrimSpace(phone)
+	if phone == "" {
+		return types.EmptyJID, errors.New("Phone is empty")
+	}
+
+	if strings.ContainsRune(phone, '@') {
+		recipient, ok := parseJID(phone)
+		if !ok {
+			return types.EmptyJID, errors.New("could not parse Phone")
+		}
+		return recipient, nil
+	}
+
+	bareID := strings.TrimPrefix(phone, "+")
+	if lidStore == nil {
+		return types.NewJID(bareID, types.DefaultUserServer), nil
+	}
+
+	lidCandidate := types.NewJID(bareID, types.HiddenUserServer)
+	pnForLID, err := lidStore.GetPNForLID(ctx, lidCandidate)
+	if err != nil {
+		return types.EmptyJID, fmt.Errorf("failed to look up PN for LID %s: %w", lidCandidate, err)
+	}
+
+	pnCandidate := types.NewJID(bareID, types.DefaultUserServer)
+	lidForPN, err := lidStore.GetLIDForPN(ctx, pnCandidate)
+	if err != nil {
+		return types.EmptyJID, fmt.Errorf("failed to look up LID for PN %s: %w", pnCandidate, err)
+	}
+
+	if !pnForLID.IsEmpty() && !lidForPN.IsEmpty() {
+		return types.EmptyJID, fmt.Errorf("ambiguous bare identifier %q: it is mapped as both a PN and a LID; include @lid or @s.whatsapp.net", bareID)
+	}
+	if !pnForLID.IsEmpty() {
+		log.Debug().Str("input", phone).Str("recipient", lidCandidate.String()).Str("pn", pnForLID.String()).Msg("Resolved bare message recipient as LID")
+		return lidCandidate, nil
+	}
+	if !lidForPN.IsEmpty() {
+		log.Debug().Str("input", phone).Str("recipient", lidForPN.String()).Str("pn", pnCandidate.String()).Msg("Resolved bare message recipient PN to LID")
+		return lidForPN, nil
+	}
+	return pnCandidate, nil
+}
+
+// Validate message fields and resolve bare PN/LID recipients from the client's
+// cached whatsmeow mapping store.
+func validateMessageFields(ctx context.Context, client *whatsmeow.Client, phone string, stanzaid *string, participant *string) (types.JID, error) {
+	var lidStore messageLIDStore
+	if client != nil && client.Store != nil {
+		lidStore = client.Store.LIDs
+	}
+	recipient, err := resolveMessageRecipient(ctx, lidStore, phone)
+	if err != nil {
+		return types.EmptyJID, err
 	}
 
 	if stanzaid != nil {
