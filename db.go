@@ -8,6 +8,7 @@ import (
 
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
+	"github.com/rs/zerolog/log"
 	_ "modernc.org/sqlite"
 )
 
@@ -84,6 +85,20 @@ func initializePostgres(config DatabaseConfig) (*sqlx.DB, error) {
 	if err := db.Ping(); err != nil {
 		return nil, fmt.Errorf("failed to ping postgres database: %w", err)
 	}
+
+	var databaseName, schemaName string
+	if err := db.QueryRow("SELECT current_database(), current_schema()").Scan(&databaseName, &schemaName); err != nil {
+		return nil, fmt.Errorf("failed to identify postgres database: %w", err)
+	}
+	log.Info().
+		Str("driver", "postgres").
+		Str("host", config.Host).
+		Str("port", config.Port).
+		Str("database", databaseName).
+		Str("schema", schemaName).
+		Str("user", config.User).
+		Str("sslmode", config.SSLMode).
+		Msg("Database connection established")
 
 	return db, nil
 }

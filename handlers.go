@@ -277,7 +277,8 @@ func (s *server) Connect() http.HandlerFunc {
 		if clientManager.GetWhatsmeowClient(txtid) != nil {
 			isConnected := clientManager.GetWhatsmeowClient(txtid).IsConnected()
 			if isConnected == true {
-				s.Respond(w, r, http.StatusInternalServerError, errors.New("already connected"))
+				log.Warn().Str("user_id", txtid).Msg("Connect request rejected because client is already connected")
+				s.Respond(w, r, http.StatusConflict, errors.New("already connected"))
 				return
 			}
 		}
@@ -729,6 +730,8 @@ func (s *server) PairPhone() http.HandlerFunc {
 			return
 		}
 
+		log.Info().Str("user_id", txtid).Msg("Requesting WhatsApp phone pairing code")
+
 		isLoggedIn := clientManager.GetWhatsmeowClient(txtid).IsLoggedIn()
 		if isLoggedIn {
 			log.Error().Msg(fmt.Sprintf("%s", "already paired"))
@@ -738,7 +741,7 @@ func (s *server) PairPhone() http.HandlerFunc {
 
 		linkingCode, err := clientManager.GetWhatsmeowClient(txtid).PairPhone(context.Background(), t.Phone, true, whatsmeow.PairClientChrome, "Chrome (Linux)")
 		if err != nil {
-			log.Error().Msg(fmt.Sprintf("%s", err))
+			log.Error().Err(err).Str("user_id", txtid).Msg("Failed to request WhatsApp phone pairing code")
 			s.Respond(w, r, http.StatusBadRequest, err)
 			return
 		}
@@ -5460,6 +5463,11 @@ func (s *server) ListUsers() http.HandlerFunc {
 
 		rows, err := s.db.Queryx(query, args...)
 		if err != nil {
+			log.Error().
+				Err(err).
+				Str("driver", s.db.DriverName()).
+				Bool("single_user", hasID).
+				Msg("Failed to query users for admin request")
 			s.Respond(w, r, http.StatusInternalServerError, errors.New("problem accessing DB"))
 			return
 		}
@@ -5472,7 +5480,10 @@ func (s *server) ListUsers() http.HandlerFunc {
 			var user usersStruct
 			err := rows.StructScan(&user)
 			if err != nil {
-				log.Error().Str("error", fmt.Sprintf("%v", err)).Msg("admin DB error")
+				log.Error().
+					Err(err).
+					Str("driver", s.db.DriverName()).
+					Msg("Failed to scan user for admin request")
 				s.Respond(w, r, http.StatusInternalServerError, errors.New("problem accessing DB"))
 				return
 			}
@@ -5539,6 +5550,10 @@ func (s *server) ListUsers() http.HandlerFunc {
 		}
 		// Check for any error that occurred during iteration
 		if err := rows.Err(); err != nil {
+			log.Error().
+				Err(err).
+				Str("driver", s.db.DriverName()).
+				Msg("Failed while iterating users for admin request")
 			s.Respond(w, r, http.StatusInternalServerError, errors.New("problem accessing DB"))
 			return
 		}

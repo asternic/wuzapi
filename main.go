@@ -268,8 +268,8 @@ func main() {
 	}
 
 	log.Info().
-		Bool("use_proxy", *globalWebhookUseProxy).
-		Msg("Webhook Proxy Configured")
+		Bool("use_proxy_when_configured", *globalWebhookUseProxy).
+		Msg("Webhook proxy routing policy configured")
 
 	log.Info().
 		Bool("enabled", *webhookRetryEnabled).
