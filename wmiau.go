@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"crypto/tls"
+	"database/sql"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -31,6 +32,7 @@ import (
 	"go.mau.fi/whatsmeow/types/events"
 	waLog "go.mau.fi/whatsmeow/util/log"
 	"golang.org/x/net/proxy"
+	"sync"
 )
 
 // db field declaration as *sqlx.DB
@@ -60,6 +62,82 @@ func safeGo(name string, fn func()) {
 		}()
 		fn()
 	}()
+}
+
+// PendingPasskeyState holds the state of an in-progress passkey pairing.
+type PendingPasskeyState struct {
+	Request   *events.PairPasskeyRequest
+	Client    *whatsmeow.Client
+	CreatedAt time.Time
+}
+
+// passkeyStateTTL is how long a pending passkey request lives before being
+// automatically cleaned up. WhatsApp challenges typically expire after
+// ~10 minutes; we keep a generous margin.
+const passkeyStateTTL = 15 * time.Minute
+
+var (
+	pendingPasskeyMu       sync.Mutex
+	pendingPasskeyRequests = make(map[string]*PendingPasskeyState) // keyed by userID
+)
+
+// startPasskeyCleanup runs a background goroutine that periodically removes
+// stale pending passkey states. Call this once during server initialization.
+func startPasskeyCleanup() {
+	go func() {
+		ticker := time.NewTicker(5 * time.Minute)
+		defer ticker.Stop()
+		for range ticker.C {
+			pendingPasskeyMu.Lock()
+			now := time.Now()
+			for userID, state := range pendingPasskeyRequests {
+				if now.Sub(state.CreatedAt) > passkeyStateTTL {
+					delete(pendingPasskeyRequests, userID)
+					log.Info().Str("userID", userID).Msg("Passkey state expired and cleaned up")
+				}
+			}
+			pendingPasskeyMu.Unlock()
+		}
+	}()
+}
+
+func storePendingPasskey(userID string, state *PendingPasskeyState) {
+	state.CreatedAt = time.Now()
+	pendingPasskeyMu.Lock()
+	pendingPasskeyRequests[userID] = state
+	pendingPasskeyMu.Unlock()
+}
+
+func getAndConsumePendingPasskey(userID string) *PendingPasskeyState {
+	pendingPasskeyMu.Lock()
+	state, ok := pendingPasskeyRequests[userID]
+	if ok {
+		delete(pendingPasskeyRequests, userID)
+	}
+	pendingPasskeyMu.Unlock()
+	if !ok {
+		return nil
+	}
+	return state
+}
+
+func deletePendingPasskey(userID string) {
+	pendingPasskeyMu.Lock()
+	delete(pendingPasskeyRequests, userID)
+	pendingPasskeyMu.Unlock()
+}
+
+// peekPendingPasskey checks if there is a pending passkey request for this user
+// WITHOUT consuming it. Used by /session/qr, /session/passkey-status, and
+// /session/passkey-confirm.
+func peekPendingPasskey(userID string) *PendingPasskeyState {
+	pendingPasskeyMu.Lock()
+	state, ok := pendingPasskeyRequests[userID]
+	pendingPasskeyMu.Unlock()
+	if !ok {
+		return nil
+	}
+	return state
 }
 
 // ensureS3ClientForUser loads S3 config from DB and initializes client if not already present (lazy init for reconnect-after-restart)
@@ -561,14 +639,15 @@ func (s *server) startClient(userID string, textjid string, token string, kill c
 	// Store the MyClient in clientManager
 	clientManager.SetMyClient(userID, &mycli)
 
-	httpClient := resty.New()
-	httpClient.SetRedirectPolicy(resty.FlexibleRedirectPolicy(15))
+	// Webhook HTTP client for outgoing webhook deliveries.
+	webhookClient := resty.New()
+	webhookClient.SetRedirectPolicy(resty.FlexibleRedirectPolicy(15))
 	if *waDebug == "DEBUG" {
-		httpClient.SetDebug(true)
+		webhookClient.SetDebug(true)
 	}
-	httpClient.SetTimeout(30 * time.Second)
-	httpClient.SetTLSClientConfig(&tls.Config{InsecureSkipVerify: true})
-	httpClient.OnError(func(req *resty.Request, err error) {
+	webhookClient.SetTimeout(30 * time.Second)
+	webhookClient.SetTLSClientConfig(&tls.Config{InsecureSkipVerify: true})
+	webhookClient.OnError(func(req *resty.Request, err error) {
 		if v, ok := err.(*resty.ResponseError); ok {
 			// v.Response contains the last response from the server
 			// v.Err contains the original error
@@ -577,34 +656,44 @@ func (s *server) startClient(userID string, textjid string, token string, kill c
 		}
 	})
 
-	// Set proxy if defined in DB (assumes users table contains proxy_url column)
 	var proxyURL string
-	err = s.db.Get(&proxyURL, "SELECT proxy_url FROM users WHERE id=$1", userID)
+	webhookUseProxy := *globalWebhookUseProxy
+	err = s.db.QueryRow(
+		"SELECT proxy_url, COALESCE(webhook_use_proxy, true) FROM users WHERE id=$1",
+		userID,
+	).Scan(&proxyURL, &webhookUseProxy)
+	if err != nil && err != sql.ErrNoRows {
+		log.Error().Err(err).Str("user_id", userID).Msg("Failed to query proxy settings from database")
+	}
 	if err == nil && proxyURL != "" {
 		parsed, perr := url.Parse(proxyURL)
 		if perr != nil {
 			log.Warn().Err(perr).Str("proxy", proxyURL).Msg("Invalid proxy URL, skipping proxy setup")
 		} else {
-
-			log.Info().Str("proxy", proxyURL).Msg("Configuring proxy")
+			log.Info().Str("proxy", proxyURL).Bool("webhook_use_proxy", webhookUseProxy).Msg("Configuring proxy")
 
 			if parsed.Scheme == "socks5" || parsed.Scheme == "socks5h" {
 				dialer, derr := proxy.FromURL(parsed, nil)
 				if derr != nil {
 					log.Warn().Err(derr).Str("proxy", proxyURL).Msg("Failed to build SOCKS proxy dialer, skipping proxy setup")
 				} else {
-					httpClient.SetProxy(proxyURL)
 					client.SetSOCKSProxy(dialer, whatsmeow.SetProxyOptions{})
-					log.Info().Msg("SOCKS proxy configured successfully")
+					log.Info().Msg("SOCKS proxy configured for WhatsApp connection")
 				}
 			} else {
-				httpClient.SetProxy(proxyURL)
 				client.SetProxyAddress(parsed.String(), whatsmeow.SetProxyOptions{})
-				log.Info().Msg("HTTP/HTTPS proxy configured successfully")
+				log.Info().Msg("HTTP/HTTPS proxy configured for WhatsApp connection")
+			}
+
+			if webhookUseProxy {
+				webhookClient.SetProxy(proxyURL)
+				log.Info().Msg("Proxy configured for webhook delivery client")
+			} else {
+				log.Info().Msg("Webhook delivery client bypassing proxy")
 			}
 		}
 	}
-	clientManager.SetHTTPClient(userID, httpClient)
+	clientManager.SetHTTPClient(userID, webhookClient)
 
 	// Initialize S3 client if configured (needed when user reconnects after container restart - connectOnStartup only runs for connected=1)
 	GetS3Manager().EnsureClientFromDB(userID)
@@ -694,6 +783,51 @@ func (s *server) startClient(userID string, textjid string, token string, kill c
 							userinfocache.Set(token, v, cache.NoExpiration)
 						}
 					}
+				} else if evt.Event == "passkey-request" {
+					if evt.PasskeyRequest != nil {
+						storePendingPasskey(userID, &PendingPasskeyState{
+							Request: evt.PasskeyRequest,
+							Client:  client,
+						})
+						postmap := make(map[string]interface{})
+						postmap["event"] = "passkey-request"
+						postmap["type"] = "PasskeyRequest"
+						postmap["publicKey"] = evt.PasskeyRequest.PublicKey
+						sendEventWithWebHook(&mycli, postmap, "")
+						log.Info().Msg("Passkey request received, sent to frontend")
+					}
+				} else if evt.Event == "passkey-confirmation" {
+					if evt.PasskeyConfirmation != nil {
+						if evt.PasskeyConfirmation.SkipHandoffUX {
+							log.Info().Msg("Passkey confirmation: SkipHandoffUX=true, auto-confirming")
+							go func() {
+								ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+								defer cancel()
+								if err := client.SendPasskeyConfirmation(ctx); err != nil {
+									log.Error().Err(err).Msg("Failed to auto-confirm passkey")
+								} else {
+									log.Info().Msg("Auto-confirmed passkey successfully")
+								}
+							}()
+						} else {
+							postmap := make(map[string]interface{})
+							postmap["event"] = "passkey-confirmation"
+							postmap["type"] = "PasskeyConfirmation"
+							postmap["code"] = evt.PasskeyConfirmation.Code
+							postmap["skipHandoffUX"] = evt.PasskeyConfirmation.SkipHandoffUX
+							sendEventWithWebHook(&mycli, postmap, "")
+							log.Info().Str("code", evt.PasskeyConfirmation.Code).Msg("Passkey confirmation code sent to frontend")
+						}
+					}
+				} else if evt.Event == "error" {
+					log.Error().Str("event", evt.Event).Interface("error", evt.Error).Msg("QR channel error")
+					postmap := make(map[string]interface{})
+					postmap["event"] = "error"
+					postmap["type"] = "PairError"
+					if evt.Error != nil {
+						postmap["error"] = evt.Error.Error()
+					}
+					sendEventWithWebHook(&mycli, postmap, "")
 				} else {
 					log.Info().Str("event", evt.Event).Msg("Login event")
 				}
@@ -1267,11 +1401,13 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 	case *events.Presence:
 		postmap["type"] = "Presence"
 		dowebhook = 1
+		postmap["from"] = evt.From.String()
 		if evt.Unavailable {
 			postmap["state"] = "offline"
 			if evt.LastSeen.IsZero() {
 				log.Info().Str("from", evt.From.String()).Msg("User is now offline")
 			} else {
+				postmap["last_seen"] = evt.LastSeen.Unix()
 				log.Info().Str("from", evt.From.String()).Str("lastSeen", fmt.Sprintf("%v", evt.LastSeen)).Msg("User is now offline")
 			}
 		} else {
@@ -1687,6 +1823,27 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 		postmap["type"] = "FBMessage"
 		dowebhook = 1
 		log.Info().Str("info", evt.Info.SourceString()).Msg("Facebook message received")
+	case *events.PairPasskeyRequest:
+		storePendingPasskey(mycli.userID, &PendingPasskeyState{
+			Request: evt,
+			Client:  mycli.WAClient,
+		})
+		postmap["type"] = "PasskeyRequest"
+		postmap["publicKey"] = evt.PublicKey
+		dowebhook = 1
+		log.Info().Msg("Passkey request received (event handler)")
+	case *events.PairPasskeyConfirmation:
+		postmap["type"] = "PasskeyConfirmation"
+		postmap["code"] = evt.Code
+		postmap["skipHandoffUX"] = evt.SkipHandoffUX
+		dowebhook = 1
+		log.Info().Str("code", evt.Code).Bool("skipHandoffUX", evt.SkipHandoffUX).Msg("Passkey confirmation received")
+	case *events.PairPasskeyError:
+		postmap["type"] = "PairPasskeyError"
+		postmap["error"] = evt.Error.Error()
+		postmap["continuation"] = evt.Continuation
+		dowebhook = 1
+		log.Warn().Err(evt.Error).Bool("continuation", evt.Continuation).Msg("Passkey pairing error")
 	default:
 		log.Warn().Str("event", fmt.Sprintf("%+v", evt)).Msg("Unhandled event")
 	}

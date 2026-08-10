@@ -130,7 +130,7 @@
       <div class="purple card hidden widget" style="cursor: pointer;" id="proxyConfig">
         <div class="content"><a class="ui purple right ribbon label">Config</a>
           <div class="header">Proxy Settings</div>
-          <div class="description">Configure proxy for WhatsApp connections.</div>
+          <div class="description">Configure proxy for WhatsApp and webhook delivery.</div>
         </div>
       </div>
       <div class="purple card hidden widget" style="cursor: pointer;" id="webhookConfig">
@@ -492,7 +492,7 @@
     <div class="content">
       <div class="ui info message">
         <div class="header">Proxy Settings</div>
-        <p>Configure HTTP/HTTPS or SOCKS5 proxy for WhatsApp connections. Useful for network restrictions or enhanced privacy.</p>
+        <p>Configure HTTP/HTTPS or SOCKS5 proxy for WhatsApp connections. Optionally route webhook deliveries through the same proxy or send them directly to your backend.</p>
       </div>
       <div class="ui form">
         <div class="field">
@@ -506,6 +506,13 @@
           <label>Proxy URL</label>
           <input id="proxyUrl" type="text" placeholder="http://proxy.example.com:8080 or socks5://user:pass@proxy.example.com:1080">
           <small>Include protocol (http://, https://, or socks5://) and port. Authentication can be included in URL format.</small>
+        </div>
+        <div class="field" id="proxyWebhookUseProxyField">
+          <div class="ui toggle checkbox" id="proxyWebhookUseProxyToggle">
+            <input type="checkbox" id="proxyWebhookUseProxy" checked>
+            <label>Use proxy for webhook delivery</label>
+          </div>
+          <small>When enabled, outgoing webhook POSTs use the configured proxy. Disable to reach your application backend directly while WhatsApp traffic still uses the proxy.</small>
         </div>
       </div>
     </div>
@@ -663,6 +670,13 @@
           <label>Proxy URL</label>
           <input type="text" name="proxy_url" placeholder="http://proxy.example.com:8080 or socks5://user:pass@proxy.example.com:1080">
           <small>Include protocol (http://, https://, or socks5://) and port. Authentication can be included in URL format.</small>
+        </div>
+        <div class="field" id="addInstanceProxyWebhookUseProxyField" style="display: none;">
+          <div class="ui toggle checkbox" id="addInstanceProxyWebhookUseProxyToggle">
+            <input type="checkbox" name="proxy_webhook_use_proxy" checked>
+            <label>Use proxy for webhook delivery</label>
+          </div>
+          <small>Disable to send webhooks directly to your backend while WhatsApp traffic uses the proxy.</small>
         </div>
 
         <!-- S3 Configuration -->
@@ -1292,6 +1306,44 @@
     </div>
     <div class="actions">
       <div class="ui button">Close</div>
+    </div>
+  </div>
+
+  <!-- Passkey Pairing Modal -->
+  <div class="ui modal" id="modalPasskeyPairing"><i class="close icon"></i>
+    <div class="header">
+      <i class="key icon"></i> Passkey Pairing
+    </div>
+    <div class="content">
+      <div class="ui warning message">
+        <div class="header">
+          <i class="info circle icon"></i> Passkey Authentication Required
+        </div>
+        <p>After scanning the QR code, WhatsApp requested passkey verification. Follow the steps below to complete the connection.</p>
+      </div>
+
+      <h4 class="ui header">Step 1 — Copy and run the code in your browser console</h4>
+      <p>Open <strong>https://web.whatsapp.com</strong>, press <kbd style="padding:2px 6px;border:1px solid #ccc;border-radius:3px;background:#f5f5f5;">F12</kbd>, paste in the console and press <kbd style="padding:2px 6px;border:1px solid #ccc;border-radius:3px;background:#f5f5f5;">Enter</kbd>.</p>
+      <div class="ui segment" style="position:relative;">
+        <pre id="passkeyCodeBlock" style="max-height:200px;overflow:auto;white-space:pre-wrap;word-break:break-all;background:#1e1e1e;color:#d4d4d4;padding:12px;border-radius:4px;font-size:12px;">Loading...</pre>
+        <button class="ui small button" style="position:absolute;top:8px;right:8px;" onclick="copyPasskeyCode()">
+          <i class="copy icon"></i> Copy
+        </button>
+      </div>
+
+      <h4 class="ui header" style="margin-top:20px;">Step 2 — Paste the console result here</h4>
+      <div class="ui form">
+        <div class="field">
+          <textarea id="passkeyResponseInput" rows="4" placeholder='Paste the JSON returned by the console here...'></textarea>
+        </div>
+      </div>
+    </div>
+    <div class="actions">
+      <div class="ui cancel button secondary">Close</div>
+      <div class="ui positive right labeled icon button" id="sendPasskeyBtn" onclick="submitPasskeyResponse()">
+        Send Response
+        <i class="checkmark icon"></i>
+      </div>
     </div>
   </div>
 

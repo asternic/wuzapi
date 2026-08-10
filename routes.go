@@ -84,6 +84,9 @@ func (s *server) routes() {
 	s.router.Handle("/session/status", c.Then(s.GetStatus())).Methods("GET")
 	s.router.Handle("/session/qr", c.Then(s.GetQR())).Methods("GET")
 	s.router.Handle("/session/pairphone", c.Then(s.PairPhone())).Methods("POST")
+	s.router.Handle("/session/passkey-response", c.Then(s.PasskeyResponse())).Methods("POST")
+	s.router.Handle("/session/passkey-confirm", c.Then(s.PasskeyConfirm())).Methods("POST")
+	s.router.Handle("/session/passkey-status", c.Then(s.GetPasskeyStatus())).Methods("GET")
 	s.router.Handle("/session/history", c.Then(s.RequestHistorySync())).Methods("GET")
 
 	s.router.Handle("/webhook", c.Then(s.SetWebhook())).Methods("POST")
@@ -127,6 +130,7 @@ func (s *server) routes() {
 	s.router.Handle("/call/reject", c.Then(s.RejectCall())).Methods("POST")
 
 	s.router.Handle("/user/presence", c.Then(s.SendPresence())).Methods("POST")
+	s.router.Handle("/user/presence/subscribe", c.Then(s.SubscribePresence())).Methods("POST")
 	s.router.Handle("/user/info", c.Then(s.GetUser())).Methods("POST")
 	s.router.Handle("/user/check", c.Then(s.CheckUser())).Methods("POST")
 	s.router.Handle("/user/avatar", c.Then(s.GetAvatar())).Methods("POST")

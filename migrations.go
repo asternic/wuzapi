@@ -75,6 +75,11 @@ var migrations = []Migration{
 		Name:  "add_whatsmeow_message_secrets_message_id_idx",
 		UpSQL: addWhatsmeowMessageSecretsMessageIDIndexSQL,
 	},
+	{
+		ID:    10,
+		Name:  "add_webhook_use_proxy",
+		UpSQL: addWebhookUseProxySQL,
+	},
 }
 
 const changeIDToStringSQL = `
@@ -226,6 +231,18 @@ BEGIN
 	CREATE INDEX IF NOT EXISTS whatsmeow_message_secrets_message_id_idx
 	ON whatsmeow_message_secrets (message_id);
 END $$;
+-- SQLite version (handled in code)
+`
+
+const addWebhookUseProxySQL = `
+-- PostgreSQL version
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'webhook_use_proxy') THEN
+        ALTER TABLE users ADD COLUMN webhook_use_proxy BOOLEAN DEFAULT TRUE;
+    END IF;
+END $$;
+
 -- SQLite version (handled in code)
 `
 
@@ -453,6 +470,12 @@ func applyMigration(db *sqlx.DB, migration Migration) error {
 	} else if migration.ID == 9 {
 		if db.DriverName() == "sqlite" {
 			err = nil
+		} else {
+			_, err = tx.Exec(migration.UpSQL)
+		}
+	} else if migration.ID == 10 {
+		if db.DriverName() == "sqlite" {
+			err = addColumnIfNotExistsSQLite(tx, "users", "webhook_use_proxy", "BOOLEAN DEFAULT 1")
 		} else {
 			_, err = tx.Exec(migration.UpSQL)
 		}

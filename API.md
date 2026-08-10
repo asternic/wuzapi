@@ -1007,6 +1007,37 @@ curl -X POST -H 'Token: 1234ABCD' -H 'Content-Type: application/json' --data '{"
 
 ---
 
+## Subscribe to Contact Presence
+
+Subscribes to a contact's presence updates (online/offline and last seen). After
+subscribing, your configured webhook receives `Presence` events for that contact. You
+should be online yourself to receive presence (wuzapi sends an available presence on
+connect). Whether `last_seen` is available depends on the contact's privacy settings.
+
+endpoint: _/user/presence/subscribe_
+
+method: **POST**
+
+```
+curl -X POST -H 'Token: 1234ABCD' -H 'Content-Type: application/json' --data '{"Phone":"5491155554444"}' http://localhost:8080/user/presence/subscribe
+```
+
+The resulting webhook `Presence` event looks like:
+
+```json
+{
+  "type": "Presence",
+  "state": "offline",
+  "from": "5491155554444@s.whatsapp.net",
+  "last_seen": 1750000000
+}
+```
+
+`last_seen` is a Unix timestamp, present only when the contact is offline and shares
+their last seen. When the contact is online, only `type`, `from` and `state` are sent.
+
+---
+
 ## Mark message(s) as read
 
 Indicates that one or more messages were read. Id is an array of messages Ids.

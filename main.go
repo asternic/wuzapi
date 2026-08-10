@@ -69,6 +69,7 @@ var (
 	webhookRetryCount        = flag.Int("retrycount", 5, "Number of times to retry failed webhooks")
 	webhookRetryDelaySeconds = flag.Int("retrydelay", 30, "Delay in seconds between webhook retries")
 	webhookErrorQueueName    = flag.String("errorqueue", "webhook_errors", "RabbitMQ queue name for failed webhooks")
+	globalWebhookUseProxy    = flag.Bool("webhookuseproxy", true, "Route webhook deliveries through the per-user proxy when configured")
 
 	container        *sqlstore.Container
 	clientManager    = NewClientManager()
@@ -81,7 +82,7 @@ var (
 
 var privateIPBlocks []*net.IPNet
 
-const version = "1.0.6"
+const version = "1.0.7"
 
 // killchannel maps a userID to its session goroutine's kill channel. It is
 // accessed from HTTP request goroutines (Connect/Disconnect/logout/delete) and
@@ -262,6 +263,13 @@ func main() {
 	if v := os.Getenv("WEBHOOK_ERROR_QUEUE_NAME"); v != "" {
 		*webhookErrorQueueName = v
 	}
+	if v := os.Getenv("WUZAPI_WEBHOOK_USE_PROXY"); v != "" {
+		*globalWebhookUseProxy = strings.ToLower(v) == "true" || v == "1"
+	}
+
+	log.Info().
+		Bool("use_proxy", *globalWebhookUseProxy).
+		Msg("Webhook Proxy Configured")
 
 	log.Info().
 		Bool("enabled", *webhookRetryEnabled).
@@ -484,6 +492,9 @@ func main() {
 
 	s.connectOnStartup()
 
+	// Start background cleanup of stale passkey pairing states (needed for both modes)
+	startPasskeyCleanup()
+
 	if serverMode == Stdio {
 		startStdioMode(s)
 	} else {
@@ -549,6 +560,7 @@ func startHTTPMode(s *server) {
 		}
 	}()
 	log.Info().Str("address", *address).Str("port", *port).Msg("Server started. Waiting for connections...")
+
 	select {}
 }
 

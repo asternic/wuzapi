@@ -644,7 +644,17 @@ func (s *server) GetQR() http.HandlerFunc {
 		}
 
 		log.Info().Str("instance", txtid).Str("qrcode", code).Msg("Get QR successful")
-		response := map[string]interface{}{"QRCode": fmt.Sprintf("%s", code)}
+		response := map[string]interface{}{
+			"QRCode":         fmt.Sprintf("%s", code),
+			"passkeyPending": false,
+			"publicKey":      nil,
+		}
+
+		if pk := peekPendingPasskey(txtid); pk != nil && pk.Request != nil {
+			response["passkeyPending"] = true
+			response["publicKey"] = pk.Request.PublicKey
+		}
+
 		responseJson, err := json.Marshal(response)
 		if err != nil {
 			s.Respond(w, r, http.StatusInternalServerError, err)
@@ -797,6 +807,112 @@ func (s *server) resolveSessionJID(ctx context.Context, txtid string, waClient *
 	return jid
 }
 
+// PasskeyResponse receives a WebAuthn response from the frontend and sends it to WhatsApp
+func (s *server) PasskeyResponse() http.HandlerFunc {
+	type passkeyResponseStruct struct {
+		Response *types.WebAuthnResponse `json:"response"`
+	}
+
+	return func(w http.ResponseWriter, r *http.Request) {
+		txtid := r.Context().Value("userinfo").(Values).Get("Id")
+
+		state := getAndConsumePendingPasskey(txtid)
+		if state == nil || state.Request == nil {
+			s.Respond(w, r, http.StatusBadRequest, errors.New("no pending passkey request"))
+			return
+		}
+
+		decoder := json.NewDecoder(r.Body)
+		var t passkeyResponseStruct
+		err := decoder.Decode(&t)
+		if err != nil {
+			storePendingPasskey(txtid, state) // put it back so user can retry
+			s.Respond(w, r, http.StatusBadRequest, errors.New("could not decode Payload"))
+			return
+		}
+
+		if t.Response == nil {
+			storePendingPasskey(txtid, state) // put it back
+			s.Respond(w, r, http.StatusBadRequest, errors.New("missing response in Payload"))
+			return
+		}
+
+		if state.Client == nil {
+			storePendingPasskey(txtid, state) // put it back
+			s.Respond(w, r, http.StatusInternalServerError, errors.New("passkey client unavailable"))
+			return
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		err = state.Client.SendPasskeyResponse(ctx, t.Response)
+		if err != nil {
+			log.Error().Err(err).Str("userID", txtid).Msg("Failed to send passkey response")
+			s.Respond(w, r, http.StatusInternalServerError, err)
+			return
+		}
+
+		log.Info().Str("userID", txtid).Msg("Passkey response sent successfully")
+		s.Respond(w, r, http.StatusOK, map[string]interface{}{"status": "passkey_response_sent"})
+	}
+}
+
+// PasskeyConfirm confirms the passkey pairing code was shown to the user.
+// Unlike PasskeyResponse, this uses peek (non-consuming read) because the
+// confirmation step does not require exclusive ownership of the state — the
+// state is only removed after a successful SendPasskeyConfirmation call.
+func (s *server) PasskeyConfirm() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		txtid := r.Context().Value("userinfo").(Values).Get("Id")
+
+		state := peekPendingPasskey(txtid)
+		if state == nil || state.Client == nil {
+			s.Respond(w, r, http.StatusBadRequest, errors.New("no pending passkey confirmation"))
+			return
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		err := state.Client.SendPasskeyConfirmation(ctx)
+		if err != nil {
+			log.Error().Err(err).Str("userID", txtid).Msg("Failed to send passkey confirmation")
+			s.Respond(w, r, http.StatusInternalServerError, err)
+			return
+		}
+
+		// Now consume the state — the confirmation was sent successfully.
+		deletePendingPasskey(txtid)
+
+		log.Info().Str("userID", txtid).Msg("Passkey confirmation sent successfully")
+		s.Respond(w, r, http.StatusOK, map[string]interface{}{"status": "passkey_confirmed"})
+	}
+}
+
+// GetPasskeyStatus returns whether there is a pending passkey request for this session
+func (s *server) GetPasskeyStatus() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		txtid := r.Context().Value("userinfo").(Values).Get("Id")
+
+		pk := peekPendingPasskey(txtid)
+		response := map[string]interface{}{
+			"passkeyPending": pk != nil && pk.Request != nil,
+			"publicKey":      nil,
+		}
+		if pk != nil && pk.Request != nil {
+			response["publicKey"] = pk.Request.PublicKey
+		}
+
+		responseJson, err := json.Marshal(response)
+		if err != nil {
+			s.Respond(w, r, http.StatusInternalServerError, err)
+		} else {
+			s.Respond(w, r, http.StatusOK, string(responseJson))
+		}
+	}
+}
+
 // Gets Connected and LoggedIn Status
 func (s *server) GetStatus() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -821,19 +937,9 @@ func (s *server) GetStatus() http.HandlerFunc {
 		isLoggedIn := waClient != nil && waClient.IsLoggedIn()
 		jid := s.resolveSessionJID(r.Context(), txtid, waClient, userInfo)
 
-		var proxyURL string
-		s.db.QueryRow("SELECT proxy_url FROM users WHERE id = $1", txtid).Scan(&proxyURL)
-		proxyConfig := map[string]interface{}{
-			"enabled":   proxyURL != "",
-			"proxy_url": proxyURL,
-		}
-
-		var s3Enabled bool
-		var s3Endpoint, s3Region, s3Bucket, s3PublicURL, s3MediaDelivery string
-		var s3PathStyle bool
-		var s3RetentionDays int
-
-		// Start with safe defaults so the field is always present in the response
+		// Safe defaults so the response always contains every config field.
+		proxyURL := ""
+		webhookUseProxy := *globalWebhookUseProxy
 		s3Config := map[string]interface{}{
 			"enabled":        false,
 			"endpoint":       "",
@@ -845,10 +951,33 @@ func (s *server) GetStatus() http.HandlerFunc {
 			"media_delivery": "",
 			"retention_days": 0,
 		}
-		err := s.db.QueryRow(`SELECT COALESCE(s3_enabled, false), COALESCE(s3_endpoint, ''), COALESCE(s3_region, ''), COALESCE(s3_bucket, ''), COALESCE(s3_path_style, false), COALESCE(s3_public_url, ''), COALESCE(media_delivery, ''), COALESCE(s3_retention_days, 0) FROM users WHERE id = $1`, txtid).Scan(&s3Enabled, &s3Endpoint, &s3Region, &s3Bucket, &s3PathStyle, &s3PublicURL, &s3MediaDelivery, &s3RetentionDays)
+		hmacConfigured := false
 
+		var s3Enabled bool
+		var s3Endpoint, s3Region, s3Bucket, s3PublicURL, s3MediaDelivery string
+		var s3PathStyle bool
+		var s3RetentionDays int
+		var hmacKey []byte
+
+		// One query for proxy, S3 and HMAC config instead of three round-trips.
+		err := s.db.QueryRow(`
+			SELECT COALESCE(proxy_url, ''),
+			       COALESCE(webhook_use_proxy, true),
+			       COALESCE(s3_enabled, false),
+			       COALESCE(s3_endpoint, ''),
+			       COALESCE(s3_region, ''),
+			       COALESCE(s3_bucket, ''),
+			       COALESCE(s3_path_style, false),
+			       COALESCE(s3_public_url, ''),
+			       COALESCE(media_delivery, ''),
+			       COALESCE(s3_retention_days, 0),
+			       hmac_key
+			FROM users WHERE id = $1`, txtid).Scan(
+			&proxyURL, &webhookUseProxy,
+			&s3Enabled, &s3Endpoint, &s3Region, &s3Bucket, &s3PathStyle, &s3PublicURL, &s3MediaDelivery, &s3RetentionDays,
+			&hmacKey,
+		)
 		if err == nil {
-			// Overwrite defaults with actual values if the query succeeded
 			s3Config["enabled"] = s3Enabled
 			s3Config["endpoint"] = s3Endpoint
 			s3Config["region"] = s3Region
@@ -857,18 +986,18 @@ func (s *server) GetStatus() http.HandlerFunc {
 			s3Config["public_url"] = s3PublicURL
 			s3Config["media_delivery"] = s3MediaDelivery
 			s3Config["retention_days"] = s3RetentionDays
-		} else {
-			if err != sql.ErrNoRows {
-				log.Warn().Err(err).Str("user_id", txtid).Msg("Failed to query S3 config for user")
-			}
+			hmacConfigured = len(hmacKey) > 0
+		} else if err != sql.ErrNoRows {
+			log.Warn().Err(err).Str("user_id", txtid).Msg("Failed to query user config for status")
 		}
+		proxyConfig := proxyConfigResponse(proxyURL, webhookUseProxy)
 
-		var hmacKey []byte
-		err = s.db.QueryRow("SELECT hmac_key FROM users WHERE id = $1", txtid).Scan(&hmacKey)
-		if err != nil && err != sql.ErrNoRows {
-			log.Error().Err(err).Str("userID", txtid).Msg("Failed to query HMAC key")
+		passkeyPending := false
+		var publicKey interface{} = nil
+		if pk := peekPendingPasskey(txtid); pk != nil && pk.Request != nil {
+			passkeyPending = true
+			publicKey = pk.Request.PublicKey
 		}
-		hmacConfigured := len(hmacKey) > 0
 
 		response := map[string]interface{}{
 			"id":              txtid,
@@ -881,6 +1010,8 @@ func (s *server) GetStatus() http.HandlerFunc {
 			"events":          userInfo.Get("Events"),
 			"proxy_url":       userInfo.Get("Proxy"),
 			"qrcode":          userInfo.Get("Qrcode"),
+			"passkeyPending":  passkeyPending,
+			"publicKey":       publicKey,
 			"history":         userInfo.Get("History"),
 			"proxy_config":    proxyConfig,
 			"s3_config":       s3Config,
@@ -945,7 +1076,7 @@ func (s *server) SendDocument() http.HandlerFunc {
 			return
 		}
 
-		recipient, err := validateMessageFields(t.Phone, t.ContextInfo.StanzaID, t.ContextInfo.Participant)
+		recipient, err := validateMessageFields(r.Context(), clientManager.GetWhatsmeowClient(txtid), t.Phone, t.ContextInfo.StanzaID, t.ContextInfo.Participant)
 		if err != nil {
 			log.Error().Msg(fmt.Sprintf("%s", err))
 			s.Respond(w, r, http.StatusBadRequest, err)
@@ -1115,7 +1246,7 @@ func (s *server) SendAudio() http.HandlerFunc {
 			return
 		}
 
-		recipient, err := validateMessageFields(t.Phone, t.ContextInfo.StanzaID, t.ContextInfo.Participant)
+		recipient, err := validateMessageFields(r.Context(), clientManager.GetWhatsmeowClient(txtid), t.Phone, t.ContextInfo.StanzaID, t.ContextInfo.Participant)
 		if err != nil {
 			log.Error().Msg(fmt.Sprintf("%s", err))
 			s.Respond(w, r, http.StatusBadRequest, err)
@@ -1321,7 +1452,7 @@ func (s *server) SendImage() http.HandlerFunc {
 			return
 		}
 
-		recipient, err := validateMessageFields(t.Phone, t.ContextInfo.StanzaID, t.ContextInfo.Participant)
+		recipient, err := validateMessageFields(r.Context(), clientManager.GetWhatsmeowClient(txtid), t.Phone, t.ContextInfo.StanzaID, t.ContextInfo.Participant)
 		if err != nil {
 			log.Error().Msg(fmt.Sprintf("%s", err))
 			s.Respond(w, r, http.StatusBadRequest, err)
@@ -1514,7 +1645,7 @@ func (s *server) SendSticker() http.HandlerFunc {
 			return
 		}
 
-		recipient, err := validateMessageFields(t.Phone, t.ContextInfo.StanzaID, t.ContextInfo.Participant)
+		recipient, err := validateMessageFields(r.Context(), clientManager.GetWhatsmeowClient(txtid), t.Phone, t.ContextInfo.StanzaID, t.ContextInfo.Participant)
 		if err != nil {
 			log.Error().Msg(fmt.Sprintf("%s", err))
 			s.Respond(w, r, http.StatusBadRequest, err)
@@ -1679,7 +1810,7 @@ func (s *server) SendVideo() http.HandlerFunc {
 			return
 		}
 
-		recipient, err := validateMessageFields(t.Phone, t.ContextInfo.StanzaID, t.ContextInfo.Participant)
+		recipient, err := validateMessageFields(r.Context(), clientManager.GetWhatsmeowClient(txtid), t.Phone, t.ContextInfo.StanzaID, t.ContextInfo.Participant)
 		if err != nil {
 			log.Error().Msg(fmt.Sprintf("%s", err))
 			s.Respond(w, r, http.StatusBadRequest, err)
@@ -1854,7 +1985,7 @@ func (s *server) SendContact() http.HandlerFunc {
 			return
 		}
 
-		recipient, err := validateMessageFields(t.Phone, t.ContextInfo.StanzaID, t.ContextInfo.Participant)
+		recipient, err := validateMessageFields(r.Context(), clientManager.GetWhatsmeowClient(txtid), t.Phone, t.ContextInfo.StanzaID, t.ContextInfo.Participant)
 		if err != nil {
 			log.Error().Msg(fmt.Sprintf("%s", err))
 			s.Respond(w, r, http.StatusBadRequest, err)
@@ -1977,7 +2108,7 @@ func (s *server) SendLocation() http.HandlerFunc {
 			return
 		}
 
-		recipient, err := validateMessageFields(t.Phone, t.ContextInfo.StanzaID, t.ContextInfo.Participant)
+		recipient, err := validateMessageFields(r.Context(), clientManager.GetWhatsmeowClient(txtid), t.Phone, t.ContextInfo.StanzaID, t.ContextInfo.Participant)
 		if err != nil {
 			log.Error().Msg(fmt.Sprintf("%s", err))
 			s.Respond(w, r, http.StatusBadRequest, err)
@@ -2176,7 +2307,7 @@ func (s *server) SendButtons() http.HandlerFunc {
 		}
 
 		// --- Destinatário e Mensagem ID ---
-		recipient, err := validateMessageFields(t.Phone, t.ContextInfo.StanzaID, t.ContextInfo.Participant)
+		recipient, err := validateMessageFields(r.Context(), clientManager.GetWhatsmeowClient(txtid), t.Phone, t.ContextInfo.StanzaID, t.ContextInfo.Participant)
 		if err != nil {
 			s.Respond(w, r, http.StatusBadRequest, err)
 			return
@@ -2476,7 +2607,7 @@ func (s *server) SendList() http.HandlerFunc {
 
 		// ── 4. Validate recipient ────────────────────────────────────────────
 
-		recipient, err := validateMessageFields(req.Phone, req.ContextInfo.StanzaID, req.ContextInfo.Participant)
+		recipient, err := validateMessageFields(r.Context(), clientManager.GetWhatsmeowClient(txtid), req.Phone, req.ContextInfo.StanzaID, req.ContextInfo.Participant)
 		if err != nil {
 			s.Respond(w, r, http.StatusBadRequest, err)
 			return
@@ -2687,7 +2818,7 @@ func (s *server) SendMessage() http.HandlerFunc {
 			s.Respond(w, r, http.StatusBadRequest, errors.New("missing Body in Payload"))
 			return
 		}
-		recipient, err := validateMessageFields(t.Phone, t.ContextInfo.StanzaID, t.ContextInfo.Participant)
+		recipient, err := validateMessageFields(r.Context(), clientManager.GetWhatsmeowClient(txtid), t.Phone, t.ContextInfo.StanzaID, t.ContextInfo.Participant)
 		if err != nil {
 			log.Error().Msg(fmt.Sprintf("%s", err))
 			s.Respond(w, r, http.StatusBadRequest, err)
@@ -2699,25 +2830,40 @@ func (s *server) SendMessage() http.HandlerFunc {
 			msgid = t.Id
 		}
 		var (
-			url         string
-			title       string
-			description string
-			imageData   []byte
+			url string
+			og  openGraphResult
 		)
 		if t.LinkPreview {
 			url = extractFirstURL(t.Body)
 			if url != "" {
-				title, description, imageData = getOpenGraphData(r.Context(), url, txtid)
+				og = getOpenGraphData(r.Context(), url, txtid)
 			}
 		}
 		msg := &waE2E.Message{
 			ExtendedTextMessage: &waE2E.ExtendedTextMessage{
 				Text:          proto.String(t.Body),
 				MatchedText:   proto.String(url),
-				Title:         proto.String(title),
-				Description:   proto.String(description),
-				JPEGThumbnail: imageData,
+				Title:         proto.String(og.Title),
+				Description:   proto.String(og.Description),
+				JPEGThumbnail: og.ImageData,
 			},
+		}
+		// Upload the high-res thumbnail so clients render the large preview
+		// card; without these fields only the small inline thumbnail shows.
+		if len(og.HQImageData) > 0 {
+			uploaded, upErr := clientManager.GetWhatsmeowClient(txtid).Upload(r.Context(), og.HQImageData, whatsmeow.MediaLinkThumbnail)
+			if upErr != nil {
+				log.Warn().Err(upErr).Str("url", url).Msg("Failed to upload link preview thumbnail, sending inline thumbnail only")
+			} else {
+				etm := msg.ExtendedTextMessage
+				etm.ThumbnailDirectPath = proto.String(uploaded.DirectPath)
+				etm.ThumbnailSHA256 = uploaded.FileSHA256
+				etm.ThumbnailEncSHA256 = uploaded.FileEncSHA256
+				etm.MediaKey = uploaded.MediaKey
+				etm.MediaKeyTimestamp = proto.Int64(time.Now().Unix())
+				etm.ThumbnailWidth = proto.Uint32(og.HQWidth)
+				etm.ThumbnailHeight = proto.Uint32(og.HQHeight)
+			}
 		}
 		if t.ContextInfo.StanzaID != nil {
 			var qm *waE2E.Message
@@ -2829,7 +2975,7 @@ func (s *server) SendPoll() http.HandlerFunc {
 			msgid = req.Id
 		}
 
-		recipient, err := validateMessageFields(req.Group, nil, nil)
+		recipient, err := validateMessageFields(r.Context(), clientManager.GetWhatsmeowClient(txtid), req.Group, nil, nil)
 		if err != nil {
 			s.Respond(w, r, http.StatusBadRequest, err)
 			return
@@ -2968,7 +3114,7 @@ func (s *server) SendEditMessage() http.HandlerFunc {
 			return
 		}
 
-		recipient, err := validateMessageFields(t.Phone, t.ContextInfo.StanzaID, t.ContextInfo.Participant)
+		recipient, err := validateMessageFields(r.Context(), clientManager.GetWhatsmeowClient(txtid), t.Phone, t.ContextInfo.StanzaID, t.ContextInfo.Participant)
 		if err != nil {
 			log.Error().Msg(fmt.Sprintf("%s", err))
 			s.Respond(w, r, http.StatusBadRequest, err)
@@ -3477,6 +3623,64 @@ func (s *server) SendPresence() http.HandlerFunc {
 		}
 
 		response := map[string]interface{}{"Details": "Presence set successfuly"}
+		responseJson, err := json.Marshal(response)
+		if err != nil {
+			s.Respond(w, r, http.StatusInternalServerError, err)
+		} else {
+			s.Respond(w, r, http.StatusOK, string(responseJson))
+		}
+		return
+
+	}
+}
+
+// Subscribes to a contact's presence (online/offline + last seen).
+// After subscribing, the configured webhook receives "Presence" events for that
+// contact (with state and, when offline, a last_seen unix timestamp). Requires the
+// session to be available/online (wuzapi sends available presence on connect).
+func (s *server) SubscribePresence() http.HandlerFunc {
+
+	type subscribePresenceStruct struct {
+		Phone string
+	}
+
+	return func(w http.ResponseWriter, r *http.Request) {
+
+		txtid := r.Context().Value("userinfo").(Values).Get("Id")
+
+		if clientManager.GetWhatsmeowClient(txtid) == nil {
+			s.Respond(w, r, http.StatusInternalServerError, errors.New("no session"))
+			return
+		}
+
+		decoder := json.NewDecoder(r.Body)
+		var t subscribePresenceStruct
+		err := decoder.Decode(&t)
+		if err != nil {
+			s.Respond(w, r, http.StatusBadRequest, errors.New("could not decode Payload"))
+			return
+		}
+
+		if len(t.Phone) < 1 {
+			s.Respond(w, r, http.StatusBadRequest, errors.New("missing Phone in Payload"))
+			return
+		}
+
+		jid, ok := parseJID(t.Phone)
+		if !ok {
+			s.Respond(w, r, http.StatusBadRequest, errors.New("could not parse Phone"))
+			return
+		}
+
+		err = clientManager.GetWhatsmeowClient(txtid).SubscribePresence(r.Context(), jid)
+		if err != nil {
+			s.Respond(w, r, http.StatusInternalServerError, errors.New("failure subscribing to presence"))
+			return
+		}
+
+		log.Info().Str("jid", jid.String()).Msg("Subscribed to presence")
+
+		response := map[string]interface{}{"Details": "Presence subscription requested successfully"}
 		responseJson, err := json.Marshal(response)
 		if err != nil {
 			s.Respond(w, r, http.StatusInternalServerError, err)
@@ -5280,17 +5484,18 @@ func (s *server) ListNewsletter() http.HandlerFunc {
 // Admin List users
 func (s *server) ListUsers() http.HandlerFunc {
 	type usersStruct struct {
-		Id         string         `db:"id"`
-		Name       string         `db:"name"`
-		Token      string         `db:"token"`
-		Webhook    string         `db:"webhook"`
-		Jid        string         `db:"jid"`
-		Qrcode     string         `db:"qrcode"`
-		Connected  sql.NullBool   `db:"connected"`
-		Expiration sql.NullInt64  `db:"expiration"`
-		ProxyURL   sql.NullString `db:"proxy_url"`
-		Events     string         `db:"events"`
-		History    sql.NullInt64  `db:"history"`
+		Id              string         `db:"id"`
+		Name            string         `db:"name"`
+		Token           string         `db:"token"`
+		Webhook         string         `db:"webhook"`
+		Jid             string         `db:"jid"`
+		Qrcode          string         `db:"qrcode"`
+		Connected       sql.NullBool   `db:"connected"`
+		Expiration      sql.NullInt64  `db:"expiration"`
+		ProxyURL        sql.NullString `db:"proxy_url"`
+		WebhookUseProxy bool           `db:"webhook_use_proxy"`
+		Events          string         `db:"events"`
+		History         sql.NullInt64  `db:"history"`
 	}
 	return func(w http.ResponseWriter, r *http.Request) {
 		vars := mux.Vars(r)
@@ -5301,11 +5506,11 @@ func (s *server) ListUsers() http.HandlerFunc {
 
 		if hasID {
 			// Fetch a single user
-			query = "SELECT id, name, token, webhook, jid, qrcode, connected, expiration, proxy_url, events, history FROM users WHERE id = $1"
+			query = "SELECT id, name, token, webhook, jid, qrcode, connected, expiration, proxy_url, COALESCE(webhook_use_proxy, true) AS webhook_use_proxy, events, history FROM users WHERE id = $1"
 			args = append(args, userID)
 		} else {
 			// Fetch all users
-			query = "SELECT id, name, token, webhook, jid, qrcode, connected, expiration, proxy_url, events, history FROM users"
+			query = "SELECT id, name, token, webhook, jid, qrcode, connected, expiration, proxy_url, COALESCE(webhook_use_proxy, true) AS webhook_use_proxy, events, history FROM users"
 		}
 
 		rows, err := s.db.Queryx(query, args...)
@@ -5350,10 +5555,7 @@ func (s *server) ListUsers() http.HandlerFunc {
 			}
 			// Add proxy_config
 			proxyURL := user.ProxyURL.String
-			userMap["proxy_config"] = map[string]interface{}{
-				"enabled":   proxyURL != "",
-				"proxy_url": proxyURL,
-			}
+			userMap["proxy_config"] = proxyConfigResponse(proxyURL, user.WebhookUseProxy)
 			// Add s3_config (search S3 fields in the database)
 			var s3Enabled bool
 			var s3Endpoint, s3Region, s3Bucket, s3PublicURL, s3MediaDelivery string
@@ -5413,11 +5615,6 @@ func (s *server) AddUser() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 
-		type ProxyConfig struct {
-			Enabled  bool   `json:"enabled"`
-			ProxyURL string `json:"proxyURL"`
-		}
-
 		// Parse the request body
 		var user struct {
 			Name        string       `json:"name"`
@@ -5451,6 +5648,7 @@ func (s *server) AddUser() http.HandlerFunc {
 		if user.ProxyConfig == nil {
 			user.ProxyConfig = &ProxyConfig{}
 		}
+		webhookUseProxy := resolveWebhookUseProxy(user.ProxyConfig.WebhookUseProxy)
 		if user.S3Config == nil {
 			user.S3Config = &S3Config{}
 		}
@@ -5535,8 +5733,8 @@ func (s *server) AddUser() http.HandlerFunc {
 
 		// Insert user with all proxy, S3 and HMAC fields
 		if _, err = s.db.Exec(
-			"INSERT INTO users (id, name, token, webhook, expiration, events, jid, qrcode, proxy_url, s3_enabled, s3_endpoint, s3_region, s3_bucket, s3_access_key, s3_secret_key, s3_path_style, s3_public_url, media_delivery, s3_retention_days, hmac_key, history) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)",
-			id, user.Name, user.Token, user.Webhook, user.Expiration, user.Events, "", "", user.ProxyConfig.ProxyURL,
+			"INSERT INTO users (id, name, token, webhook, expiration, events, jid, qrcode, proxy_url, webhook_use_proxy, s3_enabled, s3_endpoint, s3_region, s3_bucket, s3_access_key, s3_secret_key, s3_path_style, s3_public_url, media_delivery, s3_retention_days, hmac_key, history) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)",
+			id, user.Name, user.Token, user.Webhook, user.Expiration, user.Events, "", "", user.ProxyConfig.ProxyURL, webhookUseProxy,
 			user.S3Config.Enabled, user.S3Config.Endpoint, user.S3Config.Region, user.S3Config.Bucket, user.S3Config.AccessKey, user.S3Config.SecretKey, user.S3Config.PathStyle, user.S3Config.PublicURL, user.S3Config.MediaDelivery, user.S3Config.RetentionDays, encryptedHmacKey, user.History,
 		); err != nil {
 			log.Error().Str("error", fmt.Sprintf("%v", err)).Msg("admin DB error")
@@ -5566,10 +5764,7 @@ func (s *server) AddUser() http.HandlerFunc {
 		}
 
 		// Build response like GET /admin/users
-		proxyConfig := map[string]interface{}{
-			"enabled":   user.ProxyConfig.Enabled,
-			"proxy_url": user.ProxyConfig.ProxyURL,
-		}
+		proxyConfig := proxyConfigResponse(user.ProxyConfig.ProxyURL, webhookUseProxy)
 		s3Config := map[string]interface{}{
 			"enabled":        user.S3Config.Enabled,
 			"endpoint":       user.S3Config.Endpoint,
@@ -5604,11 +5799,6 @@ func (s *server) AddUser() http.HandlerFunc {
 func (s *server) EditUser() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-
-		type ProxyConfig struct {
-			Enabled  bool   `json:"enabled"`
-			ProxyURL string `json:"proxyURL"`
-		}
 
 		// Get the user ID from the request URL
 		vars := mux.Vars(r)
@@ -5709,6 +5899,9 @@ func (s *server) EditUser() http.HandlerFunc {
 				addField("proxy_url", user.ProxyConfig.ProxyURL, true)
 			} else {
 				addField("proxy_url", "", true)
+			}
+			if user.ProxyConfig.WebhookUseProxy != nil {
+				addField("webhook_use_proxy", *user.ProxyConfig.WebhookUseProxy, true)
 			}
 		}
 
@@ -6026,12 +6219,70 @@ func (s *server) Respond(w http.ResponseWriter, r *http.Request, status int, dat
 	}
 }
 
-// Validate message fields
-func validateMessageFields(phone string, stanzaid *string, participant *string) (types.JID, error) {
+type messageLIDStore interface {
+	GetPNForLID(context.Context, types.JID) (types.JID, error)
+	GetLIDForPN(context.Context, types.JID) (types.JID, error)
+}
 
-	recipient, ok := parseJID(phone)
-	if !ok {
-		return types.NewJID("", types.DefaultUserServer), errors.New("could not parse Phone")
+// resolveMessageRecipient preserves explicit JIDs. For a bare numeric ID, it
+// checks both directions of whatsmeow's cached PN/LID map. If the ID is a known
+// LID, the LID is returned. If it is a known PN, its mapped LID is returned.
+// Unknown IDs retain the historical phone-number JID fallback.
+func resolveMessageRecipient(ctx context.Context, lidStore messageLIDStore, phone string) (types.JID, error) {
+	phone = strings.TrimSpace(phone)
+	if phone == "" {
+		return types.EmptyJID, errors.New("Phone is empty")
+	}
+
+	if strings.ContainsRune(phone, '@') {
+		recipient, ok := parseJID(phone)
+		if !ok {
+			return types.EmptyJID, errors.New("could not parse Phone")
+		}
+		return recipient, nil
+	}
+
+	bareID := strings.TrimPrefix(phone, "+")
+	if lidStore == nil {
+		return types.NewJID(bareID, types.DefaultUserServer), nil
+	}
+
+	lidCandidate := types.NewJID(bareID, types.HiddenUserServer)
+	pnForLID, err := lidStore.GetPNForLID(ctx, lidCandidate)
+	if err != nil {
+		return types.EmptyJID, fmt.Errorf("failed to look up PN for LID %s: %w", lidCandidate, err)
+	}
+
+	pnCandidate := types.NewJID(bareID, types.DefaultUserServer)
+	lidForPN, err := lidStore.GetLIDForPN(ctx, pnCandidate)
+	if err != nil {
+		return types.EmptyJID, fmt.Errorf("failed to look up LID for PN %s: %w", pnCandidate, err)
+	}
+
+	if !pnForLID.IsEmpty() && !lidForPN.IsEmpty() {
+		return types.EmptyJID, fmt.Errorf("ambiguous bare identifier %q: it is mapped as both a PN and a LID; include @lid or @s.whatsapp.net", bareID)
+	}
+	if !pnForLID.IsEmpty() {
+		log.Debug().Str("input", phone).Str("recipient", lidCandidate.String()).Str("pn", pnForLID.String()).Msg("Resolved bare message recipient as LID")
+		return lidCandidate, nil
+	}
+	if !lidForPN.IsEmpty() {
+		log.Debug().Str("input", phone).Str("recipient", lidForPN.String()).Str("pn", pnCandidate.String()).Msg("Resolved bare message recipient PN to LID")
+		return lidForPN, nil
+	}
+	return pnCandidate, nil
+}
+
+// Validate message fields and resolve bare PN/LID recipients from the client's
+// cached whatsmeow mapping store.
+func validateMessageFields(ctx context.Context, client *whatsmeow.Client, phone string, stanzaid *string, participant *string) (types.JID, error) {
+	var lidStore messageLIDStore
+	if client != nil && client.Store != nil {
+		lidStore = client.Store.LIDs
+	}
+	recipient, err := resolveMessageRecipient(ctx, lidStore, phone)
+	if err != nil {
+		return types.EmptyJID, err
 	}
 
 	if stanzaid != nil {
@@ -6111,8 +6362,9 @@ func (s *server) SetHistory() http.HandlerFunc {
 // Set proxy
 func (s *server) SetProxy() http.HandlerFunc {
 	type proxyStruct struct {
-		ProxyURL string `json:"proxy_url"` // Format: "socks5://user:pass@host:port" or "http://host:port"
-		Enable   bool   `json:"enable"`    // Whether to enable or disable proxy
+		ProxyURL        string `json:"proxy_url"` // Format: "socks5://user:pass@host:port" or "http://host:port"
+		Enable          bool   `json:"enable"`    // Whether to enable or disable proxy
+		WebhookUseProxy *bool  `json:"webhook_use_proxy,omitempty"`
 	}
 
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -6135,7 +6387,16 @@ func (s *server) SetProxy() http.HandlerFunc {
 
 		// If enable is false, remove proxy configuration
 		if !t.Enable {
-			_, err = s.db.Exec("UPDATE users SET proxy_url = '' WHERE id = $1", txtid)
+			webhookUseProxy := resolveWebhookUseProxy(t.WebhookUseProxy)
+			if t.WebhookUseProxy == nil {
+				// Preserve existing per-user setting; global default on failure.
+				s.db.QueryRow("SELECT COALESCE(webhook_use_proxy, true) FROM users WHERE id = $1", txtid).Scan(&webhookUseProxy)
+			}
+			_, err = s.db.Exec(
+				"UPDATE users SET proxy_url = '', webhook_use_proxy = $1 WHERE id = $2",
+				webhookUseProxy,
+				txtid,
+			)
 			if err != nil {
 				s.Respond(w, r, http.StatusInternalServerError, errors.New("failed to remove proxy configuration"))
 				return
@@ -6179,7 +6440,17 @@ func (s *server) SetProxy() http.HandlerFunc {
 		}
 
 		// Store proxy configuration in database
-		_, err = s.db.Exec("UPDATE users SET proxy_url = $1 WHERE id = $2", t.ProxyURL, txtid)
+		webhookUseProxy := resolveWebhookUseProxy(t.WebhookUseProxy)
+		if t.WebhookUseProxy == nil {
+			// Preserve existing per-user setting; global default on failure.
+			s.db.QueryRow("SELECT COALESCE(webhook_use_proxy, true) FROM users WHERE id = $1", txtid).Scan(&webhookUseProxy)
+		}
+		_, err = s.db.Exec(
+			"UPDATE users SET proxy_url = $1, webhook_use_proxy = $2 WHERE id = $3",
+			t.ProxyURL,
+			webhookUseProxy,
+			txtid,
+		)
 		if err != nil {
 			s.Respond(w, r, http.StatusInternalServerError, errors.New("failed to save proxy configuration"))
 			return
@@ -6195,8 +6466,9 @@ func (s *server) SetProxy() http.HandlerFunc {
 		}
 
 		response := map[string]interface{}{
-			"Details":  "Proxy configured successfully",
-			"ProxyURL": t.ProxyURL,
+			"Details":           "Proxy configured successfully",
+			"ProxyURL":          t.ProxyURL,
+			"webhook_use_proxy": webhookUseProxy,
 		}
 		responseJson, err := json.Marshal(response)
 		if err != nil {
