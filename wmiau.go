@@ -828,7 +828,8 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 		}
 		if mycli.WAClient.Store != nil && mycli.WAClient.Store.ID != nil {
 			connectedJID := mycli.WAClient.Store.ID.ToNonAD().String()
-			if _, err := mycli.db.Exec(`UPDATE users SET jid=$1 WHERE id=$2`, connectedJID, mycli.userID); err != nil {
+			query := mycli.db.Rebind(`UPDATE users SET jid=? WHERE id=?`)
+			if _, err := mycli.db.Exec(query, connectedJID, mycli.userID); err != nil {
 				log.Warn().Err(err).Str("user_id", mycli.userID).Msg("Failed to persist JID on connect")
 			} else if myuserinfo, found := userinfocache.Get(mycli.token); found {
 				v := updateUserInfo(myuserinfo, "Jid", connectedJID)
@@ -841,7 +842,7 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 		if mycli.WAClient.Store != nil && mycli.WAClient.Store.ID != nil {
 			jidStr = mycli.WAClient.Store.ID.ToNonAD().String()
 		}
-		sqlStmt := `UPDATE users SET jid=$1 WHERE id=$2`
+		sqlStmt := mycli.db.Rebind(`UPDATE users SET jid=? WHERE id=?`)
 		_, err := mycli.db.Exec(sqlStmt, jidStr, mycli.userID)
 		if err != nil {
 			log.Error().Err(err).Msg(sqlStmt)

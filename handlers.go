@@ -757,15 +757,16 @@ func (s *server) PairPhone() http.HandlerFunc {
 }
 
 // resolveSessionJID returns the best-known JID for a user. When logged in, the
-func (s *server) resolveSessionJID(txtid string, waClient *whatsmeow.Client, userInfo Values) string {
+// live whatsmeow store is authoritative — cache/DB often lag after QR pairing.
+func (s *server) resolveSessionJID(ctx context.Context, txtid string, waClient *whatsmeow.Client, userInfo Values) string {
 	jid := userInfo.Get("Jid")
 
-	if waClient != nil && waClient.IsLoggedIn() && waClient.Store != nil && waClient.Store.ID != nil {
+	if waClient != nil && waClient.Store != nil && waClient.IsLoggedIn() && waClient.Store.ID != nil {
 		storeJID := waClient.Store.ID.ToNonAD()
 		if storeJID.Server == types.HiddenUserServer {
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			pn, err := getCachedPNForLID(ctx, waClient, storeJID)
-			cancel()
+			timeoutCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+			defer cancel()
+			pn, err := getCachedPNForLID(timeoutCtx, waClient, storeJID)
 			if err == nil && !pn.IsEmpty() {
 				storeJID = pn.ToNonAD()
 			}
@@ -779,14 +780,16 @@ func (s *server) resolveSessionJID(txtid string, waClient *whatsmeow.Client, use
 					v := updateUserInfo(userInfo, "Jid", resolved)
 					userinfocache.Set(token, v, cache.NoExpiration)
 				}
-				if _, err := s.db.Exec("UPDATE users SET jid=$1 WHERE id=$2", resolved, txtid); err != nil {
+				query := s.db.Rebind("UPDATE users SET jid=? WHERE id=?")
+				if _, err := s.db.Exec(query, resolved, txtid); err != nil {
 					log.Warn().Err(err).Str("user_id", txtid).Msg("Failed to persist resolved JID")
 				}
 			}
 		}
 	} else if jid == "" {
 		var dbJid string
-		if err := s.db.QueryRow("SELECT jid FROM users WHERE id = $1", txtid).Scan(&dbJid); err == nil && dbJid != "" {
+		query := s.db.Rebind("SELECT jid FROM users WHERE id = ?")
+		if err := s.db.QueryRow(query, txtid).Scan(&dbJid); err == nil && dbJid != "" {
 			jid = dbJid
 		}
 	}
@@ -816,7 +819,7 @@ func (s *server) GetStatus() http.HandlerFunc {
 		waClient := clientManager.GetWhatsmeowClient(txtid)
 		isConnected := waClient != nil && waClient.IsConnected()
 		isLoggedIn := waClient != nil && waClient.IsLoggedIn()
-		jid := s.resolveSessionJID(txtid, waClient, userInfo)
+		jid := s.resolveSessionJID(r.Context(), txtid, waClient, userInfo)
 
 		var proxyURL string
 		s.db.QueryRow("SELECT proxy_url FROM users WHERE id = $1", txtid).Scan(&proxyURL)
