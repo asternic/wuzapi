@@ -259,11 +259,23 @@ func (s *server) Connect() http.HandlerFunc {
 
 	return func(w http.ResponseWriter, r *http.Request) {
 
-		webhook := r.Context().Value("userinfo").(Values).Get("Webhook")
-		jid := r.Context().Value("userinfo").(Values).Get("Jid")
-		txtid := r.Context().Value("userinfo").(Values).Get("Id")
-		token := r.Context().Value("userinfo").(Values).Get("Token")
+		userInfo := r.Context().Value("userinfo").(Values)
+		webhook := userInfo.Get("Webhook")
+		jid := userInfo.Get("Jid")
+		txtid := userInfo.Get("Id")
+		token := userInfo.Get("Token")
 		eventstring := ""
+
+		// Always prefer the DB jid over a stale in-memory cache entry so reconnect
+		// can find the whatsmeow device even after a process restart.
+		var dbJid string
+		if err := s.db.QueryRow("SELECT jid FROM users WHERE id = $1", txtid).Scan(&dbJid); err == nil && dbJid != "" {
+			jid = dbJid
+			if jid != userInfo.Get("Jid") {
+				v := updateUserInfo(userInfo, "Jid", jid)
+				userinfocache.Set(token, v, cache.NoExpiration)
+			}
+		}
 
 		// Decodes request BODY looking for events to subscribe
 		decoder := json.NewDecoder(r.Body)
