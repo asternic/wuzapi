@@ -50,15 +50,6 @@ When HMAC is configured, all webhooks include an `x-hmac-signature` header with 
 **Optional:**
 * Docker (for containerization)
 
-## Updating dependencies
-
-This project uses the whatsmeow library to communicate with WhatsApp. To update the library to the latest version, run:
-
-```bash
-go get -u go.mau.fi/whatsmeow@latest
-go mod tidy
-```
-
 ## Building
 
 ```
@@ -311,6 +302,22 @@ API calls should be made with content type json, and parameters sent into the
 request body, always passing the Token header for authenticating the request.
 
 Check the [API Reference](https://github.com/asternic/wuzapi/blob/main/API.md)
+
+## Updating the upstream whatsmeow library
+
+> [!CAUTION]
+> This section is intended for maintainers and developers. Regular users should use the whatsmeow version pinned in `go.mod` and should not upgrade it as part of the normal installation or build process.
+
+WuzAPI uses [whatsmeow](https://github.com/tulir/whatsmeow) to communicate with WhatsApp. Its upstream API can introduce breaking changes, so upgrading to the latest version may cause WuzAPI to stop compiling or working correctly until its code is adapted.
+
+Perform upgrades in a development branch, review the resulting `go.mod` and `go.sum` changes, and verify that WuzAPI builds and its tests pass before deploying the update:
+
+```bash
+go get -u go.mau.fi/whatsmeow@latest
+go mod tidy
+go test ./...
+go build .
+```
 
 ## Contributors
 
