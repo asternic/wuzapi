@@ -183,7 +183,15 @@ func sendToUserWebHookWithHmac(webhookurl string, path string, jsonData []byte, 
 		"instanceName": instance_name,
 	}
 
-	log.Debug().Interface("webhookData", data).Msg("Data being sent to webhook")
+	if len(jsonData) > 8192 {
+		log.Debug().
+			Str("userID", userID).
+			Str("instanceName", instance_name).
+			Int("jsonDataBytes", len(jsonData)).
+			Msg("Data being sent to webhook")
+	} else {
+		log.Debug().Interface("webhookData", data).Msg("Data being sent to webhook")
+	}
 
 	if webhookurl != "" {
 		log.Info().Str("url", webhookurl).Msg("Calling user webhook")
