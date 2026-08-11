@@ -189,31 +189,31 @@ document.addEventListener('DOMContentLoaded', function() {
     return false;
   });
 
-  document.getElementById('pairphoneinput').addEventListener('keypress', function(e) {
-    if (e.key === 'Enter') {
-      const phone = pairPhoneInput.value.trim();
-      if (phone) {
-        connect().then((data) => {
-          if(data.success==true) {
-            pairPhone(phone)
-              .then((data) => {
-                document.getElementById('pairHelp').classList.add('hidden');;
-                // Success case
-                if (data.success && data.data && data.data.LinkingCode) {
-                  document.getElementById('pairInfo').innerHTML = `Your link code is: ${data.data.LinkingCode}`;
-                  scanInterval = setInterval(checkStatus, 1000);
-                } else {
-                  document.getElementById('pairInfo').innerHTML = "Problem getting pairing code";
-                }
-              })
-              .catch((error) => {
-                // Error case
-                document.getElementById('pairInfo').innerHTML = "Problem getting pairing code";
-                console.error('Pairing error:', error);
-              });
-          }
-      });
+  document.getElementById('pairphoneinput').addEventListener('keypress', async function(e) {
+    if (e.key !== 'Enter') return;
+
+    e.preventDefault();
+    const input = e.currentTarget;
+    const phone = input.value.trim();
+    if (!phone || input.disabled) return;
+
+    // This modal is shown only after /session/connect has established the
+    // WhatsApp socket. Calling connect() again here made the pairing flow fail
+    // with "already connected" before /session/pairphone was ever requested.
+    input.disabled = true;
+    try {
+      const data = await pairPhone(phone);
+      document.getElementById('pairHelp').classList.add('hidden');
+      if (data.success && data.data && data.data.LinkingCode) {
+        document.getElementById('pairInfo').textContent = `Your link code is: ${data.data.LinkingCode}`;
+      } else {
+        document.getElementById('pairInfo').textContent = `Problem getting pairing code: ${data.error || 'unknown error'}`;
       }
+    } catch (error) {
+      document.getElementById('pairInfo').textContent = "Problem getting pairing code: request failed";
+      console.error('Pairing error:', error);
+    } finally {
+      input.disabled = false;
     }
   });
 
@@ -1067,12 +1067,12 @@ async function pairPhone(phone) {
   const myHeaders = new Headers();
   myHeaders.append('token', token);
   myHeaders.append('Content-Type', 'application/json');
-  res = await fetch(baseUrl + "/session/pairphone", {
+  const res = await fetch(baseUrl + "/session/pairphone", {
     method: "POST",
     headers: myHeaders,
     body: JSON.stringify({Phone: phone})
   });
-  data = await res.json();
+  const data = await res.json();
   return data;
 }
 
@@ -1167,7 +1167,6 @@ function init() {
 
   // Starting
   let notoken=0;
-  let scanInterval;
   let token = getLocalStorageItem('token');
   let admintoken = getLocalStorageItem('admintoken');
   let isAdminLogin = getLocalStorageItem('isAdmin');
@@ -1513,7 +1512,7 @@ function populateInstances(instances) {
             <div class="extra content">
               <button class="ui primary positive button dashboard-button ${instance.connected === true ? 'hidden' : ''}" id="button-connect-${instance.id}" onclick="connect('${instance.token}')">Connect</button>
               <button class="ui primary negative button dashboard-button ${instance.connected === true ? '' : 'hidden'}" id="button-logout-${instance.id}" onclick="logout('${instance.token}')">Logout</button>
-              <button class="ui primary positive button dashboard-button ${instance.connected === true && instance.loggedIn === false ? '' : 'hidden'} id="button-logout-${instance.id}" onclick="modalPairPhone()">Login with Pairing Code</button>
+              <button class="ui primary positive button dashboard-button ${instance.connected === true && instance.loggedIn === false ? '' : 'hidden'}" id="button-pair-${instance.id}" onclick="modalPairPhone()">Login with Pairing Code</button>
               </div>
         </div>
         `;

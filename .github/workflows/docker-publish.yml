@@ -1,24 +1,23 @@
 name: Publish Docker image
 
 on:
-  push:
-    branches:
-      - main
-  pull_request:
-    branches:
-      - main
-    types: [closed]
-  workflow_dispatch:
+  release:
+    types: [published]
+
+concurrency:
+  group: docker-release-${{ github.event.release.tag_name }}
+  cancel-in-progress: false
 
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
     environment: DOCKER
-    if: github.event_name != 'pull_request' || github.event.pull_request.merged == true
 
     steps:
       - name: Check out the repo
         uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.release.tag_name }}
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v4
@@ -40,8 +39,12 @@ jobs:
         uses: docker/metadata-action@v6
         with:
           images: asternic/wuzapi
+          flavor: |
+            latest=false
           tags: |
-            type=raw,value=latest
+            type=semver,pattern={{version}},value=${{ github.event.release.tag_name }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ github.event.release.tag_name }}
+            type=raw,value=latest,enable=${{ github.event.release.prerelease == false }}
             type=sha,format=short
 
       - name: Build and push Docker image

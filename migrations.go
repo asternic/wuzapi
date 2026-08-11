@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/jmoiron/sqlx"
+	"github.com/rs/zerolog/log"
 )
 
 type Migration struct {
@@ -79,6 +80,11 @@ var migrations = []Migration{
 		ID:    10,
 		Name:  "add_webhook_use_proxy",
 		UpSQL: addWebhookUseProxySQL,
+	},
+	{
+		ID:    12,
+		Name:  "repair_webhook_use_proxy",
+		UpSQL: repairWebhookUseProxySQL,
 	},
 }
 
@@ -236,14 +242,17 @@ END $$;
 
 const addWebhookUseProxySQL = `
 -- PostgreSQL version
-DO $$
-BEGIN
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'webhook_use_proxy') THEN
-        ALTER TABLE users ADD COLUMN webhook_use_proxy BOOLEAN DEFAULT TRUE;
-    END IF;
-END $$;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS webhook_use_proxy BOOLEAN DEFAULT TRUE;
 
 -- SQLite version (handled in code)
+`
+
+// Migration 10 collided with migrations from another development branch and
+// also used an information_schema lookup that was not scoped to the active
+// schema. Keep this as a separate, globally unused migration ID so databases
+// that already recorded a different migration 10 or 11 are repaired.
+const repairWebhookUseProxySQL = `
+ALTER TABLE users ADD COLUMN IF NOT EXISTS webhook_use_proxy BOOLEAN DEFAULT TRUE;
 `
 
 // GenerateRandomID creates a random string ID
@@ -269,11 +278,51 @@ func initializeSchema(db *sqlx.DB) error {
 	}
 
 	// Apply missing migrations
+	sourceMigrations := make(map[int]string, len(migrations))
+	for _, migration := range migrations {
+		sourceMigrations[migration.ID] = migration.Name
+		if appliedName, ok := applied[migration.ID]; ok && appliedName != migration.Name {
+			log.Warn().
+				Int("migration_id", migration.ID).
+				Str("database_name", appliedName).
+				Str("binary_name", migration.Name).
+				Msg("Database migration ID has a different name in this binary")
+		}
+	}
+	for id, appliedName := range applied {
+		if _, ok := sourceMigrations[id]; !ok {
+			log.Warn().
+				Int("migration_id", id).
+				Str("database_name", appliedName).
+				Msg("Database contains a migration unknown to this binary")
+		}
+	}
+
+	pending := 0
 	for _, migration := range migrations {
 		if _, ok := applied[migration.ID]; !ok {
+			pending++
+		}
+	}
+	log.Info().
+		Str("driver", db.DriverName()).
+		Int("applied", len(applied)).
+		Int("pending", pending).
+		Msg("Database migration status")
+
+	for _, migration := range migrations {
+		if _, ok := applied[migration.ID]; !ok {
+			log.Info().
+				Int("migration_id", migration.ID).
+				Str("migration_name", migration.Name).
+				Msg("Applying database migration")
 			if err := applyMigration(db, migration); err != nil {
 				return fmt.Errorf("failed to apply migration %d: %w", migration.ID, err)
 			}
+			log.Info().
+				Int("migration_id", migration.ID).
+				Str("migration_name", migration.Name).
+				Msg("Database migration applied")
 		}
 	}
 
@@ -322,8 +371,8 @@ func createMigrationsTable(db *sqlx.DB) error {
 	return nil
 }
 
-func getAppliedMigrations(db *sqlx.DB) (map[int]struct{}, error) {
-	applied := make(map[int]struct{})
+func getAppliedMigrations(db *sqlx.DB) (map[int]string, error) {
+	applied := make(map[int]string)
 	var rows []struct {
 		ID   int    `db:"id"`
 		Name string `db:"name"`
@@ -335,7 +384,7 @@ func getAppliedMigrations(db *sqlx.DB) (map[int]struct{}, error) {
 	}
 
 	for _, row := range rows {
-		applied[row.ID] = struct{}{}
+		applied[row.ID] = row.Name
 	}
 
 	return applied, nil
@@ -473,7 +522,7 @@ func applyMigration(db *sqlx.DB, migration Migration) error {
 		} else {
 			_, err = tx.Exec(migration.UpSQL)
 		}
-	} else if migration.ID == 10 {
+	} else if migration.ID == 10 || migration.ID == 12 {
 		if db.DriverName() == "sqlite" {
 			err = addColumnIfNotExistsSQLite(tx, "users", "webhook_use_proxy", "BOOLEAN DEFAULT 1")
 		} else {
