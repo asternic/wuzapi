@@ -259,11 +259,23 @@ func (s *server) Connect() http.HandlerFunc {
 
 	return func(w http.ResponseWriter, r *http.Request) {
 
-		webhook := r.Context().Value("userinfo").(Values).Get("Webhook")
-		jid := r.Context().Value("userinfo").(Values).Get("Jid")
-		txtid := r.Context().Value("userinfo").(Values).Get("Id")
-		token := r.Context().Value("userinfo").(Values).Get("Token")
+		userInfo := r.Context().Value("userinfo").(Values)
+		webhook := userInfo.Get("Webhook")
+		jid := userInfo.Get("Jid")
+		txtid := userInfo.Get("Id")
+		token := userInfo.Get("Token")
 		eventstring := ""
+
+		// Always prefer the DB jid over a stale in-memory cache entry so reconnect
+		// can find the whatsmeow device even after a process restart.
+		var dbJid string
+		if err := s.db.QueryRow("SELECT jid FROM users WHERE id = $1", txtid).Scan(&dbJid); err == nil && dbJid != "" {
+			jid = dbJid
+			if jid != userInfo.Get("Jid") {
+				v := updateUserInfo(userInfo, "Jid", jid)
+				userinfocache.Set(token, v, cache.NoExpiration)
+			}
+		}
 
 		// Decodes request BODY looking for events to subscribe
 		decoder := json.NewDecoder(r.Body)
@@ -757,6 +769,47 @@ func (s *server) PairPhone() http.HandlerFunc {
 	}
 }
 
+// resolveSessionJID returns the best-known JID for a user. When logged in, the
+// live whatsmeow store is authoritative — cache/DB often lag after QR pairing.
+func (s *server) resolveSessionJID(ctx context.Context, txtid string, waClient *whatsmeow.Client, userInfo Values) string {
+	jid := userInfo.Get("Jid")
+
+	if waClient != nil && waClient.Store != nil && waClient.IsLoggedIn() && waClient.Store.ID != nil {
+		storeJID := waClient.Store.ID.ToNonAD()
+		if storeJID.Server == types.HiddenUserServer {
+			timeoutCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+			defer cancel()
+			pn, err := getCachedPNForLID(timeoutCtx, waClient, storeJID)
+			if err == nil && !pn.IsEmpty() {
+				storeJID = pn.ToNonAD()
+			}
+		}
+		resolved := storeJID.String()
+		if resolved != "" {
+			jid = resolved
+			if resolved != userInfo.Get("Jid") {
+				token := userInfo.Get("Token")
+				if token != "" {
+					v := updateUserInfo(userInfo, "Jid", resolved)
+					userinfocache.Set(token, v, cache.NoExpiration)
+				}
+				query := s.db.Rebind("UPDATE users SET jid=? WHERE id=?")
+				if _, err := s.db.Exec(query, resolved, txtid); err != nil {
+					log.Warn().Err(err).Str("user_id", txtid).Msg("Failed to persist resolved JID")
+				}
+			}
+		}
+	} else if jid == "" {
+		var dbJid string
+		query := s.db.Rebind("SELECT jid FROM users WHERE id = ?")
+		if err := s.db.QueryRow(query, txtid).Scan(&dbJid); err == nil && dbJid != "" {
+			jid = dbJid
+		}
+	}
+
+	return jid
+}
+
 // PasskeyResponse receives a WebAuthn response from the frontend and sends it to WhatsApp
 func (s *server) PasskeyResponse() http.HandlerFunc {
 	type passkeyResponseStruct struct {
@@ -882,8 +935,10 @@ func (s *server) GetStatus() http.HandlerFunc {
 
 		txtid := userInfo.Get("Id")
 
-		isConnected := clientManager.GetWhatsmeowClient(txtid).IsConnected()
-		isLoggedIn := clientManager.GetWhatsmeowClient(txtid).IsLoggedIn()
+		waClient := clientManager.GetWhatsmeowClient(txtid)
+		isConnected := waClient != nil && waClient.IsConnected()
+		isLoggedIn := waClient != nil && waClient.IsLoggedIn()
+		jid := s.resolveSessionJID(r.Context(), txtid, waClient, userInfo)
 
 		// Safe defaults so the response always contains every config field.
 		proxyURL := ""
@@ -953,7 +1008,7 @@ func (s *server) GetStatus() http.HandlerFunc {
 			"connected":       isConnected,
 			"loggedIn":        isLoggedIn,
 			"token":           userInfo.Get("Token"),
-			"jid":             userInfo.Get("Jid"),
+			"jid":             jid,
 			"webhook":         userInfo.Get("Webhook"),
 			"events":          userInfo.Get("Events"),
 			"proxy_url":       userInfo.Get("Proxy"),
