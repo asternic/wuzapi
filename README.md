@@ -512,7 +512,13 @@ go build .
 
 ## Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=asternic/wuzapi&type=Date)](https://www.star-history.com/#asternic/wuzapi&Date)
+<a href="https://www.star-history.com/?type=date&repos=asternic%2Fwuzapi">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=asternic/wuzapi&type=date&theme=dark&legend=top-left&sealed_token=btZMq-H0d-DBRgXRdFTBx24bZ3x6oVGnSTwAk6DEM19J5wiWYhsN20SekiMRIbFaEkIhmwM5_SyQKT1QTvNVYF9QAaFLdvvPPEq7Y7dvZ34MoKnKNXyXlQgerN1ag_hYzp9RGYAywggEXDxTESW-asFZnacNcBq7LvO4XhspFm-KflmgBomjG_czi8vR" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=asternic/wuzapi&type=date&legend=top-left&sealed_token=btZMq-H0d-DBRgXRdFTBx24bZ3x6oVGnSTwAk6DEM19J5wiWYhsN20SekiMRIbFaEkIhmwM5_SyQKT1QTvNVYF9QAaFLdvvPPEq7Y7dvZ34MoKnKNXyXlQgerN1ag_hYzp9RGYAywggEXDxTESW-asFZnacNcBq7LvO4XhspFm-KflmgBomjG_czi8vR" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=asternic/wuzapi&type=date&legend=top-left&sealed_token=btZMq-H0d-DBRgXRdFTBx24bZ3x6oVGnSTwAk6DEM19J5wiWYhsN20SekiMRIbFaEkIhmwM5_SyQKT1QTvNVYF9QAaFLdvvPPEq7Y7dvZ34MoKnKNXyXlQgerN1ag_hYzp9RGYAywggEXDxTESW-asFZnacNcBq7LvO4XhspFm-KflmgBomjG_czi8vR" />
+ </picture>
+</a>
 
 ## License
 
