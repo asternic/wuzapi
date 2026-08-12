@@ -722,8 +722,6 @@ func (s *server) startClient(userID string, textjid string, token string, kill c
 				return
 			}
 
-			myuserinfo, found := userinfocache.Get(token)
-
 			for evt := range qrChan {
 				if evt.Event == "code" {
 					// Display QR code in terminal (useful for testing/developing)
@@ -739,12 +737,8 @@ func (s *server) startClient(userID string, textjid string, token string, kill c
 					_, err := s.db.Exec(sqlStmt, base64qrcode, userID)
 					if err != nil {
 						log.Error().Err(err).Msg(sqlStmt)
-					} else {
-						if found {
-							v := updateUserInfo(myuserinfo, "Qrcode", base64qrcode)
-							userinfocache.Set(token, v, cache.NoExpiration)
-							log.Info().Str("qrcode", base64qrcode).Msg("update cache userinfo with qr code")
-						}
+					} else if setUserInfoField(token, "Qrcode", base64qrcode) {
+						log.Info().Str("qrcode", base64qrcode).Msg("update cache userinfo with qr code")
 					}
 
 					//send QR code with webhook
@@ -768,16 +762,17 @@ func (s *server) startClient(userID string, textjid string, token string, kill c
 					if err != nil {
 						log.Error().Err(err).Msg(sqlStmt)
 					} else {
-						if found {
-							v := updateUserInfo(myuserinfo, "Qrcode", "")
-							userinfocache.Set(token, v, cache.NoExpiration)
-						}
+						setUserInfoField(token, "Qrcode", "")
 					}
 					log.Warn().Msg("QR timeout killing channel")
-					clientManager.DeleteWhatsmeowClient(userID)
-					clientManager.DeleteMyClient(userID)
-					clientManager.DeleteHTTPClient(userID)
-					signalKill(userID)
+					// Kill OUR OWN channel and let the single cleanup at the
+					// end of startClient run: it already tears the session down
+					// under the staleness guard. signalKill(userID) would look
+					// up whatever channel is registered NOW, which after a
+					// racing connect belongs to a different, live session — an
+					// unscanned QR would then shut down the session that won
+					// the race and paired.
+					signalKillChannel(kill)
 				} else if evt.Event == "success" {
 					log.Info().Msg("QR pairing ok!")
 					// Clear QR code after pairing
@@ -786,10 +781,7 @@ func (s *server) startClient(userID string, textjid string, token string, kill c
 					if err != nil {
 						log.Error().Err(err).Msg(sqlStmt)
 					} else {
-						if found {
-							v := updateUserInfo(myuserinfo, "Qrcode", "")
-							userinfocache.Set(token, v, cache.NoExpiration)
-						}
+						setUserInfoField(token, "Qrcode", "")
 					}
 				} else if evt.Event == "passkey-request" {
 					if evt.PasskeyRequest != nil {
@@ -913,11 +905,17 @@ func (s *server) startClient(userID string, textjid string, token string, kill c
 	<-kill
 	log.Info().Str("userid", userID).Msg("Received kill signal")
 	client.Disconnect()
-	clientManager.DeleteWhatsmeowClient(userID)
-	clientManager.DeleteMyClient(userID)
-	clientManager.DeleteHTTPClient(userID)
-	if _, err := s.db.Exec(`UPDATE users SET qrcode='', connected=0 WHERE id=$1`, userID); err != nil {
-		log.Error().Err(err).Msg("failed to mark user disconnected on kill")
+	// Only tear down the shared state if WE are still the registered session.
+	// A reconnect may have replaced us while this goroutine was parked; that
+	// newer session owns the maps and the users row now, and evicting its
+	// client (or flipping connected=0 under it) would take down a session that
+	// is up and paired. Disconnecting our own client above is always safe.
+	if clientManager.DeleteSessionIfCurrent(userID, client) {
+		if _, err := s.db.Exec(`UPDATE users SET qrcode='', connected=0 WHERE id=$1`, userID); err != nil {
+			log.Error().Err(err).Msg("failed to mark user disconnected on kill")
+		}
+	} else {
+		log.Info().Str("userid", userID).Msg("Stale session goroutine exiting; a newer session owns this user")
 	}
 	deleteKillChannel(userID, kill)
 }

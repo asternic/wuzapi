@@ -126,6 +126,17 @@ func signalKill(userID string) {
 		log.Debug().Str("userID", userID).Msg("signalKill: no kill channel registered (already cleaned up?)")
 		return
 	}
+	signalKillChannel(ch)
+}
+
+// signalKillChannel delivers a non-blocking kill to ONE specific channel,
+// bypassing the userID lookup.
+//
+// A session goroutine that wants to end ITSELF must use this and pass its own
+// channel. Going through signalKill(userID) would read whatever channel is
+// registered NOW, which after a reconnect belongs to a different, live session
+// — so an abandoned goroutine would shut down the session that replaced it.
+func signalKillChannel(ch chan bool) {
 	select {
 	case ch <- true:
 	default:
