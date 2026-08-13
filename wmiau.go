@@ -9,13 +9,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
 	"runtime/debug"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/go-resty/resty/v2"
@@ -32,7 +32,6 @@ import (
 	"go.mau.fi/whatsmeow/types/events"
 	waLog "go.mau.fi/whatsmeow/util/log"
 	"golang.org/x/net/proxy"
-	"sync"
 )
 
 // db field declaration as *sqlx.DB
@@ -284,16 +283,12 @@ func sendEventWithWebHook(mycli *MyClient, postmap map[string]interface{}, path 
 		return
 	}
 
-	// Prepare webhook data
-	jsonData, err := json.Marshal(postmap)
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to marshal postmap to JSON")
-		return
-	}
-
-	// Get HMAC key for this user
+	// Embed userID/instanceName directly so downstream webhook senders
+	// don't need to unmarshal the JSON just to add two fields and re-marshal
+	postmap["instanceName"] = ""
 	var encryptedHmacKey []byte
 	if userinfo, found := userinfocache.Get(mycli.token); found {
+		postmap["instanceName"] = userinfo.(Values).Get("Name")
 		encryptedB64 := userinfo.(Values).Get("HmacKeyEncrypted")
 		if encryptedB64 != "" {
 			var err error
@@ -303,13 +298,43 @@ func sendEventWithWebHook(mycli *MyClient, postmap map[string]interface{}, path 
 			}
 		}
 	}
+	postmap["userID"] = mycli.userID
 
-	sendToUserWebHookWithHmac(webhookurl, path, jsonData, mycli.userID, mycli.token, encryptedHmacKey)
+	lb, hasMedia := postmap["base64"].(lazyBase64)
+	streaming := hasMedia && webhookurl != "" && shouldStreamMedia()
 
-	// Get global webhook if configured
-	safeGo("sendToGlobalWebHook", func() { sendToGlobalWebHook(jsonData, mycli.token, mycli.userID) })
+	if streaming {
+		// Stream large media into the outgoing HTTP body instead of
+		// materializing the base64 string + full JSON document in memory
+		meta := make(map[string]interface{}, len(postmap))
+		for k, v := range postmap {
+			if k != "base64" {
+				meta[k] = v
+			}
+		}
+		safeGo("callHookStreamedWithHmac", func() {
+			callHookStreamedWithHmac(webhookurl, meta, lb.data, mycli.userID, encryptedHmacKey)
+		})
+	}
 
-	safeGo("sendToGlobalRabbit", func() { sendToGlobalRabbit(jsonData, mycli.token, mycli.userID) })
+	// global webhook / RabbitMQ still need a fully marshaled copy
+	needSideChannels := *globalWebhook != "" || rabbitEnabled
+
+	if !streaming || needSideChannels {
+		jsonData, err := json.Marshal(postmap)
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to marshal postmap to JSON")
+			return
+		}
+		if !streaming {
+			sendToUserWebHookWithHmac(webhookurl, path, jsonData, mycli.userID, mycli.token, encryptedHmacKey)
+		}
+		if needSideChannels {
+			safeGo("sendToGlobalWebHook", func() { sendToGlobalWebHook(jsonData, mycli.token, mycli.userID) })
+
+			safeGo("sendToGlobalRabbit", func() { sendToGlobalRabbit(jsonData, mycli.token, mycli.userID) })
+		}
+	}
 }
 
 func checkIfSubscribedToEvent(subscribedEvents []string, eventType string, userId string) bool {
@@ -922,15 +947,6 @@ func (s *server) startClient(userID string, textjid string, token string, kill c
 	deleteKillChannel(userID, kill)
 }
 
-func fileToBase64(filepath string) (string, string, error) {
-	data, err := os.ReadFile(filepath)
-	if err != nil {
-		return "", "", err
-	}
-	mimeType := http.DetectContentType(data)
-	return base64.StdEncoding.EncodeToString(data), mimeType, nil
-}
-
 func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 	txtid := mycli.userID
 	postmap := make(map[string]interface{})
@@ -1176,24 +1192,24 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 				}
 			}
 		}
-    
-    if encMessage := evt.Message.GetSecretEncryptedMessage(); encMessage != nil {
-        decrypted, derr := mycli.WAClient.DecryptSecretEncryptedMessage(context.Background(), evt)
-        if derr != nil {
-            log.Warn().
-                Err(derr).
-                Str("messageID", evt.Info.ID).
-                Str("secretEncType", encMessage.GetSecretEncType().String()).
-                Msg("DecryptSecretEncryptedMessage failed")
-        } else if decrypted != nil {
-            log.Info().
-                Str("messageID", evt.Info.ID).
-                Str("secretEncType", encMessage.GetSecretEncType().String()).
-                Msg("Decrypted secretEncryptedMessage; swapping evt.Message")
-                evt.Message = decrypted
-        }
-    }
-    
+
+		if encMessage := evt.Message.GetSecretEncryptedMessage(); encMessage != nil {
+			decrypted, derr := mycli.WAClient.DecryptSecretEncryptedMessage(context.Background(), evt)
+			if derr != nil {
+				log.Warn().
+					Err(derr).
+					Str("messageID", evt.Info.ID).
+					Str("secretEncType", encMessage.GetSecretEncType().String()).
+					Msg("DecryptSecretEncryptedMessage failed")
+			} else if decrypted != nil {
+				log.Info().
+					Str("messageID", evt.Info.ID).
+					Str("secretEncType", encMessage.GetSecretEncType().String()).
+					Msg("Decrypted secretEncryptedMessage; swapping evt.Message")
+				evt.Message = decrypted
+			}
+		}
+
 		if !*skipMedia {
 
 			isIncoming := !evt.Info.IsFromMe
