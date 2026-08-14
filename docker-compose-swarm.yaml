@@ -16,6 +16,7 @@ services:
       - TZ=${TZ:-America/Sao_Paulo}
       - WEBHOOK_FORMAT=${WEBHOOK_FORMAT:-json}
       - SESSION_DEVICE_NAME=${SESSION_DEVICE_NAME:-WuzAPI}
+      - LOG_LEVEL=info
       # RabbitMQ configuration Optional
       - RABBITMQ_URL=amqp://wuzapi:wuzapi@rabbitmq:5672/
       - RABBITMQ_QUEUE=whatsapp_events

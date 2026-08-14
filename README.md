@@ -73,6 +73,7 @@ you can use to alter behaviour
 * -address  : sets the IP address to bind the server to (default 0.0.0.0)
 * -port  : sets the port number (default 8080)
 * -logtype : format for logs, either console (default) or json
+* -loglevel : sets log level: debug, info (default), warn, error
 * -color : enable colored output for console logs
 * -osname : Connection OS Name in Whatsapp
 * -skipmedia : Skip downloading media from messages
