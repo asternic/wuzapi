@@ -7,6 +7,7 @@ import (
 	"math/rand"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -82,6 +83,11 @@ var (
 
 var privateIPBlocks []*net.IPNet
 
+var (
+	ogProxyOnce sync.Once
+	ogProxyURL  *url.URL
+)
+
 const version = "1.0.8"
 
 // killchannel maps a userID to its session goroutine's kill channel. It is
@@ -132,14 +138,79 @@ func signalKill(userID string) {
 	}
 }
 
+// parseOGFetchProxy validates the OG_FETCH_PROXY value. An empty or malformed
+// value disables the proxy rather than failing startup: a broken preview card
+// is a much smaller problem than a server that refuses to boot.
+func parseOGFetchProxy(raw string) (*url.URL, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil, nil
+	}
+	parsed, err := url.Parse(raw)
+	if err != nil {
+		return nil, err
+	}
+	if parsed.Scheme == "" || parsed.Host == "" {
+		return nil, fmt.Errorf("proxy URL needs a scheme and a host, got %q", raw)
+	}
+	return parsed, nil
+}
+
+// ogFetchProxy returns the proxy to use for Open Graph fetches, or nil when
+// OG_FETCH_PROXY is unset.
+//
+// Some sites answer a captcha or geo-block page instead of the real page when
+// the request arrives from outside the country they serve, so the preview card
+// ends up showing the block page's title instead of the article or product.
+// Pointing this one fetch at a proxy inside the target country fixes the card.
+//
+// It is deliberately not the conventional HTTPS_PROXY: globalHTTPClient is used
+// by nothing but the Open Graph fetch, and a dedicated name keeps a generic
+// proxy setting from silently capturing traffic it was never meant to. WhatsApp
+// session traffic uses whatsmeow's own transport (and its own per-user proxy_url
+// setting) and is unaffected either way.
+//
+// Resolution is lazy because globalHTTPClient is a package-level var built
+// before main() loads the .env file; reading the variable on first use keeps
+// both the process environment and .env working.
+func ogFetchProxy() *url.URL {
+	ogProxyOnce.Do(func() {
+		parsed, err := parseOGFetchProxy(os.Getenv("OG_FETCH_PROXY"))
+		if err != nil {
+			log.Warn().Err(err).Msg("Invalid OG_FETCH_PROXY, Open Graph fetches will go out directly")
+			return
+		}
+		if parsed == nil {
+			return
+		}
+		ogProxyURL = parsed
+		log.Info().Str("proxy", parsed.Redacted()).Msg("Open Graph fetches will go through the configured proxy")
+	})
+	return ogProxyURL
+}
+
 func newSafeHTTPClient() *http.Client {
 	return &http.Client{
 		Timeout: 60 * time.Second,
 		Transport: &http.Transport{
+			Proxy: func(*http.Request) (*url.URL, error) {
+				return ogFetchProxy(), nil
+			},
 			DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
 				host, port, err := net.SplitHostPort(addr)
 				if err != nil {
 					return nil, fmt.Errorf("unexpected address format from http transport: %q: %w", addr, err)
+				}
+
+				// With a proxy configured this dial targets the proxy itself,
+				// which commonly sits on a private address, so the SSRF guard
+				// below has to let it through. Note what that shifts: the real
+				// target is no longer resolved here, so refusing internal
+				// destinations becomes the proxy's responsibility and its ACL
+				// must deny private ranges.
+				allowPrivate := false
+				if proxyURL := ogFetchProxy(); proxyURL != nil && host == proxyURL.Hostname() {
+					allowPrivate = true
 				}
 
 				ips, err := net.LookupIP(host)
@@ -157,7 +228,7 @@ func newSafeHTTPClient() *http.Client {
 				)
 
 				for _, ip := range ips {
-					if isPrivateOrLoopback(ip) {
+					if !allowPrivate && isPrivateOrLoopback(ip) {
 						log.Warn().Str("ip", ip.String()).Str("host", host).Msg("SSRF attempt detected: refused to connect to private or local address")
 						ssrfDetected = true
 						if ssrfLastError == nil {
