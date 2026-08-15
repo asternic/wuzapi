@@ -169,7 +169,21 @@ WEBHOOK_FORMAT=json # or "form" for the default
 SESSION_DEVICE_NAME=WuzAPI
 WUZAPI_PORT=8080 # Port for the WuzAPI server
 WUZAPI_GLOBAL_WEBHOOK= # Global webhook URL for all instances
+OG_FETCH_PROXY= # Proxy used only for link-preview (Open Graph) fetches
 ```
+
+#### Link preview behind a proxy
+
+Some sites answer a captcha or geo-block page instead of the real page when the
+request arrives from outside the country they serve, so the preview card ends up
+showing the block page's title. Setting `OG_FETCH_PROXY` (for example
+`http://10.0.0.5:3128`) routes **only** the Open Graph fetch through that proxy,
+leaving WhatsApp session traffic on its own connection — that one is configured
+separately, per user, through `proxy_url` and the `/session/proxy` endpoint.
+
+An invalid value is logged and ignored rather than failing startup. Because the
+proxy resolves the target host, the SSRF guard that normally refuses private
+addresses no longer sees it, so the proxy itself should deny internal ranges.
 
 ### RabbitMQ Integration
 WuzAPI supports sending WhatsApp events to a RabbitMQ queue for global event distribution. When enabled, all WhatsApp events will be published to the specified queue regardless of individual user webhook configurations.
