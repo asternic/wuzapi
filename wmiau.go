@@ -204,9 +204,7 @@ func sendToUserWebHookWithHmac(webhookurl string, path string, jsonData []byte, 
 			}
 		}
 	} else {
-		// Debug, not Warn: a user without a webhook is a valid configuration,
-		// and this fires once per event for every such user.
-		log.Debug().Str("userid", userID).Msg("No webhook set for user")
+		log.Warn().Str("userid", userID).Msg("No webhook set for user")
 	}
 }
 
