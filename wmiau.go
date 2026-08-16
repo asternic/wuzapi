@@ -204,7 +204,9 @@ func sendToUserWebHookWithHmac(webhookurl string, path string, jsonData []byte, 
 			}
 		}
 	} else {
-		log.Warn().Str("userid", userID).Msg("No webhook set for user")
+		// Debug, not Warn: a user without a webhook is a valid configuration,
+		// and this fires once per event for every such user.
+		log.Debug().Str("userid", userID).Msg("No webhook set for user")
 	}
 }
 
@@ -314,7 +316,10 @@ func sendEventWithWebHook(mycli *MyClient, postmap map[string]interface{}, path 
 
 func checkIfSubscribedToEvent(subscribedEvents []string, eventType string, userId string) bool {
 	if !Find(subscribedEvents, eventType) && !Find(subscribedEvents, "All") {
-		log.Warn().
+		// Debug, not Warn: not being subscribed to an event type is the
+		// configured outcome, not a problem. At Warn this fires for every
+		// unsubscribed event of every session and drowns real warnings.
+		log.Debug().
 			Str("type", eventType).
 			Strs("subscribedEvents", subscribedEvents).
 			Str("userID", userId).
