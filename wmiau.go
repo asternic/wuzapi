@@ -1091,6 +1091,22 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 		return
 	case *events.Message:
 
+		// [PEER_RATE_LIMIT] descarta msgs em burst do mesmo peer (fix decrypt burst)
+		{
+			peerKey := evt.Info.Sender.String()
+			if evt.Info.IsGroup {
+				peerKey = evt.Info.Chat.String() + "|" + peerKey
+			}
+			if !getPeerLimiter().Allow(peerKey) {
+				log.Warn().
+					Str("peer", peerKey).
+					Str("msg_id", evt.Info.ID).
+					Bool("is_group", evt.Info.IsGroup).
+					Msg("[PEER_RATE_LIMIT] msg dropped (peer excedeu rate)")
+				return
+			}
+		}
+
 		var s3Config struct {
 			Enabled       string `db:"s3_enabled"`
 			MediaDelivery string `db:"media_delivery"`
