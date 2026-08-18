@@ -259,11 +259,23 @@ func (s *server) Connect() http.HandlerFunc {
 
 	return func(w http.ResponseWriter, r *http.Request) {
 
-		webhook := r.Context().Value("userinfo").(Values).Get("Webhook")
-		jid := r.Context().Value("userinfo").(Values).Get("Jid")
-		txtid := r.Context().Value("userinfo").(Values).Get("Id")
-		token := r.Context().Value("userinfo").(Values).Get("Token")
+		userInfo := r.Context().Value("userinfo").(Values)
+		webhook := userInfo.Get("Webhook")
+		jid := userInfo.Get("Jid")
+		txtid := userInfo.Get("Id")
+		token := userInfo.Get("Token")
 		eventstring := ""
+
+		// Always prefer the DB jid over a stale in-memory cache entry so reconnect
+		// can find the whatsmeow device even after a process restart.
+		var dbJid string
+		if err := s.db.QueryRow("SELECT jid FROM users WHERE id = $1", txtid).Scan(&dbJid); err == nil && dbJid != "" {
+			jid = dbJid
+			if jid != userInfo.Get("Jid") {
+				v := updateUserInfo(userInfo, "Jid", jid)
+				userinfocache.Set(token, v, cache.NoExpiration)
+			}
+		}
 
 		// Decodes request BODY looking for events to subscribe
 		decoder := json.NewDecoder(r.Body)
@@ -757,6 +769,47 @@ func (s *server) PairPhone() http.HandlerFunc {
 	}
 }
 
+// resolveSessionJID returns the best-known JID for a user. When logged in, the
+// live whatsmeow store is authoritative — cache/DB often lag after QR pairing.
+func (s *server) resolveSessionJID(ctx context.Context, txtid string, waClient *whatsmeow.Client, userInfo Values) string {
+	jid := userInfo.Get("Jid")
+
+	if waClient != nil && waClient.Store != nil && waClient.IsLoggedIn() && waClient.Store.ID != nil {
+		storeJID := waClient.Store.ID.ToNonAD()
+		if storeJID.Server == types.HiddenUserServer {
+			timeoutCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+			defer cancel()
+			pn, err := getCachedPNForLID(timeoutCtx, waClient, storeJID)
+			if err == nil && !pn.IsEmpty() {
+				storeJID = pn.ToNonAD()
+			}
+		}
+		resolved := storeJID.String()
+		if resolved != "" {
+			jid = resolved
+			if resolved != userInfo.Get("Jid") {
+				token := userInfo.Get("Token")
+				if token != "" {
+					v := updateUserInfo(userInfo, "Jid", resolved)
+					userinfocache.Set(token, v, cache.NoExpiration)
+				}
+				query := s.db.Rebind("UPDATE users SET jid=? WHERE id=?")
+				if _, err := s.db.Exec(query, resolved, txtid); err != nil {
+					log.Warn().Err(err).Str("user_id", txtid).Msg("Failed to persist resolved JID")
+				}
+			}
+		}
+	} else if jid == "" {
+		var dbJid string
+		query := s.db.Rebind("SELECT jid FROM users WHERE id = ?")
+		if err := s.db.QueryRow(query, txtid).Scan(&dbJid); err == nil && dbJid != "" {
+			jid = dbJid
+		}
+	}
+
+	return jid
+}
+
 // PasskeyResponse receives a WebAuthn response from the frontend and sends it to WhatsApp
 func (s *server) PasskeyResponse() http.HandlerFunc {
 	type passkeyResponseStruct struct {
@@ -882,8 +935,10 @@ func (s *server) GetStatus() http.HandlerFunc {
 
 		txtid := userInfo.Get("Id")
 
-		isConnected := clientManager.GetWhatsmeowClient(txtid).IsConnected()
-		isLoggedIn := clientManager.GetWhatsmeowClient(txtid).IsLoggedIn()
+		waClient := clientManager.GetWhatsmeowClient(txtid)
+		isConnected := waClient != nil && waClient.IsConnected()
+		isLoggedIn := waClient != nil && waClient.IsLoggedIn()
+		jid := s.resolveSessionJID(r.Context(), txtid, waClient, userInfo)
 
 		// Safe defaults so the response always contains every config field.
 		proxyURL := ""
@@ -953,7 +1008,7 @@ func (s *server) GetStatus() http.HandlerFunc {
 			"connected":       isConnected,
 			"loggedIn":        isLoggedIn,
 			"token":           userInfo.Get("Token"),
-			"jid":             userInfo.Get("Jid"),
+			"jid":             jid,
 			"webhook":         userInfo.Get("Webhook"),
 			"events":          userInfo.Get("Events"),
 			"proxy_url":       userInfo.Get("Proxy"),
@@ -4393,6 +4448,156 @@ func (s *server) React() http.HandlerFunc {
 
 		log.Info().Str("timestamp", fmt.Sprintf("%v", resp.Timestamp)).Str("id", msgid).Msg("Message sent")
 		response := map[string]interface{}{"Details": "Sent", "Timestamp": resp.Timestamp.Unix(), "Id": msgid}
+		responseJson, err := json.Marshal(response)
+		if err != nil {
+			s.Respond(w, r, http.StatusInternalServerError, err)
+		} else {
+			s.Respond(w, r, http.StatusOK, string(responseJson))
+		}
+
+		return
+	}
+}
+
+// Pins or unpins an existing message in a chat or group
+func (s *server) PinMessage() http.HandlerFunc {
+
+	type pinStruct struct {
+		Chat            string
+		Sender          string
+		Id              string
+		DurationSeconds *uint32
+		Pin             *bool
+	}
+
+	// Allowed pin durations in seconds: 24h, 7d, 30d
+	allowedDurations := map[uint32]bool{
+		86400:   true,
+		604800:  true,
+		2592000: true,
+	}
+	const defaultDuration uint32 = 604800
+
+	return func(w http.ResponseWriter, r *http.Request) {
+
+		txtid := r.Context().Value("userinfo").(Values).Get("Id")
+
+		client := clientManager.GetWhatsmeowClient(txtid)
+		if client == nil {
+			s.Respond(w, r, http.StatusInternalServerError, errors.New("no session"))
+			return
+		}
+
+		if !client.IsConnected() {
+			s.Respond(w, r, http.StatusInternalServerError, errors.New("not connected"))
+			return
+		}
+
+		decoder := json.NewDecoder(r.Body)
+		var t pinStruct
+		err := decoder.Decode(&t)
+		if err != nil {
+			s.Respond(w, r, http.StatusBadRequest, errors.New("could not decode payload"))
+			return
+		}
+
+		if t.Chat == "" {
+			s.Respond(w, r, http.StatusBadRequest, errors.New("missing Chat in payload"))
+			return
+		}
+
+		if t.Id == "" {
+			s.Respond(w, r, http.StatusBadRequest, errors.New("missing Id in payload"))
+			return
+		}
+
+		chatJID, ok := parseJID(t.Chat)
+		if !ok {
+			s.Respond(w, r, http.StatusBadRequest, errors.New("invalid Chat JID"))
+			return
+		}
+
+		isGroup := chatJID.Server == types.GroupServer || chatJID.Server == types.BroadcastServer
+
+		var senderJID types.JID
+		if t.Sender != "" {
+			senderJID, ok = parseJID(t.Sender)
+			if !ok {
+				s.Respond(w, r, http.StatusBadRequest, errors.New("invalid Sender JID"))
+				return
+			}
+		} else if isGroup {
+			s.Respond(w, r, http.StatusBadRequest, errors.New("missing Sender in payload for group chat"))
+			return
+		}
+
+		// Default to pinning unless Pin is explicitly false
+		pin := true
+		if t.Pin != nil {
+			pin = *t.Pin
+		}
+
+		duration := defaultDuration
+		if pin && t.DurationSeconds != nil {
+			if !allowedDurations[*t.DurationSeconds] {
+				s.Respond(w, r, http.StatusBadRequest, errors.New("invalid DurationSeconds, must be one of 86400, 604800, 2592000"))
+				return
+			}
+			duration = *t.DurationSeconds
+		}
+
+		key := &waCommon.MessageKey{
+			RemoteJID: proto.String(chatJID.String()),
+			FromMe:    proto.Bool(false),
+			ID:        proto.String(t.Id),
+		}
+		if senderJID.String() != "" {
+			key.Participant = proto.String(senderJID.String())
+		}
+
+		pinType := waE2E.PinInChatMessage_PIN_FOR_ALL
+		if !pin {
+			pinType = waE2E.PinInChatMessage_UNPIN_FOR_ALL
+		}
+
+		msg := &waE2E.Message{
+			PinInChatMessage: &waE2E.PinInChatMessage{
+				Key:               key,
+				Type:              pinType.Enum(),
+				SenderTimestampMS: proto.Int64(time.Now().UnixMilli()),
+			},
+		}
+
+		if pin {
+			msg.MessageContextInfo = &waE2E.MessageContextInfo{
+				MessageAddOnDurationInSecs: proto.Uint32(duration),
+			}
+		}
+
+		resp, err := client.SendMessage(context.Background(), chatJID, msg)
+		if err != nil {
+			if pin {
+				s.Respond(w, r, http.StatusInternalServerError, errors.New(fmt.Sprintf("could not pin message: %v", err)))
+			} else {
+				s.Respond(w, r, http.StatusInternalServerError, errors.New(fmt.Sprintf("could not unpin message: %v", err)))
+			}
+			return
+		}
+
+		response := map[string]interface{}{
+			"Chat":      chatJID.String(),
+			"Id":        t.Id,
+			"Timestamp": resp.Timestamp.UTC().Format(time.RFC3339),
+		}
+		if pin {
+			response["Details"] = "Message pinned"
+			response["DurationSeconds"] = duration
+			log.Info().Str("id", t.Id).Str("chat", chatJID.String()).Uint32("duration", duration).Msg("Message pinned")
+		} else {
+			response["Details"] = "Message unpinned"
+			log.Info().Str("id", t.Id).Str("chat", chatJID.String()).Msg("Message unpinned")
+		}
+
 		responseJson, err := json.Marshal(response)
 		if err != nil {
 			s.Respond(w, r, http.StatusInternalServerError, err)

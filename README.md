@@ -50,15 +50,6 @@ When HMAC is configured, all webhooks include an `x-hmac-signature` header with 
 **Optional:**
 * Docker (for containerization)
 
-## Updating dependencies
-
-This project uses the whatsmeow library to communicate with WhatsApp. To update the library to the latest version, run:
-
-```bash
-go get -u go.mau.fi/whatsmeow@latest
-go mod tidy
-```
-
 ## Building
 
 ```
@@ -312,6 +303,22 @@ request body, always passing the Token header for authenticating the request.
 
 Check the [API Reference](https://github.com/asternic/wuzapi/blob/main/API.md)
 
+## Updating the upstream whatsmeow library
+
+> [!CAUTION]
+> This section is intended for maintainers and developers. Regular users should use the whatsmeow version pinned in `go.mod` and should not upgrade it as part of the normal installation or build process.
+
+WuzAPI uses [whatsmeow](https://github.com/tulir/whatsmeow) to communicate with WhatsApp. Its upstream API can introduce breaking changes, so upgrading to the latest version may cause WuzAPI to stop compiling or working correctly until its code is adapted.
+
+Perform upgrades in a development branch, review the resulting `go.mod` and `go.sum` changes, and verify that WuzAPI builds and its tests pass before deploying the update:
+
+```bash
+go get -u go.mau.fi/whatsmeow@latest
+go mod tidy
+go test ./...
+go build .
+```
+
 ## Contributors
 
 <!-- CONTRIBUTORS:START -->
@@ -505,7 +512,13 @@ Check the [API Reference](https://github.com/asternic/wuzapi/blob/main/API.md)
 
 ## Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=asternic/wuzapi&type=Date)](https://www.star-history.com/#asternic/wuzapi&Date)
+<a href="https://www.star-history.com/?type=date&repos=asternic%2Fwuzapi">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=asternic/wuzapi&type=date&theme=dark&legend=top-left&sealed_token=btZMq-H0d-DBRgXRdFTBx24bZ3x6oVGnSTwAk6DEM19J5wiWYhsN20SekiMRIbFaEkIhmwM5_SyQKT1QTvNVYF9QAaFLdvvPPEq7Y7dvZ34MoKnKNXyXlQgerN1ag_hYzp9RGYAywggEXDxTESW-asFZnacNcBq7LvO4XhspFm-KflmgBomjG_czi8vR" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=asternic/wuzapi&type=date&legend=top-left&sealed_token=btZMq-H0d-DBRgXRdFTBx24bZ3x6oVGnSTwAk6DEM19J5wiWYhsN20SekiMRIbFaEkIhmwM5_SyQKT1QTvNVYF9QAaFLdvvPPEq7Y7dvZ34MoKnKNXyXlQgerN1ag_hYzp9RGYAywggEXDxTESW-asFZnacNcBq7LvO4XhspFm-KflmgBomjG_czi8vR" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=asternic/wuzapi&type=date&legend=top-left&sealed_token=btZMq-H0d-DBRgXRdFTBx24bZ3x6oVGnSTwAk6DEM19J5wiWYhsN20SekiMRIbFaEkIhmwM5_SyQKT1QTvNVYF9QAaFLdvvPPEq7Y7dvZ34MoKnKNXyXlQgerN1ag_hYzp9RGYAywggEXDxTESW-asFZnacNcBq7LvO4XhspFm-KflmgBomjG_czi8vR" />
+ </picture>
+</a>
 
 ## License
 
