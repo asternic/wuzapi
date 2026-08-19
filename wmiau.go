@@ -931,6 +931,15 @@ func fileToBase64(filepath string) (string, string, error) {
 	return base64.StdEncoding.EncodeToString(data), mimeType, nil
 }
 
+func (mycli *MyClient) sendAutomaticPresence() {
+	err := mycli.WAClient.SendPresence(context.Background(), automaticPresence)
+	if err != nil {
+		log.Warn().Err(err).Str("presence", string(automaticPresence)).Msg("Failed to send automatic presence")
+	} else {
+		log.Info().Str("presence", string(automaticPresence)).Msg("Set automatic presence")
+	}
+}
+
 func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 	txtid := mycli.userID
 	postmap := make(map[string]interface{})
@@ -941,12 +950,7 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 	switch evt := rawEvt.(type) {
 	case *events.AppStateSyncComplete:
 		if len(mycli.WAClient.Store.PushName) > 0 && evt.Name == appstate.WAPatchCriticalBlock {
-			err := mycli.WAClient.SendPresence(context.Background(), types.PresenceAvailable)
-			if err != nil {
-				log.Warn().Err(err).Msg("Failed to send available presence")
-			} else {
-				log.Info().Msg("Marked self as available")
-			}
+			mycli.sendAutomaticPresence()
 		}
 	case *events.Connected, *events.PushNameSetting:
 		postmap["type"] = "Connected"
@@ -954,16 +958,11 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 		if len(mycli.WAClient.Store.PushName) == 0 {
 			break
 		}
-		// Send presence available when connecting and when the pushname is changed.
-		// This makes sure that outgoing messages always have the right pushname.
-		err := mycli.WAClient.SendPresence(context.Background(), types.PresenceAvailable)
-		if err != nil {
-			log.Warn().Err(err).Msg("Failed to send available presence")
-		} else {
-			log.Info().Msg("Marked self as available")
-		}
+		// Announce the push name with the configured presence when connecting and
+		// when the push name changes.
+		mycli.sendAutomaticPresence()
 		sqlStmt := `UPDATE users SET connected=1 WHERE id=$1`
-		_, err = mycli.db.Exec(sqlStmt, mycli.userID)
+		_, err := mycli.db.Exec(sqlStmt, mycli.userID)
 		if err != nil {
 			log.Error().Err(err).Msg(sqlStmt)
 			return

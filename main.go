@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"go.mau.fi/whatsmeow/store/sqlstore"
+	"go.mau.fi/whatsmeow/types"
 	waLog "go.mau.fi/whatsmeow/util/log"
 
 	"github.com/gorilla/mux"
@@ -52,6 +53,7 @@ var (
 	skipMedia           = flag.Bool("skipmedia", false, "Do not attempt to download media in messages")
 	osName              = flag.String("osname", "Mac OS 10", "Connection OSName in Whatsapp")
 	platformType        = flag.String("platformtype", "DESKTOP", "Device platform type (DESKTOP, IPAD, ANDROID_TABLET, IOS_PHONE, ANDROID_PHONE, etc.)")
+	autoPresenceMode    = flag.String("autopresence", "available", "Automatic presence after connecting (available or unavailable)")
 	colorOutput         = flag.Bool("color", false, "Enable colored output for console logs")
 	sslcert             = flag.String("sslcertificate", "", "SSL Certificate File")
 	sslprivkey          = flag.String("sslprivatekey", "", "SSL Certificate Private Key File")
@@ -64,6 +66,7 @@ var (
 	dataDir             = flag.String("datadir", "", "Data directory for database and session files (defaults to executable directory)")
 
 	globalHMACKeyEncrypted []byte
+	automaticPresence      = types.PresenceAvailable
 
 	webhookRetryEnabled      = flag.Bool("webhookretry", true, "Enable webhook retry mechanism")
 	webhookRetryCount        = flag.Int("retrycount", 5, "Number of times to retry failed webhooks")
@@ -83,6 +86,17 @@ var (
 var privateIPBlocks []*net.IPNet
 
 const version = "1.0.8"
+
+func parseAutomaticPresence(value string) (types.Presence, error) {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case string(types.PresenceAvailable):
+		return types.PresenceAvailable, nil
+	case string(types.PresenceUnavailable):
+		return types.PresenceUnavailable, nil
+	default:
+		return "", fmt.Errorf("invalid automatic presence %q: expected available or unavailable", value)
+	}
+}
 
 // killchannel maps a userID to its session goroutine's kill channel. It is
 // accessed from HTTP request goroutines (Connect/Disconnect/logout/delete) and
@@ -287,6 +301,17 @@ func main() {
 	if v := os.Getenv("SESSION_PLATFORM_TYPE"); v != "" {
 		*platformType = v
 	}
+
+	if v := os.Getenv("WUZAPI_AUTO_PRESENCE"); v != "" {
+		*autoPresenceMode = v
+	}
+
+	configuredPresence, err := parseAutomaticPresence(*autoPresenceMode)
+	if err != nil {
+		log.Fatal().Err(err).Msg("Invalid automatic session presence configuration")
+	}
+	automaticPresence = configuredPresence
+	log.Info().Str("presence", string(automaticPresence)).Msg("Automatic session presence configured")
 
 	if *versionFlag {
 		fmt.Printf("WuzAPI version %s\n", version)
