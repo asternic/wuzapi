@@ -1011,8 +1011,10 @@ curl -X POST -H 'Token: 1234ABCD' -H 'Content-Type: application/json' --data '{"
 
 Subscribes to a contact's presence updates (online/offline and last seen). After
 subscribing, your configured webhook receives `Presence` events for that contact. You
-should be online yourself to receive presence (wuzapi sends an available presence on
-connect). Whether `last_seen` is available depends on the contact's privacy settings.
+should be online yourself to receive presence. By default WuzAPI sends an available
+presence on connect. When `WUZAPI_AUTO_PRESENCE=unavailable` is configured to preserve
+primary-phone push notifications, set your global presence to available before
+subscribing. Whether `last_seen` is available depends on the contact's privacy settings.
 
 endpoint: _/user/presence/subscribe_
 
