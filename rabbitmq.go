@@ -16,12 +16,43 @@ var (
 	rabbitEnabled bool
 	rabbitOnce    sync.Once
 	rabbitQueue   string
+
+	// rabbitMu guards rabbitConn/rabbitChannel/rabbitEnabled and serializes every
+	// use of the shared channel. An amqp091.Channel must not be used from several
+	// goroutines at once: Channel.Publish holds the channel's internal mutex while
+	// it writes the method + header + body frames, but Channel.QueueDeclare does
+	// not take that mutex at all. Events are published concurrently (one goroutine
+	// per client event, plus the send-message handler) and every publish declares
+	// the queue first, so a Queue.Declare frame can be written in the middle of
+	// another goroutine's content frames. The broker then closes the whole
+	// connection with "unexpected_frame: expected content body, got non content
+	// body frame instead" and every event still in flight is lost.
+	rabbitMu sync.Mutex
 )
 
 const (
 	maxRetries    = 10
 	retryInterval = 3 * time.Second
 )
+
+// setRabbitConnection publishes the RabbitMQ state under rabbitMu. Publishers
+// read this state while the reconnection goroutine replaces it, so the swap must
+// be atomic with respect to them: without the lock a publisher can observe
+// rabbitEnabled==true together with the channel of an already dead connection.
+func setRabbitConnection(conn *amqp091.Connection, channel *amqp091.Channel, enabled bool) {
+	rabbitMu.Lock()
+	defer rabbitMu.Unlock()
+	rabbitConn = conn
+	rabbitChannel = channel
+	rabbitEnabled = enabled
+}
+
+// rabbitIsEnabled reports whether publishing is currently possible.
+func rabbitIsEnabled() bool {
+	rabbitMu.Lock()
+	defer rabbitMu.Unlock()
+	return rabbitEnabled
+}
 
 // Call this in main() or initialization
 func InitRabbitMQ() {
@@ -95,9 +126,7 @@ func InitRabbitMQ() {
 		}
 
 		// Success!
-		rabbitConn = conn
-		rabbitChannel = channel
-		rabbitEnabled = true
+		setRabbitConnection(conn, channel, true)
 
 		log.Info().
 			Str("queue", rabbitQueue).
@@ -112,14 +141,19 @@ func InitRabbitMQ() {
 
 // Monitor connection errors and attempt reconnection
 func handleConnectionErrors() {
-	notifyClose := rabbitConn.NotifyClose(make(chan *amqp091.Error))
+	rabbitMu.Lock()
+	currentConn := rabbitConn
+	rabbitMu.Unlock()
+
+	notifyClose := currentConn.NotifyClose(make(chan *amqp091.Error))
 
 	for err := range notifyClose {
 		log.Error().
 			Err(err).
 			Msg("RabbitMQ connection closed unexpectedly. Attempting reconnection...")
 
-		rabbitEnabled = false
+		// Clear the dead connection so no publisher can reach its channel.
+		setRabbitConnection(nil, nil, false)
 
 		// Attempt to reconnect
 		for attempt := 1; attempt <= maxRetries; attempt++ {
@@ -150,9 +184,7 @@ func handleConnectionErrors() {
 			}
 
 			// Reconnection successful
-			rabbitConn = conn
-			rabbitChannel = channel
-			rabbitEnabled = true
+			setRabbitConnection(conn, channel, true)
 
 			log.Info().Msg("RabbitMQ reconnected successfully")
 
@@ -168,15 +200,22 @@ func handleConnectionErrors() {
 
 // Optionally, allow overriding the queue per message
 func PublishToRabbit(data []byte, queueOverride ...string) error {
+	// Both calls below write frames on the same shared AMQP channel and must not
+	// interleave with another goroutine's, so the lock covers declare + publish
+	// as one unit. See rabbitMu.
+	rabbitMu.Lock()
+	defer rabbitMu.Unlock()
+
 	if !rabbitEnabled {
 		return nil
 	}
+	channel := rabbitChannel
 	queueName := rabbitQueue
 	if len(queueOverride) > 0 && queueOverride[0] != "" {
 		queueName = queueOverride[0]
 	}
 	// Declare queue (idempotent)
-	_, err := rabbitChannel.QueueDeclare(
+	_, err := channel.QueueDeclare(
 		queueName,
 		true,  // durable
 		false, // auto-delete
@@ -188,7 +227,7 @@ func PublishToRabbit(data []byte, queueOverride ...string) error {
 		log.Error().Err(err).Str("queue", queueName).Msg("Could not declare RabbitMQ queue")
 		return err
 	}
-	err = rabbitChannel.Publish(
+	err = channel.Publish(
 		"",        // exchange (default)
 		queueName, // routing key = queue
 		false,     // mandatory
@@ -208,7 +247,7 @@ func PublishToRabbit(data []byte, queueOverride ...string) error {
 }
 
 func sendToGlobalRabbit(jsonData []byte, token string, userID string, queueName ...string) {
-	if !rabbitEnabled {
+	if !rabbitIsEnabled() {
 		// Check if RabbitMQ is configured but disabled due to connection issues
 		rabbitURL := os.Getenv("RABBITMQ_URL")
 		rabbitQueueEnv := os.Getenv("RABBITMQ_QUEUE")
