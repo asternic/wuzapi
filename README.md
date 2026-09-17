@@ -362,15 +362,15 @@ go build .
   </td>
 </tr><tr>
 <td align="center">
-    <a href="https://github.com/ramon-victor">
-      <img src="https://avatars.githubusercontent.com/u/13617054?v=4" width="100px;" style="border-radius:50%;"/><br />
-      <sub><b>ramon-victor</b></sub>
+    <a href="https://github.com/ThiagoBauken">
+      <img src="https://avatars.githubusercontent.com/u/107090829?v=4" width="100px;" style="border-radius:50%;"/><br />
+      <sub><b>ThiagoBauken</b></sub>
     </a>
   </td>
 <td align="center">
-    <a href="https://github.com/vitorsilvalima">
-      <img src="https://avatars.githubusercontent.com/u/9752658?v=4" width="100px;" style="border-radius:50%;"/><br />
-      <sub><b>vitorsilvalima</b></sub>
+    <a href="https://github.com/ramon-victor">
+      <img src="https://avatars.githubusercontent.com/u/13617054?v=4" width="100px;" style="border-radius:50%;"/><br />
+      <sub><b>ramon-victor</b></sub>
     </a>
   </td>
 <td align="center">
@@ -380,15 +380,15 @@ go build .
     </a>
   </td>
 <td align="center">
-    <a href="https://github.com/Piahn">
-      <img src="https://avatars.githubusercontent.com/u/132025108?v=4" width="100px;" style="border-radius:50%;"/><br />
-      <sub><b>Piahn</b></sub>
+    <a href="https://github.com/vitorsilvalima">
+      <img src="https://avatars.githubusercontent.com/u/9752658?v=4" width="100px;" style="border-radius:50%;"/><br />
+      <sub><b>vitorsilvalima</b></sub>
     </a>
   </td>
 <td align="center">
-    <a href="https://github.com/ThiagoBauken">
-      <img src="https://avatars.githubusercontent.com/u/107090829?v=4" width="100px;" style="border-radius:50%;"/><br />
-      <sub><b>ThiagoBauken</b></sub>
+    <a href="https://github.com/Piahn">
+      <img src="https://avatars.githubusercontent.com/u/132025108?v=4" width="100px;" style="border-radius:50%;"/><br />
+      <sub><b>Piahn</b></sub>
     </a>
   </td>
 <td align="center">
@@ -429,16 +429,28 @@ go build .
     </a>
   </td>
 <td align="center">
+    <a href="https://github.com/Alg0rix">
+      <img src="https://avatars.githubusercontent.com/u/53804949?v=4" width="100px;" style="border-radius:50%;"/><br />
+      <sub><b>Alg0rix</b></sub>
+    </a>
+  </td>
+</tr><tr>
+<td align="center">
     <a href="https://github.com/igortrinidad">
       <img src="https://avatars.githubusercontent.com/u/13478652?v=4" width="100px;" style="border-radius:50%;"/><br />
       <sub><b>igortrinidad</b></sub>
     </a>
   </td>
-</tr><tr>
 <td align="center">
     <a href="https://github.com/chrsmendes">
       <img src="https://avatars.githubusercontent.com/u/77082167?v=4" width="100px;" style="border-radius:50%;"/><br />
       <sub><b>chrsmendes</b></sub>
+    </a>
+  </td>
+<td align="center">
+    <a href="https://github.com/claytim">
+      <img src="https://avatars.githubusercontent.com/u/47343472?v=4" width="100px;" style="border-radius:50%;"/><br />
+      <sub><b>claytim</b></sub>
     </a>
   </td>
 <td align="center">
@@ -448,11 +460,18 @@ go build .
     </a>
   </td>
 <td align="center">
+    <a href="https://github.com/My-con">
+      <img src="https://avatars.githubusercontent.com/u/123265027?v=4" width="100px;" style="border-radius:50%;"/><br />
+      <sub><b>My-con</b></sub>
+    </a>
+  </td>
+<td align="center">
     <a href="https://github.com/paul-lestyo">
       <img src="https://avatars.githubusercontent.com/u/51690314?v=4" width="100px;" style="border-radius:50%;"/><br />
       <sub><b>paul-lestyo</b></sub>
     </a>
   </td>
+</tr><tr>
 <td align="center">
     <a href="https://github.com/luiis716">
       <img src="https://avatars.githubusercontent.com/u/97978347?v=4" width="100px;" style="border-radius:50%;"/><br />
@@ -471,7 +490,6 @@ go build .
       <sub><b>joaosouz4dev</b></sub>
     </a>
   </td>
-</tr><tr>
 <td align="center">
     <a href="https://github.com/gusnips">
       <img src="https://avatars.githubusercontent.com/u/981265?v=4" width="100px;" style="border-radius:50%;"/><br />
@@ -479,27 +497,9 @@ go build .
     </a>
   </td>
 <td align="center">
-    <a href="https://github.com/anilgulecha">
-      <img src="https://avatars.githubusercontent.com/u/1016984?v=4" width="100px;" style="border-radius:50%;"/><br />
-      <sub><b>anilgulecha</b></sub>
-    </a>
-  </td>
-<td align="center">
-    <a href="https://github.com/zennnez">
-      <img src="https://avatars.githubusercontent.com/u/3524740?v=4" width="100px;" style="border-radius:50%;"/><br />
-      <sub><b>zennnez</b></sub>
-    </a>
-  </td>
-<td align="center">
-    <a href="https://github.com/murilo-koko">
-      <img src="https://avatars.githubusercontent.com/u/223512888?v=4" width="100px;" style="border-radius:50%;"/><br />
-      <sub><b>murilo-koko</b></sub>
-    </a>
-  </td>
-<td align="center">
-    <a href="https://github.com/Jwenqiang">
-      <img src="https://avatars.githubusercontent.com/u/20280001?v=4" width="100px;" style="border-radius:50%;"/><br />
-      <sub><b>Jwenqiang</b></sub>
+    <a href="https://github.com/Flow-Mind-Company">
+      <img src="https://avatars.githubusercontent.com/u/228500487?v=4" width="100px;" style="border-radius:50%;"/><br />
+      <sub><b>Flow-Mind-Company</b></sub>
     </a>
   </td>
 </tr></table>
