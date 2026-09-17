@@ -510,6 +510,40 @@ go build .
 
 - [wuzapi TypeScript / Node Client](https://github.com/gusnips/wuzapi-node)
 
+## Pairing history sync
+
+`days_to_sync_history` requests a full history window from WhatsApp when linking
+an account. Set it through `POST /admin/users`, `PUT /admin/users/{id}`, or
+`POST /session/history` **before starting pairing**:
+
+```json
+{"history": 1000, "days_to_sync_history": 30}
+```
+
+The dashboard exposes the same setting when creating a user and in History
+Configuration. The session configuration endpoint works without an active WhatsApp
+client. Its omitted fields are preserved; sending `days_to_sync_history: 0`
+restores WhatsApp's default sync behavior. Values from 0 through 365 are accepted.
+Admin user responses and `GET /session/status` expose the saved value.
+
+Sync days and `history` are separate settings: `history` is the local per-chat
+message retention count, not a number of days. The requested window is sent in
+that user's pairing payload; WhatsApp and the phone determine which messages are
+available. Incoming batches use the existing `HistorySync` processing and webhooks.
+Zero sync days does not suppress WhatsApp's normal history events.
+
+Changes apply on the next **new pairing**, not an ordinary reconnect. If a QR has
+already been issued, restart the pairing flow after saving. For an already linked
+account, the explicit `GET /session/history` endpoint remains available for
+message-based history requests; changing sync days alone does not backfill it.
+Both SQLite and PostgreSQL are supported, with existing accounts defaulting to 0.
+
+Regression tests run on SQLite with `go test ./...`. To run the same migration,
+API, and pairing-payload checks on PostgreSQL, set `WUZAPI_TEST_POSTGRES_DSN` to a
+test database connection string and run `go test -run TestHistorySync ./...`.
+The database role must be able to create schemas; tests create and remove their
+own schemas.
+
 ## Star History
 
 <a href="https://www.star-history.com/?type=date&repos=asternic%2Fwuzapi">

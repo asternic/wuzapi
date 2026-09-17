@@ -639,6 +639,39 @@ paths:
         500:
           description: S3 connection test failed
   /session/history:
+    post:
+      tags:
+        - Session
+      summary: Configure message retention and pairing history
+      description: Save before starting pairing. No active WhatsApp session is required. Omitted fields retain their current values. Sync days affect the next new pairing, not an ordinary reconnect or a QR already issued. Zero preserves WhatsApp default sync behavior; it does not disable incoming HistorySync events.
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              minProperties: 1
+              properties:
+                history:
+                  type: integer
+                  minimum: 0
+                  description: Local message retention count per chat, independent of sync days.
+                  example: 1000
+                days_to_sync_history:
+                  type: integer
+                  minimum: 0
+                  maximum: 365
+                  description: Requested full history window on next pairing. Availability is determined by WhatsApp and the phone.
+                  example: 30
+      responses:
+        '200':
+          description: Configuration saved
+        '400':
+          description: Missing settings or invalid values
+        '500':
+          description: Database error
     get:
       tags:
         - Session
@@ -2325,6 +2358,14 @@ definitions:
             type: integer
             example: 30
 
+      days_to_sync_history:
+        type: integer
+        minimum: 0
+        maximum: 365
+        default: 0
+        example: 30
+        description: "History window requested in days on the next new pairing. 0 uses WhatsApp defaults. Configure before starting pairing; reconnecting an already linked device does not trigger a new full sync. Independent of local history retention."
+
   CreateUser:
     type: object
     required:
@@ -2403,6 +2444,14 @@ definitions:
         example: 0
         description: "Number of messages to store in history per chat for this user. 0 means no history is saved, any positive number enables history storage for that many messages per chat. Default is 0"
         default: 0
+
+      days_to_sync_history:
+        type: integer
+        minimum: 0
+        maximum: 365
+        default: 0
+        example: 30
+        description: "History window requested in days on the next new pairing. 0 uses WhatsApp defaults. Configure before starting pairing; reconnecting an already linked device does not trigger a new full sync. Independent of local history retention."
 
   DeleteUser:
     type: object
