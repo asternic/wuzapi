@@ -50,15 +50,6 @@ When HMAC is configured, all webhooks include an `x-hmac-signature` header with 
 **Optional:**
 * Docker (for containerization)
 
-## Updating dependencies
-
-This project uses the whatsmeow library to communicate with WhatsApp. To update the library to the latest version, run:
-
-```bash
-go get -u go.mau.fi/whatsmeow@latest
-go mod tidy
-```
-
 ## Building
 
 ```
@@ -312,6 +303,22 @@ request body, always passing the Token header for authenticating the request.
 
 Check the [API Reference](https://github.com/asternic/wuzapi/blob/main/API.md)
 
+## Updating the upstream whatsmeow library
+
+> [!CAUTION]
+> This section is intended for maintainers and developers. Regular users should use the whatsmeow version pinned in `go.mod` and should not upgrade it as part of the normal installation or build process.
+
+WuzAPI uses [whatsmeow](https://github.com/tulir/whatsmeow) to communicate with WhatsApp. Its upstream API can introduce breaking changes, so upgrading to the latest version may cause WuzAPI to stop compiling or working correctly until its code is adapted.
+
+Perform upgrades in a development branch, review the resulting `go.mod` and `go.sum` changes, and verify that WuzAPI builds and its tests pass before deploying the update:
+
+```bash
+go get -u go.mau.fi/whatsmeow@latest
+go mod tidy
+go test ./...
+go build .
+```
+
 ## Contributors
 
 <!-- CONTRIBUTORS:START -->
@@ -355,15 +362,15 @@ Check the [API Reference](https://github.com/asternic/wuzapi/blob/main/API.md)
   </td>
 </tr><tr>
 <td align="center">
-    <a href="https://github.com/ramon-victor">
-      <img src="https://avatars.githubusercontent.com/u/13617054?v=4" width="100px;" style="border-radius:50%;"/><br />
-      <sub><b>ramon-victor</b></sub>
+    <a href="https://github.com/ThiagoBauken">
+      <img src="https://avatars.githubusercontent.com/u/107090829?v=4" width="100px;" style="border-radius:50%;"/><br />
+      <sub><b>ThiagoBauken</b></sub>
     </a>
   </td>
 <td align="center">
-    <a href="https://github.com/vitorsilvalima">
-      <img src="https://avatars.githubusercontent.com/u/9752658?v=4" width="100px;" style="border-radius:50%;"/><br />
-      <sub><b>vitorsilvalima</b></sub>
+    <a href="https://github.com/ramon-victor">
+      <img src="https://avatars.githubusercontent.com/u/13617054?v=4" width="100px;" style="border-radius:50%;"/><br />
+      <sub><b>ramon-victor</b></sub>
     </a>
   </td>
 <td align="center">
@@ -373,15 +380,15 @@ Check the [API Reference](https://github.com/asternic/wuzapi/blob/main/API.md)
     </a>
   </td>
 <td align="center">
-    <a href="https://github.com/Piahn">
-      <img src="https://avatars.githubusercontent.com/u/132025108?v=4" width="100px;" style="border-radius:50%;"/><br />
-      <sub><b>Piahn</b></sub>
+    <a href="https://github.com/vitorsilvalima">
+      <img src="https://avatars.githubusercontent.com/u/9752658?v=4" width="100px;" style="border-radius:50%;"/><br />
+      <sub><b>vitorsilvalima</b></sub>
     </a>
   </td>
 <td align="center">
-    <a href="https://github.com/ThiagoBauken">
-      <img src="https://avatars.githubusercontent.com/u/107090829?v=4" width="100px;" style="border-radius:50%;"/><br />
-      <sub><b>ThiagoBauken</b></sub>
+    <a href="https://github.com/Piahn">
+      <img src="https://avatars.githubusercontent.com/u/132025108?v=4" width="100px;" style="border-radius:50%;"/><br />
+      <sub><b>Piahn</b></sub>
     </a>
   </td>
 <td align="center">
@@ -422,16 +429,28 @@ Check the [API Reference](https://github.com/asternic/wuzapi/blob/main/API.md)
     </a>
   </td>
 <td align="center">
+    <a href="https://github.com/Alg0rix">
+      <img src="https://avatars.githubusercontent.com/u/53804949?v=4" width="100px;" style="border-radius:50%;"/><br />
+      <sub><b>Alg0rix</b></sub>
+    </a>
+  </td>
+</tr><tr>
+<td align="center">
     <a href="https://github.com/igortrinidad">
       <img src="https://avatars.githubusercontent.com/u/13478652?v=4" width="100px;" style="border-radius:50%;"/><br />
       <sub><b>igortrinidad</b></sub>
     </a>
   </td>
-</tr><tr>
 <td align="center">
     <a href="https://github.com/chrsmendes">
       <img src="https://avatars.githubusercontent.com/u/77082167?v=4" width="100px;" style="border-radius:50%;"/><br />
       <sub><b>chrsmendes</b></sub>
+    </a>
+  </td>
+<td align="center">
+    <a href="https://github.com/claytim">
+      <img src="https://avatars.githubusercontent.com/u/47343472?v=4" width="100px;" style="border-radius:50%;"/><br />
+      <sub><b>claytim</b></sub>
     </a>
   </td>
 <td align="center">
@@ -441,11 +460,18 @@ Check the [API Reference](https://github.com/asternic/wuzapi/blob/main/API.md)
     </a>
   </td>
 <td align="center">
+    <a href="https://github.com/My-con">
+      <img src="https://avatars.githubusercontent.com/u/123265027?v=4" width="100px;" style="border-radius:50%;"/><br />
+      <sub><b>My-con</b></sub>
+    </a>
+  </td>
+<td align="center">
     <a href="https://github.com/paul-lestyo">
       <img src="https://avatars.githubusercontent.com/u/51690314?v=4" width="100px;" style="border-radius:50%;"/><br />
       <sub><b>paul-lestyo</b></sub>
     </a>
   </td>
+</tr><tr>
 <td align="center">
     <a href="https://github.com/luiis716">
       <img src="https://avatars.githubusercontent.com/u/97978347?v=4" width="100px;" style="border-radius:50%;"/><br />
@@ -464,7 +490,6 @@ Check the [API Reference](https://github.com/asternic/wuzapi/blob/main/API.md)
       <sub><b>joaosouz4dev</b></sub>
     </a>
   </td>
-</tr><tr>
 <td align="center">
     <a href="https://github.com/gusnips">
       <img src="https://avatars.githubusercontent.com/u/981265?v=4" width="100px;" style="border-radius:50%;"/><br />
@@ -472,27 +497,9 @@ Check the [API Reference](https://github.com/asternic/wuzapi/blob/main/API.md)
     </a>
   </td>
 <td align="center">
-    <a href="https://github.com/anilgulecha">
-      <img src="https://avatars.githubusercontent.com/u/1016984?v=4" width="100px;" style="border-radius:50%;"/><br />
-      <sub><b>anilgulecha</b></sub>
-    </a>
-  </td>
-<td align="center">
-    <a href="https://github.com/zennnez">
-      <img src="https://avatars.githubusercontent.com/u/3524740?v=4" width="100px;" style="border-radius:50%;"/><br />
-      <sub><b>zennnez</b></sub>
-    </a>
-  </td>
-<td align="center">
-    <a href="https://github.com/murilo-koko">
-      <img src="https://avatars.githubusercontent.com/u/223512888?v=4" width="100px;" style="border-radius:50%;"/><br />
-      <sub><b>murilo-koko</b></sub>
-    </a>
-  </td>
-<td align="center">
-    <a href="https://github.com/Jwenqiang">
-      <img src="https://avatars.githubusercontent.com/u/20280001?v=4" width="100px;" style="border-radius:50%;"/><br />
-      <sub><b>Jwenqiang</b></sub>
+    <a href="https://github.com/Flow-Mind-Company">
+      <img src="https://avatars.githubusercontent.com/u/228500487?v=4" width="100px;" style="border-radius:50%;"/><br />
+      <sub><b>Flow-Mind-Company</b></sub>
     </a>
   </td>
 </tr></table>
@@ -503,9 +510,49 @@ Check the [API Reference](https://github.com/asternic/wuzapi/blob/main/API.md)
 
 - [wuzapi TypeScript / Node Client](https://github.com/gusnips/wuzapi-node)
 
+## Pairing history sync
+
+`days_to_sync_history` requests a full history window from WhatsApp when linking
+an account. Set it through `POST /admin/users`, `PUT /admin/users/{id}`, or
+`POST /session/history` **before starting pairing**:
+
+```json
+{"history": 1000, "days_to_sync_history": 30}
+```
+
+The dashboard exposes the same setting when creating a user and in History
+Configuration. The session configuration endpoint works without an active WhatsApp
+client. Its omitted fields are preserved; sending `days_to_sync_history: 0`
+restores WhatsApp's default sync behavior. Values from 0 through 365 are accepted.
+Admin user responses and `GET /session/status` expose the saved value.
+
+Sync days and `history` are separate settings: `history` is the local per-chat
+message retention count, not a number of days. The requested window is sent in
+that user's pairing payload; WhatsApp and the phone determine which messages are
+available. Incoming batches use the existing `HistorySync` processing and webhooks.
+Zero sync days does not suppress WhatsApp's normal history events.
+
+Changes apply on the next **new pairing**, not an ordinary reconnect. If a QR has
+already been issued, restart the pairing flow after saving. For an already linked
+account, the explicit `GET /session/history` endpoint remains available for
+message-based history requests; changing sync days alone does not backfill it.
+Both SQLite and PostgreSQL are supported, with existing accounts defaulting to 0.
+
+Regression tests run on SQLite with `go test ./...`. To run the same migration,
+API, and pairing-payload checks on PostgreSQL, set `WUZAPI_TEST_POSTGRES_DSN` to a
+test database connection string and run `go test -run TestHistorySync ./...`.
+The database role must be able to create schemas; tests create and remove their
+own schemas.
+
 ## Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=asternic/wuzapi&type=Date)](https://www.star-history.com/#asternic/wuzapi&Date)
+<a href="https://www.star-history.com/?type=date&repos=asternic%2Fwuzapi">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=asternic/wuzapi&type=date&theme=dark&legend=top-left&sealed_token=btZMq-H0d-DBRgXRdFTBx24bZ3x6oVGnSTwAk6DEM19J5wiWYhsN20SekiMRIbFaEkIhmwM5_SyQKT1QTvNVYF9QAaFLdvvPPEq7Y7dvZ34MoKnKNXyXlQgerN1ag_hYzp9RGYAywggEXDxTESW-asFZnacNcBq7LvO4XhspFm-KflmgBomjG_czi8vR" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=asternic/wuzapi&type=date&legend=top-left&sealed_token=btZMq-H0d-DBRgXRdFTBx24bZ3x6oVGnSTwAk6DEM19J5wiWYhsN20SekiMRIbFaEkIhmwM5_SyQKT1QTvNVYF9QAaFLdvvPPEq7Y7dvZ34MoKnKNXyXlQgerN1ag_hYzp9RGYAywggEXDxTESW-asFZnacNcBq7LvO4XhspFm-KflmgBomjG_czi8vR" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=asternic/wuzapi&type=date&legend=top-left&sealed_token=btZMq-H0d-DBRgXRdFTBx24bZ3x6oVGnSTwAk6DEM19J5wiWYhsN20SekiMRIbFaEkIhmwM5_SyQKT1QTvNVYF9QAaFLdvvPPEq7Y7dvZ34MoKnKNXyXlQgerN1ag_hYzp9RGYAywggEXDxTESW-asFZnacNcBq7LvO4XhspFm-KflmgBomjG_czi8vR" />
+ </picture>
+</a>
 
 ## License
 

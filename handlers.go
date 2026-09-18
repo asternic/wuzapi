@@ -995,6 +995,12 @@ func (s *server) GetStatus() http.HandlerFunc {
 		}
 		proxyConfig := proxyConfigResponse(proxyURL, webhookUseProxy)
 
+		var daysToSyncHistory int
+		if err := s.db.Get(&daysToSyncHistory, s.db.Rebind("SELECT COALESCE(days_to_sync_history, 0) FROM users WHERE id = ?"), txtid); err != nil {
+			s.Respond(w, r, http.StatusInternalServerError, errors.New("failed to read history sync configuration"))
+			return
+		}
+
 		passkeyPending := false
 		var publicKey interface{} = nil
 		if pk := peekPendingPasskey(txtid); pk != nil && pk.Request != nil {
@@ -1003,22 +1009,23 @@ func (s *server) GetStatus() http.HandlerFunc {
 		}
 
 		response := map[string]interface{}{
-			"id":              txtid,
-			"name":            userInfo.Get("Name"),
-			"connected":       isConnected,
-			"loggedIn":        isLoggedIn,
-			"token":           userInfo.Get("Token"),
-			"jid":             jid,
-			"webhook":         userInfo.Get("Webhook"),
-			"events":          userInfo.Get("Events"),
-			"proxy_url":       userInfo.Get("Proxy"),
-			"qrcode":          userInfo.Get("Qrcode"),
-			"passkeyPending":  passkeyPending,
-			"publicKey":       publicKey,
-			"history":         userInfo.Get("History"),
-			"proxy_config":    proxyConfig,
-			"s3_config":       s3Config,
-			"hmac_configured": hmacConfigured,
+			"id":                   txtid,
+			"name":                 userInfo.Get("Name"),
+			"connected":            isConnected,
+			"loggedIn":             isLoggedIn,
+			"token":                userInfo.Get("Token"),
+			"jid":                  jid,
+			"webhook":              userInfo.Get("Webhook"),
+			"events":               userInfo.Get("Events"),
+			"proxy_url":            userInfo.Get("Proxy"),
+			"qrcode":               userInfo.Get("Qrcode"),
+			"passkeyPending":       passkeyPending,
+			"publicKey":            publicKey,
+			"history":              userInfo.Get("History"),
+			"days_to_sync_history": daysToSyncHistory,
+			"proxy_config":         proxyConfig,
+			"s3_config":            s3Config,
+			"hmac_configured":      hmacConfigured,
 		}
 		responseJson, err := json.Marshal(response)
 		if err != nil {
@@ -2768,7 +2775,7 @@ func (s *server) SetStatusMessage() http.HandlerFunc {
 
 		msg := proto.String(t.Body)
 
-		err = clientManager.GetWhatsmeowClient(txtid).SetStatusMessage(context.Background(), *msg)
+		err = clientManager.GetWhatsmeowClient(txtid).SetStatusMessage(context.Background(), types.SetStatusInput{Text: msg})
 		if err != nil {
 			s.Respond(w, r, http.StatusInternalServerError, errors.New(fmt.Sprintf("error sending status message: %v", err)))
 			return
@@ -4459,6 +4466,156 @@ func (s *server) React() http.HandlerFunc {
 	}
 }
 
+// Pins or unpins an existing message in a chat or group
+func (s *server) PinMessage() http.HandlerFunc {
+
+	type pinStruct struct {
+		Chat            string
+		Sender          string
+		Id              string
+		DurationSeconds *uint32
+		Pin             *bool
+	}
+
+	// Allowed pin durations in seconds: 24h, 7d, 30d
+	allowedDurations := map[uint32]bool{
+		86400:   true,
+		604800:  true,
+		2592000: true,
+	}
+	const defaultDuration uint32 = 604800
+
+	return func(w http.ResponseWriter, r *http.Request) {
+
+		txtid := r.Context().Value("userinfo").(Values).Get("Id")
+
+		client := clientManager.GetWhatsmeowClient(txtid)
+		if client == nil {
+			s.Respond(w, r, http.StatusInternalServerError, errors.New("no session"))
+			return
+		}
+
+		if !client.IsConnected() {
+			s.Respond(w, r, http.StatusInternalServerError, errors.New("not connected"))
+			return
+		}
+
+		decoder := json.NewDecoder(r.Body)
+		var t pinStruct
+		err := decoder.Decode(&t)
+		if err != nil {
+			s.Respond(w, r, http.StatusBadRequest, errors.New("could not decode payload"))
+			return
+		}
+
+		if t.Chat == "" {
+			s.Respond(w, r, http.StatusBadRequest, errors.New("missing Chat in payload"))
+			return
+		}
+
+		if t.Id == "" {
+			s.Respond(w, r, http.StatusBadRequest, errors.New("missing Id in payload"))
+			return
+		}
+
+		chatJID, ok := parseJID(t.Chat)
+		if !ok {
+			s.Respond(w, r, http.StatusBadRequest, errors.New("invalid Chat JID"))
+			return
+		}
+
+		isGroup := chatJID.Server == types.GroupServer || chatJID.Server == types.BroadcastServer
+
+		var senderJID types.JID
+		if t.Sender != "" {
+			senderJID, ok = parseJID(t.Sender)
+			if !ok {
+				s.Respond(w, r, http.StatusBadRequest, errors.New("invalid Sender JID"))
+				return
+			}
+		} else if isGroup {
+			s.Respond(w, r, http.StatusBadRequest, errors.New("missing Sender in payload for group chat"))
+			return
+		}
+
+		// Default to pinning unless Pin is explicitly false
+		pin := true
+		if t.Pin != nil {
+			pin = *t.Pin
+		}
+
+		duration := defaultDuration
+		if pin && t.DurationSeconds != nil {
+			if !allowedDurations[*t.DurationSeconds] {
+				s.Respond(w, r, http.StatusBadRequest, errors.New("invalid DurationSeconds, must be one of 86400, 604800, 2592000"))
+				return
+			}
+			duration = *t.DurationSeconds
+		}
+
+		key := &waCommon.MessageKey{
+			RemoteJID: proto.String(chatJID.String()),
+			FromMe:    proto.Bool(false),
+			ID:        proto.String(t.Id),
+		}
+		if senderJID.String() != "" {
+			key.Participant = proto.String(senderJID.String())
+		}
+
+		pinType := waE2E.PinInChatMessage_PIN_FOR_ALL
+		if !pin {
+			pinType = waE2E.PinInChatMessage_UNPIN_FOR_ALL
+		}
+
+		msg := &waE2E.Message{
+			PinInChatMessage: &waE2E.PinInChatMessage{
+				Key:               key,
+				Type:              pinType.Enum(),
+				SenderTimestampMS: proto.Int64(time.Now().UnixMilli()),
+			},
+		}
+
+		if pin {
+			msg.MessageContextInfo = &waE2E.MessageContextInfo{
+				MessageAddOnDurationInSecs: proto.Uint32(duration),
+			}
+		}
+
+		resp, err := client.SendMessage(context.Background(), chatJID, msg)
+		if err != nil {
+			if pin {
+				s.Respond(w, r, http.StatusInternalServerError, errors.New(fmt.Sprintf("could not pin message: %v", err)))
+			} else {
+				s.Respond(w, r, http.StatusInternalServerError, errors.New(fmt.Sprintf("could not unpin message: %v", err)))
+			}
+			return
+		}
+
+		response := map[string]interface{}{
+			"Chat":      chatJID.String(),
+			"Id":        t.Id,
+			"Timestamp": resp.Timestamp.UTC().Format(time.RFC3339),
+		}
+		if pin {
+			response["Details"] = "Message pinned"
+			response["DurationSeconds"] = duration
+			log.Info().Str("id", t.Id).Str("chat", chatJID.String()).Uint32("duration", duration).Msg("Message pinned")
+		} else {
+			response["Details"] = "Message unpinned"
+			log.Info().Str("id", t.Id).Str("chat", chatJID.String()).Msg("Message unpinned")
+		}
+
+		responseJson, err := json.Marshal(response)
+		if err != nil {
+			s.Respond(w, r, http.StatusInternalServerError, err)
+		} else {
+			s.Respond(w, r, http.StatusOK, string(responseJson))
+		}
+
+		return
+	}
+}
+
 // Mark messages as read
 func (s *server) MarkRead() http.HandlerFunc {
 
@@ -5487,18 +5644,19 @@ func (s *server) ListNewsletter() http.HandlerFunc {
 // Admin List users
 func (s *server) ListUsers() http.HandlerFunc {
 	type usersStruct struct {
-		Id              string         `db:"id"`
-		Name            string         `db:"name"`
-		Token           string         `db:"token"`
-		Webhook         string         `db:"webhook"`
-		Jid             string         `db:"jid"`
-		Qrcode          string         `db:"qrcode"`
-		Connected       sql.NullBool   `db:"connected"`
-		Expiration      sql.NullInt64  `db:"expiration"`
-		ProxyURL        sql.NullString `db:"proxy_url"`
-		WebhookUseProxy bool           `db:"webhook_use_proxy"`
-		Events          string         `db:"events"`
-		History         sql.NullInt64  `db:"history"`
+		Id                string         `db:"id"`
+		Name              string         `db:"name"`
+		Token             string         `db:"token"`
+		Webhook           string         `db:"webhook"`
+		Jid               string         `db:"jid"`
+		Qrcode            string         `db:"qrcode"`
+		Connected         sql.NullBool   `db:"connected"`
+		Expiration        sql.NullInt64  `db:"expiration"`
+		ProxyURL          sql.NullString `db:"proxy_url"`
+		WebhookUseProxy   bool           `db:"webhook_use_proxy"`
+		Events            string         `db:"events"`
+		History           sql.NullInt64  `db:"history"`
+		DaysToSyncHistory int            `db:"days_to_sync_history"`
 	}
 	return func(w http.ResponseWriter, r *http.Request) {
 		vars := mux.Vars(r)
@@ -5509,11 +5667,11 @@ func (s *server) ListUsers() http.HandlerFunc {
 
 		if hasID {
 			// Fetch a single user
-			query = "SELECT id, name, token, webhook, jid, qrcode, connected, expiration, proxy_url, COALESCE(webhook_use_proxy, true) AS webhook_use_proxy, events, history FROM users WHERE id = $1"
+			query = "SELECT id, name, token, webhook, jid, qrcode, connected, expiration, proxy_url, COALESCE(webhook_use_proxy, true) AS webhook_use_proxy, events, history, COALESCE(days_to_sync_history, 0) AS days_to_sync_history FROM users WHERE id = $1"
 			args = append(args, userID)
 		} else {
 			// Fetch all users
-			query = "SELECT id, name, token, webhook, jid, qrcode, connected, expiration, proxy_url, COALESCE(webhook_use_proxy, true) AS webhook_use_proxy, events, history FROM users"
+			query = "SELECT id, name, token, webhook, jid, qrcode, connected, expiration, proxy_url, COALESCE(webhook_use_proxy, true) AS webhook_use_proxy, events, history, COALESCE(days_to_sync_history, 0) AS days_to_sync_history FROM users"
 		}
 
 		rows, err := s.db.Queryx(query, args...)
@@ -5552,17 +5710,19 @@ func (s *server) ListUsers() http.HandlerFunc {
 
 			//"connected":  user.Connected.Bool,
 			userMap := map[string]interface{}{
-				"id":         user.Id,
-				"name":       user.Name,
-				"token":      user.Token,
-				"webhook":    user.Webhook,
-				"jid":        user.Jid,
-				"qrcode":     user.Qrcode,
-				"connected":  isConnected,
-				"loggedIn":   isLoggedIn,
-				"expiration": user.Expiration.Int64,
-				"proxy_url":  user.ProxyURL.String,
-				"events":     user.Events,
+				"id":                   user.Id,
+				"name":                 user.Name,
+				"token":                user.Token,
+				"webhook":              user.Webhook,
+				"jid":                  user.Jid,
+				"qrcode":               user.Qrcode,
+				"connected":            isConnected,
+				"loggedIn":             isLoggedIn,
+				"expiration":           user.Expiration.Int64,
+				"proxy_url":            user.ProxyURL.String,
+				"events":               user.Events,
+				"history":              user.History.Int64,
+				"days_to_sync_history": user.DaysToSyncHistory,
 			}
 			// Add proxy_config
 			proxyURL := user.ProxyURL.String
@@ -5632,15 +5792,16 @@ func (s *server) AddUser() http.HandlerFunc {
 
 		// Parse the request body
 		var user struct {
-			Name        string       `json:"name"`
-			Token       string       `json:"token"`
-			Webhook     string       `json:"webhook,omitempty"`
-			Expiration  int          `json:"expiration,omitempty"`
-			Events      string       `json:"events,omitempty"`
-			ProxyConfig *ProxyConfig `json:"proxyConfig,omitempty"`
-			S3Config    *S3Config    `json:"s3Config,omitempty"`
-			HmacKey     string       `json:"hmacKey,omitempty"`
-			History     int          `json:"history,omitempty"`
+			Name              string       `json:"name"`
+			Token             string       `json:"token"`
+			Webhook           string       `json:"webhook,omitempty"`
+			Expiration        int          `json:"expiration,omitempty"`
+			Events            string       `json:"events,omitempty"`
+			ProxyConfig       *ProxyConfig `json:"proxyConfig,omitempty"`
+			S3Config          *S3Config    `json:"s3Config,omitempty"`
+			HmacKey           string       `json:"hmacKey,omitempty"`
+			History           int          `json:"history,omitempty"`
+			DaysToSyncHistory *int         `json:"days_to_sync_history,omitempty"`
 		}
 
 		if err := json.NewDecoder(r.Body).Decode(&user); err != nil {
@@ -5651,6 +5812,13 @@ func (s *server) AddUser() http.HandlerFunc {
 				"success": false,
 			})
 			return
+		}
+
+		if user.DaysToSyncHistory != nil {
+			if err := validateHistorySyncDays(*user.DaysToSyncHistory); err != nil {
+				s.Respond(w, r, http.StatusBadRequest, err)
+				return
+			}
 		}
 
 		log.Info().Interface("proxyConfig", user.ProxyConfig).Interface("s3Config", user.S3Config).Msg("Received values for proxyConfig and s3Config")
@@ -5748,9 +5916,9 @@ func (s *server) AddUser() http.HandlerFunc {
 
 		// Insert user with all proxy, S3 and HMAC fields
 		if _, err = s.db.Exec(
-			"INSERT INTO users (id, name, token, webhook, expiration, events, jid, qrcode, proxy_url, webhook_use_proxy, s3_enabled, s3_endpoint, s3_region, s3_bucket, s3_access_key, s3_secret_key, s3_path_style, s3_public_url, media_delivery, s3_retention_days, hmac_key, history) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)",
+			"INSERT INTO users (id, name, token, webhook, expiration, events, jid, qrcode, proxy_url, webhook_use_proxy, s3_enabled, s3_endpoint, s3_region, s3_bucket, s3_access_key, s3_secret_key, s3_path_style, s3_public_url, media_delivery, s3_retention_days, hmac_key, history, days_to_sync_history) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, COALESCE($23, 0))",
 			id, user.Name, user.Token, user.Webhook, user.Expiration, user.Events, "", "", user.ProxyConfig.ProxyURL, webhookUseProxy,
-			user.S3Config.Enabled, user.S3Config.Endpoint, user.S3Config.Region, user.S3Config.Bucket, user.S3Config.AccessKey, user.S3Config.SecretKey, user.S3Config.PathStyle, user.S3Config.PublicURL, user.S3Config.MediaDelivery, user.S3Config.RetentionDays, encryptedHmacKey, user.History,
+			user.S3Config.Enabled, user.S3Config.Endpoint, user.S3Config.Region, user.S3Config.Bucket, user.S3Config.AccessKey, user.S3Config.SecretKey, user.S3Config.PathStyle, user.S3Config.PublicURL, user.S3Config.MediaDelivery, user.S3Config.RetentionDays, encryptedHmacKey, user.History, user.DaysToSyncHistory,
 		); err != nil {
 			log.Error().Str("error", fmt.Sprintf("%v", err)).Msg("admin DB error")
 			s.respondWithJSON(w, http.StatusInternalServerError, map[string]interface{}{
@@ -5792,15 +5960,20 @@ func (s *server) AddUser() http.HandlerFunc {
 			"retention_days": user.S3Config.RetentionDays,
 		}
 		userMap := map[string]interface{}{
-			"id":           id,
-			"name":         user.Name,
-			"token":        user.Token,
-			"webhook":      user.Webhook,
-			"expiration":   user.Expiration,
-			"events":       user.Events,
-			"proxy_config": proxyConfig,
-			"s3_config":    s3Config,
-			"hmac_key":     user.HmacKey != "",
+			"id":                   id,
+			"name":                 user.Name,
+			"token":                user.Token,
+			"webhook":              user.Webhook,
+			"expiration":           user.Expiration,
+			"events":               user.Events,
+			"proxy_config":         proxyConfig,
+			"s3_config":            s3Config,
+			"hmac_key":             user.HmacKey != "",
+			"history":              user.History,
+			"days_to_sync_history": 0,
+		}
+		if user.DaysToSyncHistory != nil {
+			userMap["days_to_sync_history"] = *user.DaysToSyncHistory
 		}
 		s.respondWithJSON(w, http.StatusCreated, map[string]interface{}{
 			"code":    http.StatusCreated,
@@ -5821,14 +5994,15 @@ func (s *server) EditUser() http.HandlerFunc {
 
 		// Parse the request body
 		var user struct {
-			Name        string       `json:"name,omitempty"`
-			Token       string       `json:"token,omitempty"`
-			Webhook     string       `json:"webhook,omitempty"`
-			Expiration  int          `json:"expiration,omitempty"`
-			Events      string       `json:"events,omitempty"`
-			ProxyConfig *ProxyConfig `json:"proxyConfig,omitempty"`
-			S3Config    *S3Config    `json:"s3Config,omitempty"`
-			History     int          `json:"history,omitempty"`
+			Name              string       `json:"name,omitempty"`
+			Token             string       `json:"token,omitempty"`
+			Webhook           string       `json:"webhook,omitempty"`
+			Expiration        int          `json:"expiration,omitempty"`
+			Events            string       `json:"events,omitempty"`
+			ProxyConfig       *ProxyConfig `json:"proxyConfig,omitempty"`
+			S3Config          *S3Config    `json:"s3Config,omitempty"`
+			History           int          `json:"history,omitempty"`
+			DaysToSyncHistory *int         `json:"days_to_sync_history,omitempty"`
 		}
 
 		if err := json.NewDecoder(r.Body).Decode(&user); err != nil {
@@ -5839,6 +6013,13 @@ func (s *server) EditUser() http.HandlerFunc {
 				"success": false,
 			})
 			return
+		}
+
+		if user.DaysToSyncHistory != nil {
+			if err := validateHistorySyncDays(*user.DaysToSyncHistory); err != nil {
+				s.Respond(w, r, http.StatusBadRequest, err)
+				return
+			}
 		}
 
 		log.Info().Interface("proxyConfig", user.ProxyConfig).Interface("s3Config", user.S3Config).Msg("Received values for proxyConfig and s3Config")
@@ -5907,6 +6088,9 @@ func (s *server) EditUser() http.HandlerFunc {
 		addField("expiration", user.Expiration, user.Expiration != 0)
 		addField("events", user.Events, user.Events != "")
 		addField("history", user.History, user.History != 0)
+		if user.DaysToSyncHistory != nil {
+			addField("days_to_sync_history", *user.DaysToSyncHistory, true)
+		}
 
 		// Handle proxy config
 		if user.ProxyConfig != nil {
@@ -6315,62 +6499,61 @@ func validateMessageFields(ctx context.Context, client *whatsmeow.Client, phone 
 	return recipient, nil
 }
 
-// Set history
+// SetHistory configures local retention and the history window requested on next pairing.
 func (s *server) SetHistory() http.HandlerFunc {
-	type historyStruct struct {
-		History int `json:"history"`
-	}
-
 	return func(w http.ResponseWriter, r *http.Request) {
-		txtid := r.Context().Value("userinfo").(Values).Get("Id")
-
-		// Check if client exists and is connected
-
-		if clientManager.GetWhatsmeowClient(txtid) == nil {
-			s.Respond(w, r, http.StatusBadRequest, errors.New("no session"))
-			return
+		info := r.Context().Value("userinfo").(Values)
+		var config struct {
+			History *int `json:"history"`
+			Days    *int `json:"days_to_sync_history"`
 		}
-
-		decoder := json.NewDecoder(r.Body)
-		var t historyStruct
-		err := decoder.Decode(&t)
-		if err != nil {
+		if err := json.NewDecoder(r.Body).Decode(&config); err != nil {
 			s.Respond(w, r, http.StatusBadRequest, errors.New("could not decode payload"))
 			return
 		}
-
-		// Validate history value
-		if t.History < 0 {
+		if config.History == nil && config.Days == nil {
+			s.Respond(w, r, http.StatusBadRequest, errors.New("provide history or days_to_sync_history"))
+			return
+		}
+		if config.History != nil && *config.History < 0 {
 			s.Respond(w, r, http.StatusBadRequest, errors.New("history cannot be negative"))
 			return
 		}
-
-		// Store history configuration in database
-		_, err = s.db.Exec("UPDATE users SET history = $1 WHERE id = $2", t.History, txtid)
-		if err != nil {
+		if config.Days != nil {
+			if err := validateHistorySyncDays(*config.Days); err != nil {
+				s.Respond(w, r, http.StatusBadRequest, err)
+				return
+			}
+		}
+		// Configuration must be possible before a WhatsApp client or QR exists.
+		query := s.db.Rebind("UPDATE users SET history = COALESCE(?, history), days_to_sync_history = COALESCE(?, days_to_sync_history) WHERE id = ?")
+		if _, err := s.db.Exec(query, config.History, config.Days, info.Get("Id")); err != nil {
 			s.Respond(w, r, http.StatusInternalServerError, errors.New("failed to save history configuration"))
 			return
 		}
-
-		token := r.Context().Value("userinfo").(Values).Get("Token")
-		if cachedUserInfo, found := userinfocache.Get(token); found {
-			updatedUserInfo := cachedUserInfo.(Values)
-			// Update history in cache
-			updatedUserInfo = updateUserInfo(updatedUserInfo, "History", strconv.Itoa(t.History)).(Values)
-			userinfocache.Set(token, updatedUserInfo, cache.NoExpiration)
-			log.Info().Str("userID", txtid).Msg("User info cache updated with History configuration")
+		if config.History != nil {
+			if cached, found := userinfocache.Get(info.Get("Token")); found {
+				updated := updateUserInfo(cached, "History", strconv.Itoa(*config.History))
+				userinfocache.Set(info.Get("Token"), updated, cache.NoExpiration)
+			}
 		}
-
-		response := map[string]interface{}{
-			"Details": "History configured successfully",
-			"History": t.History,
+		var saved struct {
+			History int `db:"history" json:"History"`
+			Days    int `db:"days_to_sync_history" json:"days_to_sync_history"`
 		}
-		responseJson, err := json.Marshal(response)
-		if err != nil {
-			s.Respond(w, r, http.StatusInternalServerError, err)
-		} else {
-			s.Respond(w, r, http.StatusOK, string(responseJson))
+		if err := s.db.Get(&saved, s.db.Rebind("SELECT COALESCE(history, 0) AS history, COALESCE(days_to_sync_history, 0) AS days_to_sync_history FROM users WHERE id = ?"), info.Get("Id")); err != nil {
+			s.Respond(w, r, http.StatusInternalServerError, errors.New("failed to read history configuration"))
+			return
 		}
+		s.respondWithJSON(w, http.StatusOK, map[string]interface{}{
+			"code":    http.StatusOK,
+			"success": true,
+			"data": map[string]interface{}{
+				"Details":              "History configured successfully; sync days apply on the next pairing",
+				"History":              saved.History,
+				"days_to_sync_history": saved.Days,
+			},
+		})
 	}
 }
 
@@ -6933,110 +7116,6 @@ func (s *server) GetHistory() http.HandlerFunc {
 			s.Respond(w, r, http.StatusOK, string(responseJson))
 		}
 	}
-}
-
-// syncHistoryForChat syncs history for a specific chat
-func (s *server) syncHistoryForChat(ctx context.Context, userID string, chatJID types.JID, count int) error {
-	chatJIDStr := chatJID.String()
-
-	// Try to get last message info for this chat from database
-	var query string
-	if s.db.DriverName() == "postgres" {
-		query = `
-			SELECT message_id, chat_jid, sender_jid
-			FROM message_history
-			WHERE user_id = $1 AND chat_jid = $2
-			ORDER BY timestamp DESC
-			LIMIT 1`
-	} else {
-		query = `
-			SELECT message_id, chat_jid, sender_jid
-			FROM message_history
-			WHERE user_id = ? AND chat_jid = ?
-			ORDER BY timestamp DESC
-			LIMIT 1`
-	}
-
-	var lastMsg struct {
-		MessageID string `db:"message_id"`
-		ChatJID   string `db:"chat_jid"`
-		SenderJID string `db:"sender_jid"`
-	}
-
-	var lastMessageInfo *types.MessageInfo
-	err := s.db.Get(&lastMsg, query, userID, chatJIDStr)
-	if err != nil && !errors.Is(err, sql.ErrNoRows) {
-		return fmt.Errorf("failed to get last message from history: %w", err)
-	}
-
-	if err == nil && lastMsg.MessageID != "" {
-		// Parse sender JID
-		var senderJID types.JID
-		if lastMsg.SenderJID != "" && lastMsg.SenderJID != "me" {
-			var pErr error
-			senderJID, pErr = types.ParseJID(lastMsg.SenderJID)
-			if pErr != nil {
-				log.Warn().Err(pErr).Str("senderJID", lastMsg.SenderJID).Msg("Failed to parse sender JID from history, using empty JID")
-				senderJID = types.EmptyJID
-			}
-		} else {
-			senderJID = types.EmptyJID
-		}
-
-		// MessageInfo embeds MessageSource which contains Chat, Sender, IsGroup
-		lastMessageInfo = &types.MessageInfo{
-			MessageSource: types.MessageSource{
-				Chat:    chatJID,
-				Sender:  senderJID,
-				IsGroup: chatJID.Server == types.GroupServer || chatJID.Server == types.BroadcastServer,
-			},
-			ID: lastMsg.MessageID,
-		}
-	} else {
-		// If no last message found, create MessageInfo with just the chat
-		lastMessageInfo = &types.MessageInfo{
-			MessageSource: types.MessageSource{
-				Chat:    chatJID,
-				IsGroup: chatJID.Server == types.GroupServer || chatJID.Server == types.BroadcastServer,
-			},
-		}
-	}
-
-	// Build history sync request
-	historyMsg := clientManager.GetWhatsmeowClient(userID).BuildHistorySyncRequest(lastMessageInfo, count)
-	if historyMsg == nil {
-		return errors.New("failed to build history sync request")
-	}
-
-	// Send the history sync request
-	myClient := clientManager.GetMyClient(userID)
-	if myClient == nil || myClient.WAClient == nil || myClient.WAClient.Store == nil || myClient.WAClient.Store.ID == nil {
-		return errors.New("client store not available")
-	}
-
-	_, err = clientManager.GetWhatsmeowClient(userID).SendMessage(
-		ctx,
-		myClient.WAClient.Store.ID.ToNonAD(),
-		historyMsg,
-		whatsmeow.SendRequestExtra{Peer: true},
-	)
-
-	if err != nil {
-		log.Error().
-			Str("userID", userID).
-			Str("chatJID", chatJIDStr).
-			Err(err).
-			Msg("Failed to send WhatsApp history sync request")
-		return fmt.Errorf("failed to send history sync request: %w", err)
-	}
-
-	log.Info().
-		Str("userID", userID).
-		Str("chatJID", chatJIDStr).
-		Int("count", count).
-		Msg("WhatsApp history sync request sent successfully")
-
-	return nil
 }
 
 // save outgoing message to history

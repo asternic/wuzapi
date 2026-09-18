@@ -86,6 +86,11 @@ var migrations = []Migration{
 		Name:  "repair_webhook_use_proxy",
 		UpSQL: repairWebhookUseProxySQL,
 	},
+	{
+		ID:    13,
+		Name:  "add_days_to_sync_history",
+		UpSQL: `ALTER TABLE users ADD COLUMN IF NOT EXISTS days_to_sync_history INTEGER DEFAULT 0;`,
+	},
 }
 
 const changeIDToStringSQL = `
@@ -519,6 +524,12 @@ func applyMigration(db *sqlx.DB, migration Migration) error {
 	} else if migration.ID == 9 {
 		if db.DriverName() == "sqlite" {
 			err = nil
+		} else {
+			_, err = tx.Exec(migration.UpSQL)
+		}
+	} else if migration.ID == 13 {
+		if db.DriverName() == "sqlite" {
+			err = addColumnIfNotExistsSQLite(tx, "users", "days_to_sync_history", "INTEGER DEFAULT 0")
 		} else {
 			_, err = tx.Exec(migration.UpSQL)
 		}

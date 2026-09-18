@@ -16,6 +16,7 @@ import (
 	"syscall"
 	"time"
 
+	"go.mau.fi/whatsmeow/store"
 	"go.mau.fi/whatsmeow/store/sqlstore"
 	waLog "go.mau.fi/whatsmeow/util/log"
 
@@ -82,7 +83,7 @@ var (
 
 var privateIPBlocks []*net.IPNet
 
-const version = "1.0.8"
+const version = "1.0.9"
 
 // killchannel maps a userID to its session goroutine's kill channel. It is
 // accessed from HTTP request goroutines (Connect/Disconnect/logout/delete) and
@@ -287,6 +288,10 @@ func main() {
 	if v := os.Getenv("SESSION_PLATFORM_TYPE"); v != "" {
 		*platformType = v
 	}
+	// Whatsmeow also reads these global properties in QR/passkey pairing.
+	// Set the process-wide identity once, before any client goroutines start.
+	store.DeviceProps.PlatformType = getPlatformTypeEnum(*platformType)
+	store.DeviceProps.Os = osName
 
 	if *versionFlag {
 		fmt.Printf("WuzAPI version %s\n", version)

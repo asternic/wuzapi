@@ -1074,6 +1074,91 @@ curl -X POST -H 'Token: 1234ABCD' -H 'Content-Type: application/json' --data '{"
 
 ---
 
+## Pin / Unpin a message
+
+Pins or unpins an existing message in an individual chat or group. The same endpoint handles both: send `Pin: true` (the default) to pin and `Pin: false` to unpin.
+
+endpoint: _/chat/pin_
+
+method: **POST**
+
+Required headers:
+
+```
+Token: <USER_TOKEN>
+Content-Type: application/json
+```
+
+### Request body
+
+| Field | Required | Type | Description |
+|---|---|---|---|
+| `Chat` | Yes | string | Target chat JID. For groups, the group JID ending in `@g.us`. |
+| `Sender` | Required for groups | string | JID of the original message sender. Required for group messages because the message key includes the participant. Optional for one-to-one chats. |
+| `Id` | Yes | string | WhatsApp message ID of the message to pin or unpin. |
+| `DurationSeconds` | No | integer | How long the message stays pinned. Defaults to `604800`. Only used when pinning. |
+| `Pin` | No | boolean | `true` pins the message, `false` unpins it. Defaults to `true`. |
+
+### Allowed durations
+
+| Duration | Seconds |
+|---|---|
+| 24 hours | `86400` |
+| 7 days | `604800` (default) |
+| 30 days | `2592000` |
+
+When `Pin` is `false`, `DurationSeconds` is ignored.
+
+### Pin a group message for 7 days
+
+```
+curl -X POST -H 'Token: 1234ABCD' -H 'Content-Type: application/json' --data '{"Chat":"120363012345678901@g.us","Sender":"5491123456789@s.whatsapp.net","Id":"3EB0ABCDEF1234567890","DurationSeconds":604800,"Pin":true}' http://localhost:8080/chat/pin
+```
+
+### Pin a group message for 24 hours
+
+```
+curl -X POST -H 'Token: 1234ABCD' -H 'Content-Type: application/json' --data '{"Chat":"120363012345678901@g.us","Sender":"5491123456789@s.whatsapp.net","Id":"3EB0ABCDEF1234567890","DurationSeconds":86400,"Pin":true}' http://localhost:8080/chat/pin
+```
+
+### Unpin a group message
+
+```
+curl -X POST -H 'Token: 1234ABCD' -H 'Content-Type: application/json' --data '{"Chat":"120363012345678901@g.us","Sender":"5491123456789@s.whatsapp.net","Id":"3EB0ABCDEF1234567890","Pin":false}' http://localhost:8080/chat/pin
+```
+
+### Example responses
+
+Pin success:
+
+```json
+{
+  "Details": "Message pinned",
+  "Chat": "120363012345678901@g.us",
+  "Id": "3EB0ABCDEF1234567890",
+  "DurationSeconds": 604800,
+  "Timestamp": "2026-06-18T12:34:56Z"
+}
+```
+
+Unpin success:
+
+```json
+{
+  "Details": "Message unpinned",
+  "Chat": "120363012345678901@g.us",
+  "Id": "3EB0ABCDEF1234567890",
+  "Timestamp": "2026-06-18T12:34:56Z"
+}
+```
+
+### Notes
+
+- For group messages the `Sender` field is mandatory and must be the JID of the original message sender. If it is wrong or missing, WhatsApp may ignore the pin.
+- The linked account must have permission to pin in the target group (if the group restricts pinning to admins, the account must be an admin). The transport may report success even when WhatsApp silently ignores an unauthorized pin.
+
+---
+
 ## Download Image
 
 Downloads an Image from a message and retrieves it Base64 media encoded. Required request parameters are: Url, MediaKey, Mimetype, FileSHA256 and FileLength
