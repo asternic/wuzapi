@@ -2,7 +2,10 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"mime"
+	"net/http"
 	"os"
 	"path/filepath"
 	"time"
@@ -22,6 +25,24 @@ const (
 type mediaS3Config struct {
 	Enabled       string
 	MediaDelivery string
+}
+
+// lazyBase64 carries raw media bytes through postmap without eagerly
+// encoding them
+type lazyBase64 struct {
+	data []byte
+}
+
+func (b lazyBase64) MarshalJSON() ([]byte, error) {
+	return json.Marshal(base64.StdEncoding.EncodeToString(b.data))
+}
+
+// resolves MIME Type based on WhatsApp declared preferably
+func resolveMimeType(declaredMimeType string, data []byte) string {
+	if declaredMimeType != "" {
+		return declaredMimeType
+	}
+	return http.DetectContentType(data)
 }
 
 func (mycli *MyClient) processMedia(
@@ -52,8 +73,11 @@ func (mycli *MyClient) processMedia(
 	}
 
 	ext := fallbackExt
-	if exts, _ := mime.ExtensionsByType(mimeType); len(exts) > 0 {
-		ext = exts[0]
+	//prefer fallbackExt when available
+	if len(ext) == 0 {
+		if exts, _ := mime.ExtensionsByType(mimeType); len(exts) > 0 {
+			ext = exts[0]
+		}
 	}
 	tmpPath := filepath.Join(tmpDir, messageID+ext)
 
@@ -88,13 +112,8 @@ func (mycli *MyClient) processMedia(
 	}
 
 	if s3cfg.MediaDelivery == "base64" || s3cfg.MediaDelivery == "both" {
-		b64, mime_, err := fileToBase64(tmpPath)
-		if err != nil {
-			log.Error().Err(err).Msg("Failed to convert media to base64")
-			return
-		}
-		postmap["base64"] = b64
-		postmap["mimeType"] = mime_
+		postmap["base64"] = lazyBase64{data: data}
+		postmap["mimeType"] = resolveMimeType(mimeType, data)
 		postmap["fileName"] = filepath.Base(tmpPath)
 	}
 

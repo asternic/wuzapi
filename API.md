@@ -1952,3 +1952,21 @@ Content-Type: application/json
 - The `form` mode ensures compatibility with legacy or older webhook systems.
 - The `json` mode is recommended for modern integrations and easier backend parsing.
 - If you do not set the variable, the system will use `form` mode by default.
+
+### Streaming large media
+
+When `WEBHOOK_FORMAT=json`, large media attachments can be streamed directly
+into the outgoing webhook request instead of being fully buffered in memory
+first. This is opt-in via the `WEBHOOK_STREAM_MEDIA` environment variable,
+independent of the format choice above:
+
+```bash
+export WEBHOOK_STREAM_MEDIA=true # enable streaming; only takes effect when WEBHOOK_FORMAT=json
+```
+
+Left unset, it defaults to `false`, so upgrading does not silently change how
+existing `WEBHOOK_FORMAT=json` deployments send webhooks — you must opt in
+explicitly. It has no effect in `form` mode, since streaming is only
+implemented for the JSON body format. The resulting webhook payload is
+byte-for-byte identical either way — this setting only affects how much memory
+sending it uses.

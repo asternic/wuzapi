@@ -126,6 +126,7 @@ WUZAPI_GLOBAL_HMAC_KEY=your_global_hmac_key_here
 ```
 TZ=America/New_York
 WEBHOOK_FORMAT=json
+WEBHOOK_STREAM_MEDIA=true
 SESSION_DEVICE_NAME=WuzAPI
 WUZAPI_PORT=8080
 WUZAPI_GLOBAL_WEBHOOK=https://your-global-webhook.url
@@ -166,6 +167,7 @@ No database configuration needed - SQLite is used by default if no PostgreSQL se
 ```
 TZ=America/New_York
 WEBHOOK_FORMAT=json # or "form" for the default
+WEBHOOK_STREAM_MEDIA=true # opt-in, defaults to "false"; only takes effect when WEBHOOK_FORMAT=json
 SESSION_DEVICE_NAME=WuzAPI
 WUZAPI_PORT=8080 # Port for the WuzAPI server
 WUZAPI_GLOBAL_WEBHOOK= # Global webhook URL for all instances

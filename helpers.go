@@ -8,6 +8,7 @@ import (
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
@@ -25,7 +26,6 @@ import (
 	"runtime/debug"
 	"strings"
 	"sync"
-
 	"time"
 
 	"github.com/go-resty/resty/v2"
@@ -94,9 +94,9 @@ type WebhookErrorPayload struct {
 
 // ProxyConfig holds per-user proxy settings for WhatsApp and webhook delivery.
 type ProxyConfig struct {
-	Enabled         bool  `json:"enabled"`
+	Enabled         bool   `json:"enabled"`
 	ProxyURL        string `json:"proxyURL"`
-	WebhookUseProxy *bool `json:"webhookUseProxy,omitempty"`
+	WebhookUseProxy *bool  `json:"webhookUseProxy,omitempty"`
 }
 
 func resolveWebhookUseProxy(perUser *bool) bool {
@@ -310,6 +310,7 @@ func callHookWithHmac(myurl string, payload map[string]string, userID string, en
 	var lastError error
 
 	var body interface{} = payload
+	var lastJsonBody []byte
 
 	// Starts the retry loop.
 	for attempt := 0; attempt < maxRetries; attempt++ {
@@ -330,30 +331,15 @@ func callHookWithHmac(myurl string, payload map[string]string, userID string, en
 
 		var req *resty.Request
 		var hmacSignature string
-		var marshalErr error
 
 		format := os.Getenv("WEBHOOK_FORMAT")
 
 		if format == "json" {
-			var jsonBody []byte
-
-			if jsonStr, ok := payload["jsonData"]; ok {
-				var postmap map[string]interface{}
-
-				if err := json.Unmarshal([]byte(jsonStr), &postmap); err == nil {
-					if instanceName, ok := payload["instanceName"]; ok {
-						postmap["instanceName"] = instanceName
-					}
-					postmap["userID"] = userID
-					body = postmap
-				}
-			}
-
-			// Marshal body to JSON for HMAC signature
-			jsonBody, marshalErr = json.Marshal(body)
-			if marshalErr != nil {
-				log.Error().Err(marshalErr).Msg("Failed to marshal body for HMAC")
-			}
+			// payload["jsonData"] is already the final JSON (the caller
+			// embeds userID/instanceName before marshaling), so sign and
+			// send it as-is.
+			jsonBody := []byte(payload["jsonData"])
+			lastJsonBody = jsonBody
 
 			// Generate HMAC signature if key exists
 			if len(encryptedHmacKey) > 0 && len(jsonBody) > 0 {
@@ -364,7 +350,7 @@ func callHookWithHmac(myurl string, payload map[string]string, userID string, en
 				}
 			}
 
-			req = client.R().SetHeader("Content-Type", "application/json").SetBody(body)
+			req = client.R().SetHeader("Content-Type", "application/json").SetBody(jsonBody)
 
 		} else {
 
@@ -381,7 +367,6 @@ func callHookWithHmac(myurl string, payload map[string]string, userID string, en
 				}
 			}
 			req = client.R().SetFormData(payload)
-			body = payload
 		}
 
 		if hmacSignature != "" {
@@ -424,10 +409,161 @@ func callHookWithHmac(myurl string, payload map[string]string, userID string, en
 			for k, v := range p {
 				errorPayloadMap[k] = v
 			}
-		} else if p, ok := body.(map[string]interface{}); ok {
-
-			errorPayloadMap = p
 		}
+
+		if len(lastJsonBody) > 0 {
+			var postmap map[string]interface{}
+			if err := json.Unmarshal(lastJsonBody, &postmap); err == nil {
+				errorPayloadMap = postmap
+			}
+		}
+
+		errorPayload := WebhookErrorPayload{
+			URL:              myurl,
+			Payload:          errorPayloadMap,
+			UserID:           userID,
+			EncryptedHmacKey: hex.EncodeToString(encryptedHmacKey),
+			AttemptTime:      time.Now(),
+			ErrorMessage:     lastError.Error(),
+		}
+
+		PublishDataErrorToQueue(errorPayload)
+	}
+}
+
+// webhook body as a stream
+func newStreamedWebhookBody(metaJSON []byte, mediaBytes []byte) io.Reader {
+	prefix := metaJSON[:len(metaJSON)-1] // drop trailing '}'
+	sep := []byte(`,"base64":"`)
+	if len(prefix) == 1 { // metaJSON was "{}" -- no fields to comma-separate from
+		sep = []byte(`"base64":"`)
+	}
+
+	pr, pw := io.Pipe()
+	go func() {
+		_, werr := pw.Write(prefix)
+		if werr == nil {
+			_, werr = pw.Write(sep)
+		}
+		if werr == nil {
+			enc := base64.NewEncoder(base64.StdEncoding, pw)
+			if _, werr = enc.Write(mediaBytes); werr == nil {
+				werr = enc.Close()
+			}
+		}
+		if werr == nil {
+			_, werr = pw.Write([]byte(`"}`))
+		}
+		pw.CloseWithError(werr)
+	}()
+	return pr
+}
+
+// reports whether large media should be streamed directly
+func shouldStreamMedia() bool {
+	if os.Getenv("WEBHOOK_FORMAT") != "json" {
+		return false
+	}
+	switch strings.ToLower(os.Getenv("WEBHOOK_STREAM_MEDIA")) {
+	case "true", "1", "yes":
+		return true
+	default:
+		return false
+	}
+}
+
+// sends a webhook whose body embeds large media directly into the request body
+func callHookStreamedWithHmac(myurl string, metaFields map[string]interface{}, mediaBytes []byte, userID string, encryptedHmacKey []byte) {
+	log.Info().Str("url", myurl).Str("userID", userID).Msg("Sending streamed POST to client with retry logic")
+
+	client := clientManager.GetHTTPClient(userID)
+	if client == nil {
+		log.Warn().Str("url", myurl).Str("userID", userID).Msg("HTTP client is nil for user, skipping streamed webhook")
+		return
+	}
+
+	metaJSON, err := json.Marshal(metaFields)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to marshal webhook metadata")
+		return
+	}
+
+	// newBody returns a fresh streaming reader for the full JSON body
+	newBody := func() io.Reader {
+		return newStreamedWebhookBody(metaJSON, mediaBytes)
+	}
+
+	maxRetries := 1
+	if *webhookRetryEnabled {
+		maxRetries = *webhookRetryCount
+	}
+
+	var lastError error
+
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		if attempt > 0 {
+			backoffFactor := 1 << uint(attempt-1)
+			delayDuration := time.Duration(*webhookRetryDelaySeconds) * time.Second * time.Duration(backoffFactor)
+			log.Warn().
+				Int("attempt", attempt+1).
+				Str("url", myurl).
+				Dur("delay", delayDuration).
+				Msg("Retrying streamed webhook request with exponential backoff...")
+			time.Sleep(delayDuration)
+		}
+
+		var hmacSignature string
+		if len(encryptedHmacKey) > 0 {
+			sig, herr := generateHmacSignatureFromReader(newBody(), encryptedHmacKey)
+			if herr != nil {
+				log.Error().Err(herr).Msg("Failed to generate HMAC signature for streamed webhook")
+			} else {
+				hmacSignature = sig
+			}
+		}
+
+		req := client.R().SetHeader("Content-Type", "application/json").SetBody(newBody())
+		if hmacSignature != "" {
+			req.SetHeader("x-hmac-signature", hmacSignature)
+		}
+
+		resp, postErr := req.Post(myurl)
+		lastError = postErr
+
+		if postErr != nil {
+			log.Error().Err(postErr).Int("attempt", attempt+1).Str("url", myurl).Msg("Streamed webhook failed due to network/IO error")
+			continue
+		}
+
+		if resp.StatusCode() < 200 || resp.StatusCode() >= 300 {
+			lastError = fmt.Errorf("unexpected status code: %d. Body: %s", resp.StatusCode(), string(resp.Body()))
+			log.Error().
+				Int("status", resp.StatusCode()).
+				Int("attempt", attempt+1).
+				Str("url", myurl).
+				Msg("Streamed webhook failed due to non-2xx status code")
+
+			if !*webhookRetryEnabled {
+				break
+			}
+			continue
+		}
+
+		log.Info().Int("status", resp.StatusCode()).Str("url", myurl).Msg("Streamed webhook call successful")
+		return
+	}
+
+	if lastError != nil {
+		log.Error().Str("url", myurl).Msg("Streamed webhook permanently failed after all retries. Sending to error queue...")
+
+		// Only the rare permanent-failure path pays for a full base64
+		// string — needed so the error queue has a complete, replayable
+		// payload.
+		errorPayloadMap := make(map[string]interface{}, len(metaFields)+1)
+		for k, v := range metaFields {
+			errorPayloadMap[k] = v
+		}
+		errorPayloadMap["base64"] = base64.StdEncoding.EncodeToString(mediaBytes)
 
 		errorPayload := WebhookErrorPayload{
 			URL:              myurl,
@@ -623,6 +759,11 @@ func ProcessOutgoingMedia(userID string, contactJID string, messageID string, da
 
 // generateHmacSignature generates HMAC-SHA256 signature for webhook payload
 func generateHmacSignature(payload []byte, encryptedHmacKey []byte) (string, error) {
+	return generateHmacSignatureFromReader(bytes.NewReader(payload), encryptedHmacKey)
+}
+
+// generateHmacSignature generates HMAC-SHA256 signature for streamed webhook payload
+func generateHmacSignatureFromReader(r io.Reader, encryptedHmacKey []byte) (string, error) {
 	if len(encryptedHmacKey) == 0 {
 		return "", nil
 	}
@@ -635,7 +776,9 @@ func generateHmacSignature(payload []byte, encryptedHmacKey []byte) (string, err
 
 	// Generate HMAC
 	h := hmac.New(sha256.New, []byte(hmacKey))
-	h.Write(payload)
+	if _, err := io.Copy(h, r); err != nil {
+		return "", fmt.Errorf("failed to hash streamed payload: %w", err)
+	}
 
 	return hex.EncodeToString(h.Sum(nil)), nil
 }
