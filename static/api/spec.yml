@@ -639,6 +639,39 @@ paths:
         500:
           description: S3 connection test failed
   /session/history:
+    post:
+      tags:
+        - Session
+      summary: Configure message retention and pairing history
+      description: Save before starting pairing. No active WhatsApp session is required. Omitted fields retain their current values. Sync days affect the next new pairing, not an ordinary reconnect or a QR already issued. Zero preserves WhatsApp default sync behavior; it does not disable incoming HistorySync events.
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              minProperties: 1
+              properties:
+                history:
+                  type: integer
+                  minimum: 0
+                  description: Local message retention count per chat, independent of sync days.
+                  example: 1000
+                days_to_sync_history:
+                  type: integer
+                  minimum: 0
+                  maximum: 365
+                  description: Requested full history window on next pairing. Availability is determined by WhatsApp and the phone.
+                  example: 30
+      responses:
+        '200':
+          description: Configuration saved
+        '400':
+          description: Missing settings or invalid values
+        '500':
+          description: Database error
     get:
       tags:
         - Session
@@ -1062,8 +1095,15 @@ paths:
     post:
       tags:
         - Chat 
-      summary: Deletes a message sent by user
-      description: Deletes a messages sent by the same user
+      summary: Deletes an own message or another participant's group message
+      description: >-
+        Omit SenderJID (or send an empty string) to delete your own message.
+        To delete another participant's message, use the group JID in Phone and
+        the original author's full PN or LID in SenderJID. The connected WhatsApp
+        account must be a group admin; WhatsApp enforces deletion permissions.
+        Providing your own PN or LID also deletes an own message and does not
+        require group admin privileges. Use the sender identity from the original
+        message event; PN and LID are not automatically interconverted.
       security:
         - ApiKeyAuth: []
       requestBody:
@@ -1079,7 +1119,11 @@ paths:
           content:
             application/json:
               schema:
-                example: { "code": 200, "data": { "Details": "Message deleted" }, "success": true }
+                example: { "code": 200, "data": { "Details": "Deleted", "Id": "AABBCC11223344", "Timestamp": 1700000000 }, "success": true }
+        400:
+          description: Missing fields, invalid SenderJID, or another sender outside a group
+        500:
+          description: No session or an error sending the revocation to WhatsApp
   /chat/markread:
     post:
       tags:
@@ -2325,6 +2369,14 @@ definitions:
             type: integer
             example: 30
 
+      days_to_sync_history:
+        type: integer
+        minimum: 0
+        maximum: 365
+        default: 0
+        example: 30
+        description: "History window requested in days on the next new pairing. 0 uses WhatsApp defaults. Configure before starting pairing; reconnecting an already linked device does not trigger a new full sync. Independent of local history retention."
+
   CreateUser:
     type: object
     required:
@@ -2403,6 +2455,14 @@ definitions:
         example: 0
         description: "Number of messages to store in history per chat for this user. 0 means no history is saved, any positive number enables history storage for that many messages per chat. Default is 0"
         default: 0
+
+      days_to_sync_history:
+        type: integer
+        minimum: 0
+        maximum: 365
+        default: 0
+        example: 30
+        description: "History window requested in days on the next new pairing. 0 uses WhatsApp defaults. Configure before starting pairing; reconnecting an already linked device does not trigger a new full sync. Independent of local history retention."
 
   DeleteUser:
     type: object
@@ -3000,7 +3060,17 @@ definitions:
         example: "1234-abcd-21234"
       Phone:
         type: string
-        example: "5491155553934"
+        description: Destination chat; use the full group JID ending in @g.us for group messages.
+        example: "120363000000000000@g.us"
+      SenderJID:
+        type: string
+        description: >-
+          Optional original message author. Omit or leave empty for own messages.
+          Otherwise provide a numeric user JID ending in @s.whatsapp.net or @lid.
+          Legacy @c.us is normalized to @s.whatsapp.net. Device/agent suffixes are
+          validated and removed. Bare numbers, whitespace, multiple @ signs and
+          group, broadcast or newsletter JIDs are rejected with HTTP 400.
+        example: "5491155553935@s.whatsapp.net"
   Markread:
     type: object
     required:

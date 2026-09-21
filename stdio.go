@@ -25,6 +25,7 @@ import (
 	"io"
 	"net/http/httptest"
 	"os"
+	"sync"
 
 	"github.com/rs/zerolog/log"
 )
@@ -576,6 +577,8 @@ func (ss *stdioServer) sendError(id ID, code int, errorMsg string) {
 	ss.writeResponse(response)
 }
 
+var stdioOutputMu sync.Mutex
+
 func (ss *stdioServer) writeResponse(response jsonRpcResponse) {
 	// Marshalled response as single line
 	responseBytes, err := json.Marshal(response)
@@ -597,7 +600,9 @@ func (ss *stdioServer) writeResponse(response jsonRpcResponse) {
 	}
 
 	// Write to stdout with newline
+	stdioOutputMu.Lock()
 	fmt.Fprintf(ss.stdout, "%s\n", string(responseBytes))
+	stdioOutputMu.Unlock()
 
 	// Log with appropriate fields based on response type
 	logEvent := log.Debug().Str("id", response.ID.String())
@@ -618,27 +623,38 @@ type jsonRpcNotification struct {
 }
 
 // SendNotification sends a JSON-RPC notification to stdout (webhooks in stdio mode)
-// This is thread-safe - os.Stdout writes are atomic at the OS level
+// Notifications and responses share a lock for complete JSON lines.
 func (s *server) SendNotification(method string, params map[string]interface{}) {
 	if s.mode != Stdio {
 		return
 	}
 
-	notification := jsonRpcNotification{
-		JSONRPC: "2.0",
-		Method:  method,
-		Params:  params,
+	notification := map[string]interface{}{"jsonrpc": "2.0", "method": method}
+	if len(params) > 0 {
+		notification["params"] = params
 	}
-
-	notificationBytes, err := json.Marshal(notification)
+	body, err := prepareMediaJSON(notification)
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to marshal notification")
+		log.Error().Err(err).Msg("Failed to prepare notification")
 		return
 	}
+	defer body.Close()
+	if err = writeMediaNotification(os.Stdout, body); err != nil {
+		log.Error().Err(err).Msg("Failed to write notification")
+	}
+}
 
-	fmt.Fprintf(os.Stdout, "%s\n", string(notificationBytes))
-
-	log.Debug().
-		Str("method", method).
-		Msg("Sent stdio notification")
+func writeMediaNotification(w io.Writer, body *mediaFile) error {
+	reader, err := body.Open()
+	if err != nil {
+		return err
+	}
+	defer reader.Close()
+	stdioOutputMu.Lock()
+	defer stdioOutputMu.Unlock()
+	if _, err = io.Copy(w, reader); err != nil {
+		return err
+	}
+	_, err = io.WriteString(w, "\n")
+	return err
 }

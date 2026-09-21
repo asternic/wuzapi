@@ -418,6 +418,14 @@ document.addEventListener('DOMContentLoaded', function() {
           prompt: 'History must be a non-negative integer'
         }]
       },
+      days_to_sync_history: {
+        identifier: 'days_to_sync_history',
+        optional: true,
+        rules: [{
+          type: 'integer[0..365]',
+          prompt: 'History sync days must be an integer between 0 and 365'
+        }]
+      },
       proxy_url: {
         identifier: 'proxy_url',
         optional: true,
@@ -555,6 +563,7 @@ async function addInstance(data) {
     webhook: data.webhook_url || '',
     expiration: 0,
     history: parseInt(data.history) || 0,
+    days_to_sync_history: Number(data.days_to_sync_history || 0),
     proxyConfig: proxyConfig,
     s3Config: s3Config,
     hmacKey: hmacKey
@@ -1841,6 +1850,7 @@ async function loadHistoryConfig() {
     
     if (res.ok) {
       const data = await res.json();
+      $('#historySyncDays').val(data.data?.days_to_sync_history ?? 0);
       if (data.code === 200 && data.data && data.data.history) {
         const historyConfig = data.data.history;
         $('#history').val(historyConfig);
@@ -1860,10 +1870,17 @@ async function saveHistoryConfig() {
   myHeaders.append('token', token);
   myHeaders.append('Content-Type', 'application/json');
   
-  const historyConfig = parseInt($('#history').val());
+  const historyConfig = Number($('#history').val());
+  const syncDays = Number($('#historySyncDays').val());
+  if (!Number.isInteger(historyConfig) || historyConfig < 0 ||
+      !Number.isInteger(syncDays) || syncDays < 0 || syncDays > 365) {
+    showError('History must be a non-negative integer and sync days must be between 0 and 365.');
+    return;
+  }
   
   const config = {
     history: historyConfig,
+    days_to_sync_history: syncDays,
   };
   
   try {
@@ -1875,7 +1892,7 @@ async function saveHistoryConfig() {
     
     const data = await res.json();
     if (data.success) {
-      showSuccess('History configuration saved successfully');
+      showSuccess('History configuration saved. Sync days apply on the next pairing.');
       $('#modalHistoryConfig').modal('hide');
     } else {
       showError('Failed to save history configuration: ' + (data.error || 'Unknown error'));

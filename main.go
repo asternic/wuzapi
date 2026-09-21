@@ -16,6 +16,7 @@ import (
 	"syscall"
 	"time"
 
+	"go.mau.fi/whatsmeow/store"
 	"go.mau.fi/whatsmeow/store/sqlstore"
 	"go.mau.fi/whatsmeow/types"
 	waLog "go.mau.fi/whatsmeow/util/log"
@@ -85,7 +86,7 @@ var (
 
 var privateIPBlocks []*net.IPNet
 
-const version = "1.0.8"
+const version = "1.0.9"
 
 func parseAutomaticPresence(value string) (types.Presence, error) {
 	switch strings.ToLower(strings.TrimSpace(value)) {
@@ -244,6 +245,9 @@ func main() {
 	}
 
 	flag.Parse()
+	if _, err := getMediaStore(); err != nil {
+		log.Fatal().Err(err).Msg("Could not initialize media storage")
+	}
 
 	// Check for address in environment variable if flag is default or empty
 	if *address == "0.0.0.0" || *address == "" {
@@ -301,6 +305,10 @@ func main() {
 	if v := os.Getenv("SESSION_PLATFORM_TYPE"); v != "" {
 		*platformType = v
 	}
+	// Whatsmeow also reads these global properties in QR/passkey pairing.
+	// Set the process-wide identity once, before any client goroutines start.
+	store.DeviceProps.PlatformType = getPlatformTypeEnum(*platformType)
+	store.DeviceProps.Os = osName
 
 	if v := os.Getenv("WUZAPI_AUTO_PRESENCE"); v != "" {
 		*autoPresenceMode = v
@@ -548,6 +556,9 @@ func startHTTPMode(s *server) {
 			<-done
 			once.Do(func() {
 				log.Warn().Msg("Stopping server...")
+				if store, err := getMediaStore(); err == nil {
+					store.cancel()
+				}
 
 				// Graceful shutdown logic
 				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -558,6 +569,9 @@ func startHTTPMode(s *server) {
 					os.Exit(1)
 				}
 
+				if err := shutdownMedia(ctx); err != nil {
+					log.Error().Err(err).Msg("Media shutdown did not finish")
+				}
 				log.Info().Msg("Server Exited Properly")
 				os.Exit(0)
 			})
@@ -591,7 +605,13 @@ func startHTTPMode(s *server) {
 
 func startStdioMode(s *server) {
 	stdioServer := NewStdioServer(s)
-	if err := stdioServer.Start(); err != nil {
+	err := stdioServer.Start()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if shutdownErr := shutdownMedia(ctx); shutdownErr != nil {
+		log.Error().Err(shutdownErr).Msg("Media shutdown did not finish")
+	}
+	if err != nil {
 		log.Error().Err(err).Msg("Stdio server error")
 		os.Exit(1)
 	}
