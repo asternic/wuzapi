@@ -374,9 +374,15 @@ Response:
 Disconnects from Whatsapp servers, keeping the session active. This means that if you /session/connect again, it will
 reuse the session and won't require a QR code rescan.
 
+Event subscriptions are **preserved by default**. Pass `clear=true` to also reset them on disconnect.
+
 Endpoint: _/session/disconnect_
 
 Method: **POST**
+
+Query parameters:
+
+* `clear` (optional, boolean): if `true`, clears the user's event subscriptions on disconnect. Defaults to `false` (subscriptions preserved).
 
 
 ```
@@ -637,6 +643,165 @@ Response:
 
 ---
 
+## Get Privacy Settings
+
+Returns the account's current privacy settings.
+
+Endpoint: _/user/privacy_
+
+Method: **GET**
+
+```
+curl -s -X GET -H 'Token: 1234ABCD' http://localhost:8080/user/privacy
+```
+
+Response:
+
+```json
+{
+  "code": 200,
+  "data": {
+    "GroupAdd": "contacts",
+    "LastSeen": "all",
+    "Status": "contacts",
+    "Profile": "all",
+    "ReadReceipts": "all",
+    "CallAdd": "all",
+    "Online": "all",
+    "Messages": "all",
+    "Defense": "off",
+    "Stickers": "contacts"
+  },
+  "success": true
+}
+```
+
+---
+
+## Set Privacy Setting
+
+Updates a single privacy setting.
+
+Endpoint: _/user/privacy_
+
+Method: **POST**
+
+Valid `Name` / `Value` combinations:
+
+| Name | Valid values |
+|------|--------------|
+| `groupadd`, `last`, `status`, `profile` | `all`, `contacts`, `contact_blacklist`, `none` |
+| `readreceipts` | `all`, `none` |
+| `online` | `all`, `match_last_seen` |
+| `calladd` | `all`, `known` |
+
+```
+curl -s -X POST -H 'Token: 1234ABCD' -H 'Content-Type: application/json' --data '{"Name":"last","Value":"contacts"}' http://localhost:8080/user/privacy
+```
+
+Response:
+
+```json
+{
+  "code": 200,
+  "data": {
+    "LastSeen": "contacts"
+  },
+  "success": true
+}
+```
+
+---
+
+## Block User
+
+Blocks a WhatsApp user and returns the updated blocklist.
+
+Endpoint: _/user/block_
+
+Method: **POST**
+
+```
+curl -s -X POST -H 'Token: 1234ABCD' -H 'Content-Type: application/json' --data '{"Phone":"5491155554445"}' http://localhost:8080/user/block
+```
+
+Response:
+
+```json
+{
+  "code": 200,
+  "data": {
+    "Details": "User blocked",
+    "JID": "5491155554445@s.whatsapp.net",
+    "Blocklist": [
+      "5491155554445@s.whatsapp.net"
+    ],
+    "DHash": "1234567890"
+  },
+  "success": true
+}
+```
+
+---
+
+## Unblock User
+
+Unblocks a WhatsApp user and returns the updated blocklist.
+
+Endpoint: _/user/unblock_
+
+Method: **POST**
+
+```
+curl -s -X POST -H 'Token: 1234ABCD' -H 'Content-Type: application/json' --data '{"Phone":"5491155554445"}' http://localhost:8080/user/unblock
+```
+
+Response:
+
+```json
+{
+  "code": 200,
+  "data": {
+    "Details": "User unblocked",
+    "JID": "5491155554445@s.whatsapp.net",
+    "Blocklist": [],
+    "DHash": "1234567891"
+  },
+  "success": true
+}
+```
+
+---
+
+## Get Blocklist
+
+Returns the list of WhatsApp users currently blocked by the session.
+
+Endpoint: _/user/blocklist_
+
+Method: **GET**
+
+```
+curl -s -X GET -H 'Token: 1234ABCD' http://localhost:8080/user/blocklist
+```
+
+Response:
+
+```json
+{
+  "code": 200,
+  "data": {
+    "Blocklist": [
+      "5491155554445@s.whatsapp.net"
+    ],
+    "DHash": "1234567890"
+  },
+  "success": true
+}
+```
+
+---
+
 
 # Chat
 
@@ -842,6 +1007,37 @@ curl -X POST -H 'Token: 1234ABCD' -H 'Content-Type: application/json' --data '{"
 
 ---
 
+## Subscribe to Contact Presence
+
+Subscribes to a contact's presence updates (online/offline and last seen). After
+subscribing, your configured webhook receives `Presence` events for that contact. You
+should be online yourself to receive presence (wuzapi sends an available presence on
+connect). Whether `last_seen` is available depends on the contact's privacy settings.
+
+endpoint: _/user/presence/subscribe_
+
+method: **POST**
+
+```
+curl -X POST -H 'Token: 1234ABCD' -H 'Content-Type: application/json' --data '{"Phone":"5491155554444"}' http://localhost:8080/user/presence/subscribe
+```
+
+The resulting webhook `Presence` event looks like:
+
+```json
+{
+  "type": "Presence",
+  "state": "offline",
+  "from": "5491155554444@s.whatsapp.net",
+  "last_seen": 1750000000
+}
+```
+
+`last_seen` is a Unix timestamp, present only when the contact is offline and shares
+their last seen. When the contact is online, only `type`, `from` and `state` are sent.
+
+---
+
 ## Mark message(s) as read
 
 Indicates that one or more messages were read. Id is an array of messages Ids.
@@ -875,6 +1071,91 @@ method: **POST**
 ```
 curl -X POST -H 'Token: 1234ABCD' -H 'Content-Type: application/json' --data '{"Phone":"5491155554444","Body":"❤️","Id":"me:069EDE53E81CB5A4773587FB96CB3ED3"}' http://localhost:8080/chat/react
 ```
+
+---
+
+## Pin / Unpin a message
+
+Pins or unpins an existing message in an individual chat or group. The same endpoint handles both: send `Pin: true` (the default) to pin and `Pin: false` to unpin.
+
+endpoint: _/chat/pin_
+
+method: **POST**
+
+Required headers:
+
+```
+Token: <USER_TOKEN>
+Content-Type: application/json
+```
+
+### Request body
+
+| Field | Required | Type | Description |
+|---|---|---|---|
+| `Chat` | Yes | string | Target chat JID. For groups, the group JID ending in `@g.us`. |
+| `Sender` | Required for groups | string | JID of the original message sender. Required for group messages because the message key includes the participant. Optional for one-to-one chats. |
+| `Id` | Yes | string | WhatsApp message ID of the message to pin or unpin. |
+| `DurationSeconds` | No | integer | How long the message stays pinned. Defaults to `604800`. Only used when pinning. |
+| `Pin` | No | boolean | `true` pins the message, `false` unpins it. Defaults to `true`. |
+
+### Allowed durations
+
+| Duration | Seconds |
+|---|---|
+| 24 hours | `86400` |
+| 7 days | `604800` (default) |
+| 30 days | `2592000` |
+
+When `Pin` is `false`, `DurationSeconds` is ignored.
+
+### Pin a group message for 7 days
+
+```
+curl -X POST -H 'Token: 1234ABCD' -H 'Content-Type: application/json' --data '{"Chat":"120363012345678901@g.us","Sender":"5491123456789@s.whatsapp.net","Id":"3EB0ABCDEF1234567890","DurationSeconds":604800,"Pin":true}' http://localhost:8080/chat/pin
+```
+
+### Pin a group message for 24 hours
+
+```
+curl -X POST -H 'Token: 1234ABCD' -H 'Content-Type: application/json' --data '{"Chat":"120363012345678901@g.us","Sender":"5491123456789@s.whatsapp.net","Id":"3EB0ABCDEF1234567890","DurationSeconds":86400,"Pin":true}' http://localhost:8080/chat/pin
+```
+
+### Unpin a group message
+
+```
+curl -X POST -H 'Token: 1234ABCD' -H 'Content-Type: application/json' --data '{"Chat":"120363012345678901@g.us","Sender":"5491123456789@s.whatsapp.net","Id":"3EB0ABCDEF1234567890","Pin":false}' http://localhost:8080/chat/pin
+```
+
+### Example responses
+
+Pin success:
+
+```json
+{
+  "Details": "Message pinned",
+  "Chat": "120363012345678901@g.us",
+  "Id": "3EB0ABCDEF1234567890",
+  "DurationSeconds": 604800,
+  "Timestamp": "2026-06-18T12:34:56Z"
+}
+```
+
+Unpin success:
+
+```json
+{
+  "Details": "Message unpinned",
+  "Chat": "120363012345678901@g.us",
+  "Id": "3EB0ABCDEF1234567890",
+  "Timestamp": "2026-06-18T12:34:56Z"
+}
+```
+
+### Notes
+
+- For group messages the `Sender` field is mandatory and must be the JID of the original message sender. If it is wrong or missing, WhatsApp may ignore the pin.
+- The linked account must have permission to pin in the target group (if the group restricts pinning to admins, the account must be an admin). The transport may report success even when WhatsApp silently ignores an unauthorized pin.
 
 ---
 
@@ -1269,6 +1550,89 @@ Response:
   "code": 200,
   "data": {
     "Details": "Group photo removed successfully"
+  },
+  "success": true
+}
+```
+
+---
+
+## List pending join requests
+
+Lists participants who have requested to join the group. Requires join approval mode to be enabled on the group and the session to be a group admin.
+
+endpoint: _/group/requestparticipants_
+
+method: **GET**
+
+```
+curl -s -X GET -H 'Token: 1234ABCD' 'http://localhost:8080/group/requestparticipants?groupJID=120362023605733675@g.us'
+```
+
+Response:
+
+```json
+{
+  "code": 200,
+  "data": [
+    {
+      "JID": "70072425046185@lid",
+      "RequestedAt": "2026-05-27T00:34:40-03:00"
+    }
+  ],
+  "success": true
+}
+```
+
+---
+
+## Approve or reject join requests
+
+Approves or rejects participants who requested to join the group. Use the `JID` values returned by `/group/requestparticipants` in the `Phone` array.
+
+endpoint: _/group/updaterequestparticipants_
+
+method: **POST**
+
+`Action` must be `"approve"` or `"reject"`.
+
+```
+curl -s -X POST -H 'Token: 1234ABCD' -H 'Content-Type: application/json' -d '{"GroupJID":"120362023605733675@g.us","Phone":["70072425046185@lid"],"Action":"approve"}' http://localhost:8080/group/updaterequestparticipants
+```
+
+Response:
+
+```json
+{
+  "code": 200,
+  "data": {
+    "Details": "Group request participants updated successfully"
+  },
+  "success": true
+}
+```
+
+---
+
+## Set group join approval mode
+
+Enables or disables the requirement that new members be approved by an admin before joining the group.
+
+endpoint: _/group/joinapprovalmode_
+
+method: **POST**
+
+```
+curl -s -X POST -H 'Token: 1234ABCD' -H 'Content-Type: application/json' -d '{"groupjid":"120362023605733675@g.us","mode":true}' http://localhost:8080/group/joinapprovalmode
+```
+
+Response:
+
+```json
+{
+  "code": 200,
+  "data": {
+    "Details": "Group join approval mode updated successfully"
   },
   "success": true
 }

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"strings"
 	"sync"
 	"time"
@@ -12,6 +13,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+	"github.com/jmoiron/sqlx"
 	"github.com/rs/zerolog/log"
 )
 
@@ -32,6 +34,7 @@ type S3Config struct {
 // S3Manager manages S3 operations
 type S3Manager struct {
 	mu      sync.RWMutex
+	db      *sqlx.DB
 	clients map[string]*s3.Client
 	configs map[string]*S3Config
 }
@@ -45,6 +48,56 @@ var s3Manager = &S3Manager{
 // GetS3Manager returns the global S3 manager instance
 func GetS3Manager() *S3Manager {
 	return s3Manager
+}
+
+// SetDB sets the database reference for lazy S3 client initialization
+func (m *S3Manager) SetDB(db *sqlx.DB) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.db = db
+}
+
+// EnsureClientFromDB loads S3 config from DB and initializes client if enabled. Returns true if client is available.
+func (m *S3Manager) EnsureClientFromDB(userID string) bool {
+	if _, _, ok := m.GetClient(userID); ok {
+		return true
+	}
+	m.mu.RLock()
+	db := m.db
+	m.mu.RUnlock()
+	if db == nil {
+		return false
+	}
+	var s3DbConfig struct {
+		Enabled       bool   `db:"s3_enabled"`
+		Endpoint      string `db:"s3_endpoint"`
+		Region        string `db:"s3_region"`
+		Bucket        string `db:"s3_bucket"`
+		AccessKey     string `db:"s3_access_key"`
+		SecretKey     string `db:"s3_secret_key"`
+		PathStyle     bool   `db:"s3_path_style"`
+		PublicURL     string `db:"s3_public_url"`
+		MediaDelivery string `db:"media_delivery"`
+		RetentionDays int    `db:"s3_retention_days"`
+	}
+	query := `SELECT s3_enabled, s3_endpoint, s3_region, s3_bucket, s3_access_key, s3_secret_key, s3_path_style, s3_public_url, COALESCE(media_delivery, 'base64') AS media_delivery, COALESCE(s3_retention_days, 30) AS s3_retention_days FROM users WHERE id = $1`
+	query = db.Rebind(query)
+	if err := db.Get(&s3DbConfig, query, userID); err != nil || !s3DbConfig.Enabled {
+		return false
+	}
+	config := &S3Config{
+		Enabled:       s3DbConfig.Enabled,
+		Endpoint:      s3DbConfig.Endpoint,
+		Region:        s3DbConfig.Region,
+		Bucket:        s3DbConfig.Bucket,
+		AccessKey:     s3DbConfig.AccessKey,
+		SecretKey:     s3DbConfig.SecretKey,
+		PathStyle:     s3DbConfig.PathStyle,
+		PublicURL:     s3DbConfig.PublicURL,
+		MediaDelivery: s3DbConfig.MediaDelivery,
+		RetentionDays: s3DbConfig.RetentionDays,
+	}
+	return m.InitializeS3Client(userID, config) == nil
 }
 
 // InitializeS3Client creates or updates S3 client for a user
@@ -164,6 +217,10 @@ func (m *S3Manager) GenerateS3Key(userID, contactJID, messageID string, mimeType
 		ext = ".opus"
 	case strings.Contains(mimeType, "pdf"):
 		ext = ".pdf"
+	case strings.Contains(mimeType, "spreadsheetml"):
+		ext = ".xlsx"
+	case strings.Contains(mimeType, "excel"):
+		ext = ".xls"
 	case strings.Contains(mimeType, "doc"):
 		if strings.Contains(mimeType, "docx") {
 			ext = ".docx"
@@ -190,9 +247,19 @@ func (m *S3Manager) GenerateS3Key(userID, contactJID, messageID string, mimeType
 
 // UploadToS3 uploads file to S3 and returns the key
 func (m *S3Manager) UploadToS3(ctx context.Context, userID string, key string, data []byte, mimeType string) error {
+	return m.UploadReaderToS3(ctx, userID, key, bytes.NewReader(data), int64(len(data)), mimeType)
+}
+
+func (m *S3Manager) UploadReaderToS3(ctx context.Context, userID, key string, reader io.ReadSeeker, size int64, mimeType string) error {
 	client, config, ok := m.GetClient(userID)
 	if !ok {
-		return fmt.Errorf("S3 client not initialized for user %s", userID)
+		// Try lazy init from DB if available (handles reconnect-after-restart)
+		if m.EnsureClientFromDB(userID) {
+			client, config, ok = m.GetClient(userID)
+		}
+		if !ok {
+			return fmt.Errorf("S3 client not initialized for user %s", userID)
+		}
 	}
 
 	// Set content type and cache headers for preview
@@ -209,12 +276,13 @@ func (m *S3Manager) UploadToS3(ctx context.Context, userID string, key string, d
 	}
 
 	input := &s3.PutObjectInput{
-		Bucket:       aws.String(config.Bucket),
-		Key:          aws.String(key),
-		Body:         bytes.NewReader(data),
-		ContentType:  aws.String(contentType),
-		CacheControl: aws.String("public, max-age=3600"),
-		ACL:          types.ObjectCannedACLPublicRead,
+		Bucket:        aws.String(config.Bucket),
+		Key:           aws.String(key),
+		Body:          reader,
+		ContentLength: aws.Int64(size),
+		ContentType:   aws.String(contentType),
+		CacheControl:  aws.String("public, max-age=3600"),
+		ACL:           types.ObjectCannedACLPublicRead,
 	}
 
 	if expires != nil {
@@ -288,12 +356,16 @@ func (m *S3Manager) TestConnection(ctx context.Context, userID string) error {
 // ProcessMediaForS3 handles the complete media upload process
 func (m *S3Manager) ProcessMediaForS3(ctx context.Context, userID, contactJID, messageID string,
 	data []byte, mimeType string, fileName string, isIncoming bool) (map[string]interface{}, error) {
+	return m.ProcessMediaReaderForS3(ctx, userID, contactJID, messageID, bytes.NewReader(data), int64(len(data)), mimeType, fileName, isIncoming)
+}
+
+func (m *S3Manager) ProcessMediaReaderForS3(ctx context.Context, userID, contactJID, messageID string, reader io.ReadSeeker, size int64, mimeType, fileName string, isIncoming bool) (map[string]interface{}, error) {
 
 	// Generate S3 key
 	key := m.GenerateS3Key(userID, contactJID, messageID, mimeType, isIncoming)
 
 	// Upload to S3
-	err := m.UploadToS3(ctx, userID, key, data, mimeType)
+	err := m.UploadReaderToS3(ctx, userID, key, reader, size, mimeType)
 	if err != nil {
 		return nil, fmt.Errorf("failed to upload to S3: %w", err)
 	}
@@ -301,12 +373,20 @@ func (m *S3Manager) ProcessMediaForS3(ctx context.Context, userID, contactJID, m
 	// Generate public URL
 	publicURL := m.GetPublicURL(userID, key)
 
+	// Read the bucket through GetClient, which acquires the read lock — this
+	// avoids racing with a concurrent reconfigure/removal of the configs map and
+	// the nil deref the previous unlocked read could hit.
+	bucket := ""
+	if _, config, ok := m.GetClient(userID); ok && config != nil {
+		bucket = config.Bucket
+	}
+
 	// Return S3 metadata
 	s3Data := map[string]interface{}{
 		"url":      publicURL,
 		"key":      key,
-		"bucket":   m.configs[userID].Bucket,
-		"size":     len(data),
+		"bucket":   bucket,
+		"size":     size,
 		"mimeType": mimeType,
 		"fileName": fileName,
 	}

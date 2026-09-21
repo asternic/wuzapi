@@ -16,6 +16,7 @@ import (
 	"syscall"
 	"time"
 
+	"go.mau.fi/whatsmeow/store"
 	"go.mau.fi/whatsmeow/store/sqlstore"
 	waLog "go.mau.fi/whatsmeow/util/log"
 
@@ -51,6 +52,7 @@ var (
 	logType             = flag.String("logtype", "console", "Type of log output (console or json)")
 	skipMedia           = flag.Bool("skipmedia", false, "Do not attempt to download media in messages")
 	osName              = flag.String("osname", "Mac OS 10", "Connection OSName in Whatsapp")
+	platformType        = flag.String("platformtype", "DESKTOP", "Device platform type (DESKTOP, IPAD, ANDROID_TABLET, IOS_PHONE, ANDROID_PHONE, etc.)")
 	colorOutput         = flag.Bool("color", false, "Enable colored output for console logs")
 	sslcert             = flag.String("sslcertificate", "", "SSL Certificate File")
 	sslprivkey          = flag.String("sslprivatekey", "", "SSL Certificate Private Key File")
@@ -68,10 +70,12 @@ var (
 	webhookRetryCount        = flag.Int("retrycount", 5, "Number of times to retry failed webhooks")
 	webhookRetryDelaySeconds = flag.Int("retrydelay", 30, "Delay in seconds between webhook retries")
 	webhookErrorQueueName    = flag.String("errorqueue", "webhook_errors", "RabbitMQ queue name for failed webhooks")
+	globalWebhookUseProxy    = flag.Bool("webhookuseproxy", true, "Route webhook deliveries through the per-user proxy when configured")
 
 	container        *sqlstore.Container
 	clientManager    = NewClientManager()
 	killchannel      = make(map[string](chan bool))
+	killchannelMu    sync.Mutex
 	userinfocache    = cache.New(5*time.Minute, 10*time.Minute)
 	lastMessageCache = cache.New(24*time.Hour, 24*time.Hour)
 	globalHTTPClient = newSafeHTTPClient()
@@ -79,7 +83,55 @@ var (
 
 var privateIPBlocks []*net.IPNet
 
-const version = "1.0.5"
+const version = "1.0.9"
+
+// killchannel maps a userID to its session goroutine's kill channel. It is
+// accessed from HTTP request goroutines (Connect/Disconnect/logout/delete) and
+// from the per-session startClient goroutine, so every map operation must be
+// serialized through killchannelMu. The helpers below lock only around the map
+// access itself — never while sending on or receiving from a channel — so a
+// slow or absent receiver can never block another session.
+func setKillChannel(userID string, ch chan bool) {
+	killchannelMu.Lock()
+	killchannel[userID] = ch
+	killchannelMu.Unlock()
+}
+
+func getKillChannel(userID string) (chan bool, bool) {
+	killchannelMu.Lock()
+	ch, ok := killchannel[userID]
+	killchannelMu.Unlock()
+	return ch, ok
+}
+
+// deleteKillChannel removes userID's entry, but only if it still maps to ch.
+// A session goroutine passes the channel it captured at startup; if a newer
+// session has replaced the entry in the meantime (a reconnect for the same
+// user), the map holds a different channel and this is a no-op. That stops a
+// slow-cleanup goroutine from an old session deleting the live session's kill
+// channel and leaving the new session unkillable.
+func deleteKillChannel(userID string, ch chan bool) {
+	killchannelMu.Lock()
+	if current, ok := killchannel[userID]; ok && current == ch {
+		delete(killchannel, userID)
+	}
+	killchannelMu.Unlock()
+}
+
+// signalKill delivers a non-blocking kill signal to userID's session goroutine,
+// if one is registered. The channel is buffered (cap 1) so the send never
+// blocks; the default guards a full buffer or a missing entry.
+func signalKill(userID string) {
+	ch, ok := getKillChannel(userID)
+	if !ok {
+		log.Debug().Str("userID", userID).Msg("signalKill: no kill channel registered (already cleaned up?)")
+		return
+	}
+	select {
+	case ch <- true:
+	default:
+	}
+}
 
 func newSafeHTTPClient() *http.Client {
 	return &http.Client{
@@ -179,6 +231,9 @@ func main() {
 	}
 
 	flag.Parse()
+	if _, err := getMediaStore(); err != nil {
+		log.Fatal().Err(err).Msg("Could not initialize media storage")
+	}
 
 	// Check for address in environment variable if flag is default or empty
 	if *address == "0.0.0.0" || *address == "" {
@@ -212,6 +267,13 @@ func main() {
 	if v := os.Getenv("WEBHOOK_ERROR_QUEUE_NAME"); v != "" {
 		*webhookErrorQueueName = v
 	}
+	if v := os.Getenv("WUZAPI_WEBHOOK_USE_PROXY"); v != "" {
+		*globalWebhookUseProxy = strings.ToLower(v) == "true" || v == "1"
+	}
+
+	log.Info().
+		Bool("use_proxy_when_configured", *globalWebhookUseProxy).
+		Msg("Webhook proxy routing policy configured")
 
 	log.Info().
 		Bool("enabled", *webhookRetryEnabled).
@@ -224,6 +286,15 @@ func main() {
 	if v := os.Getenv("SESSION_DEVICE_NAME"); v != "" {
 		*osName = v
 	}
+
+	// Override platformType from environment variable if set
+	if v := os.Getenv("SESSION_PLATFORM_TYPE"); v != "" {
+		*platformType = v
+	}
+	// Whatsmeow also reads these global properties in QR/passkey pairing.
+	// Set the process-wide identity once, before any client goroutines start.
+	store.DeviceProps.PlatformType = getPlatformTypeEnum(*platformType)
+	store.DeviceProps.Os = osName
 
 	if *versionFlag {
 		fmt.Printf("WuzAPI version %s\n", version)
@@ -377,15 +448,8 @@ func main() {
 		}
 	}()
 
-	// Initialize the schema
-	if err = initializeSchema(db); err != nil {
-		log.Fatal().Err(err).Msg("Failed to initialize schema")
-		// Perform cleanup before exiting
-		if err := db.Close(); err != nil {
-			log.Error().Err(err).Msg("Failed to close database connection during cleanup")
-		}
-		os.Exit(1)
-	}
+	// Set DB reference in S3Manager for lazy client initialization
+	GetS3Manager().SetDB(db)
 
 	var dbLog waLog.Logger
 	if *waDebug != "" {
@@ -402,12 +466,22 @@ func main() {
 		)
 		container, err = sqlstore.New(context.Background(), "postgres", storeConnStr, dbLog)
 	} else {
-		storeConnStr = "file:" + filepath.Join(config.Path, "main.db") + "?_pragma=foreign_keys(1)&_busy_timeout=3000"
+		storeConnStr = "file:" + filepath.ToSlash(filepath.Join(config.Path, "main.db")) + "?_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)&_pragma=busy_timeout(10000)"
 		container, err = sqlstore.New(context.Background(), "sqlite", storeConnStr, dbLog)
 	}
 
 	if err != nil {
 		log.Fatal().Err(err).Msg("Error creating sqlstore")
+		os.Exit(1)
+	}
+
+	// Initialize the schema
+	if err = initializeSchema(db); err != nil {
+		log.Fatal().Err(err).Msg("Failed to initialize schema")
+		// Perform cleanup before exiting
+		if err := db.Close(); err != nil {
+			log.Error().Err(err).Msg("Failed to close database connection during cleanup")
+		}
 		os.Exit(1)
 	}
 
@@ -425,6 +499,9 @@ func main() {
 	s.routes()
 
 	s.connectOnStartup()
+
+	// Start background cleanup of stale passkey pairing states (needed for both modes)
+	startPasskeyCleanup()
 
 	if serverMode == Stdio {
 		startStdioMode(s)
@@ -454,6 +531,9 @@ func startHTTPMode(s *server) {
 			<-done
 			once.Do(func() {
 				log.Warn().Msg("Stopping server...")
+				if store, err := getMediaStore(); err == nil {
+					store.cancel()
+				}
 
 				// Graceful shutdown logic
 				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -464,6 +544,9 @@ func startHTTPMode(s *server) {
 					os.Exit(1)
 				}
 
+				if err := shutdownMedia(ctx); err != nil {
+					log.Error().Err(err).Msg("Media shutdown did not finish")
+				}
 				log.Info().Msg("Server Exited Properly")
 				os.Exit(0)
 			})
@@ -491,12 +574,19 @@ func startHTTPMode(s *server) {
 		}
 	}()
 	log.Info().Str("address", *address).Str("port", *port).Msg("Server started. Waiting for connections...")
+
 	select {}
 }
 
 func startStdioMode(s *server) {
 	stdioServer := NewStdioServer(s)
-	if err := stdioServer.Start(); err != nil {
+	err := stdioServer.Start()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if shutdownErr := shutdownMedia(ctx); shutdownErr != nil {
+		log.Error().Err(shutdownErr).Msg("Media shutdown did not finish")
+	}
+	if err != nil {
 		log.Error().Err(err).Msg("Stdio server error")
 		os.Exit(1)
 	}

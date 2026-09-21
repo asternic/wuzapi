@@ -50,15 +50,6 @@ When HMAC is configured, all webhooks include an `x-hmac-signature` header with 
 **Optional:**
 * Docker (for containerization)
 
-## Updating dependencies
-
-This project uses the whatsmeow library to communicate with WhatsApp. To update the library to the latest version, run:
-
-```bash
-go get -u go.mau.fi/whatsmeow@latest
-go mod tidy
-```
-
 ## Building
 
 ```
@@ -142,7 +133,34 @@ WEBHOOK_RETRY_ENABLED=true
 WEBHOOK_RETRY_COUNT=2
 WEBHOOK_RETRY_DELAY_SECONDS=30
 WEBHOOK_ERROR_QUEUE_NAME=wuzapi_dead_letter_webhooks
+WUZAPI_MEDIA_CONCURRENCY=2
+# WUZAPI_MEDIA_TMPDIR=/path/to/disk-backed/temp
 ```
+
+### Attachment temporary storage
+
+Incoming event attachments and outgoing document, audio, image, video, sticker,
+and optional button-image uploads use private temporary files automatically.
+`WUZAPI_MEDIA_TMPDIR` defaults to the operating system temporary directory.
+`WUZAPI_MEDIA_CONCURRENCY` defaults to `2` and limits simultaneous media downloads,
+uploads, decoding, conversions, and delivery-body preparation. Waiting operations
+honor cancellation; webhook retry backoff does not hold a media slot.
+
+Use a **disk-backed** writable directory or container volume for memory savings.
+A tmpfs mount still consumes RAM. Set the path inside the container and mount the
+backing storage there; setting a host path in `.env` alone does not mount it.
+The directory must support file locks. Allow space for plaintext, encryption or
+conversion scratch files, and base64 delivery bodies (approximately 4/3 of the
+attachment size each). Slow receivers and pending retries retain delivery files.
+
+Files are removed when their consumers finish. Each process owns a locked private
+directory; later starts reclaim abandoned directories without touching another
+running instance. Temporary files are not a durable queue and do not recover
+in-flight messages after a crash. Existing API inputs, delivery formats, and URL
+size limits are unchanged. JSON request decoding, image pixel decoding, and
+RabbitMQ's final payload buffer still have size-dependent memory costs.
+
+See [attachment memory validation](media-memory.md) for measurements and test limits.
 
 ### Important Notes
 
@@ -312,254 +330,256 @@ request body, always passing the Token header for authenticating the request.
 
 Check the [API Reference](https://github.com/asternic/wuzapi/blob/main/API.md)
 
+## Updating the upstream whatsmeow library
+
+> [!CAUTION]
+> This section is intended for maintainers and developers. Regular users should use the whatsmeow version pinned in `go.mod` and should not upgrade it as part of the normal installation or build process.
+
+WuzAPI uses [whatsmeow](https://github.com/tulir/whatsmeow) to communicate with WhatsApp. Its upstream API can introduce breaking changes, so upgrading to the latest version may cause WuzAPI to stop compiling or working correctly until its code is adapted.
+
+Perform upgrades in a development branch, review the resulting `go.mod` and `go.sum` changes, and verify that WuzAPI builds and its tests pass before deploying the update:
+
+```bash
+go get -u go.mau.fi/whatsmeow@latest
+go mod tidy
+go test ./...
+go build .
+```
+
 ## Contributors
 
-<table>
-<tr>
-    <td align="center" style="word-wrap: break-word; width: 150.0; height: 150.0">
-        <a href=https://github.com/asternic>
-            <img src=https://avatars.githubusercontent.com/u/25182694?v=4 width="100;"  style="border-radius:50%;align-items:center;justify-content:center;overflow:hidden;padding-top:10px" alt=Nicolas/>
-            <br />
-            <sub style="font-size:14px"><b>Nicolas</b></sub>
-        </a>
-    </td>
-    <td align="center" style="word-wrap: break-word; width: 150.0; height: 150.0">
-        <a href=https://github.com/guilhermejansen>
-            <img src=https://avatars.githubusercontent.com/u/52773109?v=4 width="100;"  style="border-radius:50%;align-items:center;justify-content:center;overflow:hidden;padding-top:10px" alt=Guilherme Jansen/>
-            <br />
-            <sub style="font-size:14px"><b>Guilherme Jansen</b></sub>
-        </a>
-    </td>
-    <td align="center" style="word-wrap: break-word; width: 150.0; height: 150.0">
-        <a href=https://github.com/LuizFelipeNeves>
-            <img src=https://avatars.githubusercontent.com/u/14094719?v=4 width="100;"  style="border-radius:50%;align-items:center;justify-content:center;overflow:hidden;padding-top:10px" alt=Luiz Felipe Neves/>
-            <br />
-            <sub style="font-size:14px"><b>Luiz Felipe Neves</b></sub>
-        </a>
-    </td>
-    <td align="center" style="word-wrap: break-word; width: 150.0; height: 150.0">
-        <a href=https://github.com/cleitonme>
-            <img src=https://avatars.githubusercontent.com/u/12551230?v=4 width="100;"  style="border-radius:50%;align-items:center;justify-content:center;overflow:hidden;padding-top:10px" alt=cleitonme/>
-            <br />
-            <sub style="font-size:14px"><b>cleitonme</b></sub>
-        </a>
-    </td>
-    <td align="center" style="word-wrap: break-word; width: 150.0; height: 150.0">
-        <a href=https://github.com/WellingtonFonseca>
-            <img src=https://avatars.githubusercontent.com/u/25608175?v=4 width="100;"  style="border-radius:50%;align-items:center;justify-content:center;overflow:hidden;padding-top:10px" alt=Wellington Fonseca/>
-            <br />
-            <sub style="font-size:14px"><b>Wellington Fonseca</b></sub>
-        </a>
-    </td>
-    <td align="center" style="word-wrap: break-word; width: 150.0; height: 150.0">
-        <a href=https://github.com/xenodium>
-            <img src=https://avatars.githubusercontent.com/u/8107219?v=4 width="100;"  style="border-radius:50%;align-items:center;justify-content:center;overflow:hidden;padding-top:10px" alt=xenodium/>
-            <br />
-            <sub style="font-size:14px"><b>xenodium</b></sub>
-        </a>
-    </td>
-</tr>
-<tr>
-    <td align="center" style="word-wrap: break-word; width: 150.0; height: 150.0">
-        <a href=https://github.com/ramon-victor>
-            <img src=https://avatars.githubusercontent.com/u/13617054?v=4 width="100;"  style="border-radius:50%;align-items:center;justify-content:center;overflow:hidden;padding-top:10px" alt=ramon-victor/>
-            <br />
-            <sub style="font-size:14px"><b>ramon-victor</b></sub>
-        </a>
-    </td>
-    <td align="center" style="word-wrap: break-word; width: 150.0; height: 150.0">
-        <a href=https://github.com/netrixken>
-            <img src=https://avatars.githubusercontent.com/u/9066682?v=4 width="100;"  style="border-radius:50%;align-items:center;justify-content:center;overflow:hidden;padding-top:10px" alt=Netrix Ken/>
-            <br />
-            <sub style="font-size:14px"><b>Netrix Ken</b></sub>
-        </a>
-    </td>
-    <td align="center" style="word-wrap: break-word; width: 150.0; height: 150.0">
-        <a href=https://github.com/luizrgf2>
-            <img src=https://avatars.githubusercontent.com/u/71092163?v=4 width="100;"  style="border-radius:50%;align-items:center;justify-content:center;overflow:hidden;padding-top:10px" alt=Luiz Ricardo Gonçalves Felipe/>
-            <br />
-            <sub style="font-size:14px"><b>Luiz Ricardo Gonçalves Felipe</b></sub>
-        </a>
-    </td>
-    <td align="center" style="word-wrap: break-word; width: 150.0; height: 150.0">
-        <a href=https://github.com/andreydruz>
-            <img src=https://avatars.githubusercontent.com/u/976438?v=4 width="100;"  style="border-radius:50%;align-items:center;justify-content:center;overflow:hidden;padding-top:10px" alt=andreydruz/>
-            <br />
-            <sub style="font-size:14px"><b>andreydruz</b></sub>
-        </a>
-    </td>
-    <td align="center" style="word-wrap: break-word; width: 150.0; height: 150.0">
-        <a href=https://github.com/vitorsilvalima>
-            <img src=https://avatars.githubusercontent.com/u/9752658?v=4 width="100;"  style="border-radius:50%;align-items:center;justify-content:center;overflow:hidden;padding-top:10px" alt=Vitor Silva Lima/>
-            <br />
-            <sub style="font-size:14px"><b>Vitor Silva Lima</b></sub>
-        </a>
-    </td>
-    <td align="center" style="word-wrap: break-word; width: 150.0; height: 150.0">
-        <a href=https://github.com/RuanAyram>
-            <img src=https://avatars.githubusercontent.com/u/16547662?v=4 width="100;"  style="border-radius:50%;align-items:center;justify-content:center;overflow:hidden;padding-top:10px" alt=Ruan Kaylo/>
-            <br />
-            <sub style="font-size:14px"><b>Ruan Kaylo</b></sub>
-        </a>
-    </td>
-</tr>
-<tr>
-    <td align="center" style="word-wrap: break-word; width: 150.0; height: 150.0">
-        <a href=https://github.com/pedroafonso18>
-            <img src=https://avatars.githubusercontent.com/u/157052926?v=4 width="100;"  style="border-radius:50%;align-items:center;justify-content:center;overflow:hidden;padding-top:10px" alt=Pedro Afonso/>
-            <br />
-            <sub style="font-size:14px"><b>Pedro Afonso</b></sub>
-        </a>
-    </td>
-    <td align="center" style="word-wrap: break-word; width: 150.0; height: 150.0">
-        <a href=https://github.com/igortrinidad>
-            <img src=https://avatars.githubusercontent.com/u/13478652?v=4 width="100;"  style="border-radius:50%;align-items:center;justify-content:center;overflow:hidden;padding-top:10px" alt=Igor Trindade/>
-            <br />
-            <sub style="font-size:14px"><b>Igor Trindade</b></sub>
-        </a>
-    </td>
-    <td align="center" style="word-wrap: break-word; width: 150.0; height: 150.0">
-        <a href=https://github.com/chrsmendes>
-            <img src=https://avatars.githubusercontent.com/u/77082167?v=4 width="100;"  style="border-radius:50%;align-items:center;justify-content:center;overflow:hidden;padding-top:10px" alt=Christopher Mendes/>
-            <br />
-            <sub style="font-size:14px"><b>Christopher Mendes</b></sub>
-        </a>
-    </td>
-    <td align="center" style="word-wrap: break-word; width: 150.0; height: 150.0">
-        <a href=https://github.com/luiis716>
-            <img src=https://avatars.githubusercontent.com/u/97978347?v=4 width="100;"  style="border-radius:50%;align-items:center;justify-content:center;overflow:hidden;padding-top:10px" alt=luiis716/>
-            <br />
-            <sub style="font-size:14px"><b>luiis716</b></sub>
-        </a>
-    </td>
-    <td align="center" style="word-wrap: break-word; width: 150.0; height: 150.0">
-        <a href=https://github.com/joaosouz4dev>
-            <img src=https://avatars.githubusercontent.com/u/47183663?v=4 width="100;"  style="border-radius:50%;align-items:center;justify-content:center;overflow:hidden;padding-top:10px" alt=João Victor Souza/>
-            <br />
-            <sub style="font-size:14px"><b>João Victor Souza</b></sub>
-        </a>
-    </td>
-    <td align="center" style="word-wrap: break-word; width: 150.0; height: 150.0">
-        <a href=https://github.com/gusnips>
-            <img src=https://avatars.githubusercontent.com/u/981265?v=4 width="100;"  style="border-radius:50%;align-items:center;justify-content:center;overflow:hidden;padding-top:10px" alt=Gustavo Salomé />
-            <br />
-            <sub style="font-size:14px"><b>Gustavo Salomé </b></sub>
-        </a>
-    </td>
-</tr>
-<tr>
-    <td align="center" style="word-wrap: break-word; width: 150.0; height: 150.0">
-        <a href=https://github.com/AntonKun>
-            <img src=https://avatars.githubusercontent.com/u/59668952?v=4 width="100;"  style="border-radius:50%;align-items:center;justify-content:center;overflow:hidden;padding-top:10px" alt=Anton Kozyk/>
-            <br />
-            <sub style="font-size:14px"><b>Anton Kozyk</b></sub>
-        </a>
-    </td>
-    <td align="center" style="word-wrap: break-word; width: 150.0; height: 150.0">
-        <a href=https://github.com/anilgulecha>
-            <img src=https://avatars.githubusercontent.com/u/1016984?v=4 width="100;"  style="border-radius:50%;align-items:center;justify-content:center;overflow:hidden;padding-top:10px" alt=Anil Gulecha/>
-            <br />
-            <sub style="font-size:14px"><b>Anil Gulecha</b></sub>
-        </a>
-    </td>
-    <td align="center" style="word-wrap: break-word; width: 150.0; height: 150.0">
-        <a href=https://github.com/AlanMartines>
-            <img src=https://avatars.githubusercontent.com/u/10979090?v=4 width="100;"  style="border-radius:50%;align-items:center;justify-content:center;overflow:hidden;padding-top:10px" alt=Alan Martines/>
-            <br />
-            <sub style="font-size:14px"><b>Alan Martines</b></sub>
-        </a>
-    </td>
-    <td align="center" style="word-wrap: break-word; width: 150.0; height: 150.0">
-        <a href=https://github.com/DwiRizqiH>
-            <img src=https://avatars.githubusercontent.com/u/69355492?v=4 width="100;"  style="border-radius:50%;align-items:center;justify-content:center;overflow:hidden;padding-top:10px" alt=Ahmad Dwi Rizqi Hidayatulloh/>
-            <br />
-            <sub style="font-size:14px"><b>Ahmad Dwi Rizqi Hidayatulloh</b></sub>
-        </a>
-    </td>
-    <td align="center" style="word-wrap: break-word; width: 150.0; height: 150.0">
-        <a href=https://github.com/elohmeier>
-            <img src=https://avatars.githubusercontent.com/u/2536303?v=4 width="100;"  style="border-radius:50%;align-items:center;justify-content:center;overflow:hidden;padding-top:10px" alt=elohmeier/>
-            <br />
-            <sub style="font-size:14px"><b>elohmeier</b></sub>
-        </a>
-    </td>
-    <td align="center" style="word-wrap: break-word; width: 150.0; height: 150.0">
-        <a href=https://github.com/fadlee>
-            <img src=https://avatars.githubusercontent.com/u/334797?v=4 width="100;"  style="border-radius:50%;align-items:center;justify-content:center;overflow:hidden;padding-top:10px" alt=Fadlul Alim/>
-            <br />
-            <sub style="font-size:14px"><b>Fadlul Alim</b></sub>
-        </a>
-    </td>
-</tr>
-<tr>
-    <td align="center" style="word-wrap: break-word; width: 150.0; height: 150.0">
-        <a href=https://github.com/joaokopernico>
-            <img src=https://avatars.githubusercontent.com/u/111400483?v=4 width="100;"  style="border-radius:50%;align-items:center;justify-content:center;overflow:hidden;padding-top:10px" alt=joaokopernico/>
-            <br />
-            <sub style="font-size:14px"><b>joaokopernico</b></sub>
-        </a>
-    </td>
-    <td align="center" style="word-wrap: break-word; width: 150.0; height: 150.0">
-        <a href=https://github.com/JobasFernandes>
-            <img src=https://avatars.githubusercontent.com/u/26033148?v=4 width="100;"  style="border-radius:50%;align-items:center;justify-content:center;overflow:hidden;padding-top:10px" alt=Joseph Fernandes/>
-            <br />
-            <sub style="font-size:14px"><b>Joseph Fernandes</b></sub>
-        </a>
-    </td>
-    <td align="center" style="word-wrap: break-word; width: 150.0; height: 150.0">
-        <a href=https://github.com/renancesarti-cyber>
-            <img src=https://avatars.githubusercontent.com/u/235291917?v=4 width="100;"  style="border-radius:50%;align-items:center;justify-content:center;overflow:hidden;padding-top:10px" alt=renancesarti-cyber/>
-            <br />
-            <sub style="font-size:14px"><b>renancesarti-cyber</b></sub>
-        </a>
-    </td>
-    <td align="center" style="word-wrap: break-word; width: 150.0; height: 150.0">
-        <a href=https://github.com/ruben18salazar3>
-            <img src=https://avatars.githubusercontent.com/u/86245508?v=4 width="100;"  style="border-radius:50%;align-items:center;justify-content:center;overflow:hidden;padding-top:10px" alt=Rubén Salazar/>
-            <br />
-            <sub style="font-size:14px"><b>Rubén Salazar</b></sub>
-        </a>
-    </td>
-    <td align="center" style="word-wrap: break-word; width: 150.0; height: 150.0">
-        <a href=https://github.com/ryanachdiadsyah>
-            <img src=https://avatars.githubusercontent.com/u/165612793?v=4 width="100;"  style="border-radius:50%;align-items:center;justify-content:center;overflow:hidden;padding-top:10px" alt=Ryan Achdiadsyah/>
-            <br />
-            <sub style="font-size:14px"><b>Ryan Achdiadsyah</b></sub>
-        </a>
-    </td>
-    <td align="center" style="word-wrap: break-word; width: 150.0; height: 150.0">
-        <a href=https://github.com/ViFigueiredo>
-            <img src=https://avatars.githubusercontent.com/u/67883343?v=4 width="100;"  style="border-radius:50%;align-items:center;justify-content:center;overflow:hidden;padding-top:10px" alt=ViFigueiredo/>
-            <br />
-            <sub style="font-size:14px"><b>ViFigueiredo</b></sub>
-        </a>
-    </td>
-</tr>
-<tr>
-    <td align="center" style="word-wrap: break-word; width: 150.0; height: 150.0">
-        <a href=https://github.com/cadao7>
-            <img src=https://avatars.githubusercontent.com/u/306330?v=4 width="100;"  style="border-radius:50%;align-items:center;justify-content:center;overflow:hidden;padding-top:10px" alt=Ricardo Maminhak/>
-            <br />
-            <sub style="font-size:14px"><b>Ricardo Maminhak</b></sub>
-        </a>
-    </td>
-    <td align="center" style="word-wrap: break-word; width: 150.0; height: 150.0">
-        <a href=https://github.com/zennnez>
-            <img src=https://avatars.githubusercontent.com/u/3524740?v=4 width="100;"  style="border-radius:50%;align-items:center;justify-content:center;overflow:hidden;padding-top:10px" alt=zen/>
-            <br />
-            <sub style="font-size:14px"><b>zen</b></sub>
-        </a>
-    </td>
-</tr>
-</table>
+<!-- CONTRIBUTORS:START -->
+
+<table><tr>
+<td align="center">
+    <a href="https://github.com/asternic">
+      <img src="https://avatars.githubusercontent.com/u/25182694?v=4" width="100px;" style="border-radius:50%;"/><br />
+      <sub><b>asternic</b></sub>
+    </a>
+  </td>
+<td align="center">
+    <a href="https://github.com/cleitonme">
+      <img src="https://avatars.githubusercontent.com/u/12551230?v=4" width="100px;" style="border-radius:50%;"/><br />
+      <sub><b>cleitonme</b></sub>
+    </a>
+  </td>
+<td align="center">
+    <a href="https://github.com/guilhermejansen">
+      <img src="https://avatars.githubusercontent.com/u/52773109?v=4" width="100px;" style="border-radius:50%;"/><br />
+      <sub><b>guilhermejansen</b></sub>
+    </a>
+  </td>
+<td align="center">
+    <a href="https://github.com/LuizFelipeNeves">
+      <img src="https://avatars.githubusercontent.com/u/14094719?v=4" width="100px;" style="border-radius:50%;"/><br />
+      <sub><b>LuizFelipeNeves</b></sub>
+    </a>
+  </td>
+<td align="center">
+    <a href="https://github.com/WellingtonFonseca">
+      <img src="https://avatars.githubusercontent.com/u/25608175?v=4" width="100px;" style="border-radius:50%;"/><br />
+      <sub><b>WellingtonFonseca</b></sub>
+    </a>
+  </td>
+<td align="center">
+    <a href="https://github.com/xenodium">
+      <img src="https://avatars.githubusercontent.com/u/8107219?v=4" width="100px;" style="border-radius:50%;"/><br />
+      <sub><b>xenodium</b></sub>
+    </a>
+  </td>
+</tr><tr>
+<td align="center">
+    <a href="https://github.com/ThiagoBauken">
+      <img src="https://avatars.githubusercontent.com/u/107090829?v=4" width="100px;" style="border-radius:50%;"/><br />
+      <sub><b>ThiagoBauken</b></sub>
+    </a>
+  </td>
+<td align="center">
+    <a href="https://github.com/ramon-victor">
+      <img src="https://avatars.githubusercontent.com/u/13617054?v=4" width="100px;" style="border-radius:50%;"/><br />
+      <sub><b>ramon-victor</b></sub>
+    </a>
+  </td>
+<td align="center">
+    <a href="https://github.com/AntonKun">
+      <img src="https://avatars.githubusercontent.com/u/59668952?v=4" width="100px;" style="border-radius:50%;"/><br />
+      <sub><b>AntonKun</b></sub>
+    </a>
+  </td>
+<td align="center">
+    <a href="https://github.com/vitorsilvalima">
+      <img src="https://avatars.githubusercontent.com/u/9752658?v=4" width="100px;" style="border-radius:50%;"/><br />
+      <sub><b>vitorsilvalima</b></sub>
+    </a>
+  </td>
+<td align="center">
+    <a href="https://github.com/Piahn">
+      <img src="https://avatars.githubusercontent.com/u/132025108?v=4" width="100px;" style="border-radius:50%;"/><br />
+      <sub><b>Piahn</b></sub>
+    </a>
+  </td>
+<td align="center">
+    <a href="https://github.com/netrixken">
+      <img src="https://avatars.githubusercontent.com/u/9066682?v=4" width="100px;" style="border-radius:50%;"/><br />
+      <sub><b>netrixken</b></sub>
+    </a>
+  </td>
+</tr><tr>
+<td align="center">
+    <a href="https://github.com/luizrgf2">
+      <img src="https://avatars.githubusercontent.com/u/71092163?v=4" width="100px;" style="border-radius:50%;"/><br />
+      <sub><b>luizrgf2</b></sub>
+    </a>
+  </td>
+<td align="center">
+    <a href="https://github.com/andreydruz">
+      <img src="https://avatars.githubusercontent.com/u/976438?v=4" width="100px;" style="border-radius:50%;"/><br />
+      <sub><b>andreydruz</b></sub>
+    </a>
+  </td>
+<td align="center">
+    <a href="https://github.com/devLucasMoraes">
+      <img src="https://avatars.githubusercontent.com/u/104109951?v=4" width="100px;" style="border-radius:50%;"/><br />
+      <sub><b>devLucasMoraes</b></sub>
+    </a>
+  </td>
+<td align="center">
+    <a href="https://github.com/RuanAyram">
+      <img src="https://avatars.githubusercontent.com/u/16547662?v=4" width="100px;" style="border-radius:50%;"/><br />
+      <sub><b>RuanAyram</b></sub>
+    </a>
+  </td>
+<td align="center">
+    <a href="https://github.com/pedroafonso18">
+      <img src="https://avatars.githubusercontent.com/u/157052926?v=4" width="100px;" style="border-radius:50%;"/><br />
+      <sub><b>pedroafonso18</b></sub>
+    </a>
+  </td>
+<td align="center">
+    <a href="https://github.com/Alg0rix">
+      <img src="https://avatars.githubusercontent.com/u/53804949?v=4" width="100px;" style="border-radius:50%;"/><br />
+      <sub><b>Alg0rix</b></sub>
+    </a>
+  </td>
+</tr><tr>
+<td align="center">
+    <a href="https://github.com/igortrinidad">
+      <img src="https://avatars.githubusercontent.com/u/13478652?v=4" width="100px;" style="border-radius:50%;"/><br />
+      <sub><b>igortrinidad</b></sub>
+    </a>
+  </td>
+<td align="center">
+    <a href="https://github.com/chrsmendes">
+      <img src="https://avatars.githubusercontent.com/u/77082167?v=4" width="100px;" style="border-radius:50%;"/><br />
+      <sub><b>chrsmendes</b></sub>
+    </a>
+  </td>
+<td align="center">
+    <a href="https://github.com/claytim">
+      <img src="https://avatars.githubusercontent.com/u/47343472?v=4" width="100px;" style="border-radius:50%;"/><br />
+      <sub><b>claytim</b></sub>
+    </a>
+  </td>
+<td align="center">
+    <a href="https://github.com/jeffersonfelixdev">
+      <img src="https://avatars.githubusercontent.com/u/3003222?v=4" width="100px;" style="border-radius:50%;"/><br />
+      <sub><b>jeffersonfelixdev</b></sub>
+    </a>
+  </td>
+<td align="center">
+    <a href="https://github.com/My-con">
+      <img src="https://avatars.githubusercontent.com/u/123265027?v=4" width="100px;" style="border-radius:50%;"/><br />
+      <sub><b>My-con</b></sub>
+    </a>
+  </td>
+<td align="center">
+    <a href="https://github.com/paul-lestyo">
+      <img src="https://avatars.githubusercontent.com/u/51690314?v=4" width="100px;" style="border-radius:50%;"/><br />
+      <sub><b>paul-lestyo</b></sub>
+    </a>
+  </td>
+</tr><tr>
+<td align="center">
+    <a href="https://github.com/luiis716">
+      <img src="https://avatars.githubusercontent.com/u/97978347?v=4" width="100px;" style="border-radius:50%;"/><br />
+      <sub><b>luiis716</b></sub>
+    </a>
+  </td>
+<td align="center">
+    <a href="https://github.com/dgattupalli696">
+      <img src="https://avatars.githubusercontent.com/u/219828309?v=4" width="100px;" style="border-radius:50%;"/><br />
+      <sub><b>dgattupalli696</b></sub>
+    </a>
+  </td>
+<td align="center">
+    <a href="https://github.com/joaosouz4dev">
+      <img src="https://avatars.githubusercontent.com/u/47183663?v=4" width="100px;" style="border-radius:50%;"/><br />
+      <sub><b>joaosouz4dev</b></sub>
+    </a>
+  </td>
+<td align="center">
+    <a href="https://github.com/gusnips">
+      <img src="https://avatars.githubusercontent.com/u/981265?v=4" width="100px;" style="border-radius:50%;"/><br />
+      <sub><b>gusnips</b></sub>
+    </a>
+  </td>
+<td align="center">
+    <a href="https://github.com/Flow-Mind-Company">
+      <img src="https://avatars.githubusercontent.com/u/228500487?v=4" width="100px;" style="border-radius:50%;"/><br />
+      <sub><b>Flow-Mind-Company</b></sub>
+    </a>
+  </td>
+</tr></table>
+
+<!-- CONTRIBUTORS:END -->
 
 ## Clients
 
 - [wuzapi TypeScript / Node Client](https://github.com/gusnips/wuzapi-node)
 
+## Pairing history sync
+
+`days_to_sync_history` requests a full history window from WhatsApp when linking
+an account. Set it through `POST /admin/users`, `PUT /admin/users/{id}`, or
+`POST /session/history` **before starting pairing**:
+
+```json
+{"history": 1000, "days_to_sync_history": 30}
+```
+
+The dashboard exposes the same setting when creating a user and in History
+Configuration. The session configuration endpoint works without an active WhatsApp
+client. Its omitted fields are preserved; sending `days_to_sync_history: 0`
+restores WhatsApp's default sync behavior. Values from 0 through 365 are accepted.
+Admin user responses and `GET /session/status` expose the saved value.
+
+Sync days and `history` are separate settings: `history` is the local per-chat
+message retention count, not a number of days. The requested window is sent in
+that user's pairing payload; WhatsApp and the phone determine which messages are
+available. Incoming batches use the existing `HistorySync` processing and webhooks.
+Zero sync days does not suppress WhatsApp's normal history events.
+
+Changes apply on the next **new pairing**, not an ordinary reconnect. If a QR has
+already been issued, restart the pairing flow after saving. For an already linked
+account, the explicit `GET /session/history` endpoint remains available for
+message-based history requests; changing sync days alone does not backfill it.
+Both SQLite and PostgreSQL are supported, with existing accounts defaulting to 0.
+
+Regression tests run on SQLite with `go test ./...`. To run the same migration,
+API, and pairing-payload checks on PostgreSQL, set `WUZAPI_TEST_POSTGRES_DSN` to a
+test database connection string and run `go test -run TestHistorySync ./...`.
+The database role must be able to create schemas; tests create and remove their
+own schemas.
+
 ## Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=asternic/wuzapi&type=Date)](https://www.star-history.com/#asternic/wuzapi&Date)
+<a href="https://www.star-history.com/?type=date&repos=asternic%2Fwuzapi">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=asternic/wuzapi&type=date&theme=dark&legend=top-left&sealed_token=btZMq-H0d-DBRgXRdFTBx24bZ3x6oVGnSTwAk6DEM19J5wiWYhsN20SekiMRIbFaEkIhmwM5_SyQKT1QTvNVYF9QAaFLdvvPPEq7Y7dvZ34MoKnKNXyXlQgerN1ag_hYzp9RGYAywggEXDxTESW-asFZnacNcBq7LvO4XhspFm-KflmgBomjG_czi8vR" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=asternic/wuzapi&type=date&legend=top-left&sealed_token=btZMq-H0d-DBRgXRdFTBx24bZ3x6oVGnSTwAk6DEM19J5wiWYhsN20SekiMRIbFaEkIhmwM5_SyQKT1QTvNVYF9QAaFLdvvPPEq7Y7dvZ34MoKnKNXyXlQgerN1ag_hYzp9RGYAywggEXDxTESW-asFZnacNcBq7LvO4XhspFm-KflmgBomjG_czi8vR" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=asternic/wuzapi&type=date&legend=top-left&sealed_token=btZMq-H0d-DBRgXRdFTBx24bZ3x6oVGnSTwAk6DEM19J5wiWYhsN20SekiMRIbFaEkIhmwM5_SyQKT1QTvNVYF9QAaFLdvvPPEq7Y7dvZ34MoKnKNXyXlQgerN1ag_hYzp9RGYAywggEXDxTESW-asFZnacNcBq7LvO4XhspFm-KflmgBomjG_czi8vR" />
+ </picture>
+</a>
 
 ## License
 

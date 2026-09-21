@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/jmoiron/sqlx"
+	"github.com/rs/zerolog/log"
 )
 
 type Migration struct {
@@ -69,6 +70,26 @@ var migrations = []Migration{
 		ID:    8,
 		Name:  "add_data_json",
 		UpSQL: addDataJsonSQL,
+	},
+	{
+		ID:    9,
+		Name:  "add_whatsmeow_message_secrets_message_id_idx",
+		UpSQL: addWhatsmeowMessageSecretsMessageIDIndexSQL,
+	},
+	{
+		ID:    10,
+		Name:  "add_webhook_use_proxy",
+		UpSQL: addWebhookUseProxySQL,
+	},
+	{
+		ID:    12,
+		Name:  "repair_webhook_use_proxy",
+		UpSQL: repairWebhookUseProxySQL,
+	},
+	{
+		ID:    13,
+		Name:  "add_days_to_sync_history",
+		UpSQL: `ALTER TABLE users ADD COLUMN IF NOT EXISTS days_to_sync_history INTEGER DEFAULT 0;`,
 	},
 }
 
@@ -214,6 +235,31 @@ END $$;
 -- SQLite version (handled in code)
 `
 
+const addWhatsmeowMessageSecretsMessageIDIndexSQL = `
+-- PostgreSQL version
+DO $$
+BEGIN
+	CREATE INDEX IF NOT EXISTS whatsmeow_message_secrets_message_id_idx
+	ON whatsmeow_message_secrets (message_id);
+END $$;
+-- SQLite version (handled in code)
+`
+
+const addWebhookUseProxySQL = `
+-- PostgreSQL version
+ALTER TABLE users ADD COLUMN IF NOT EXISTS webhook_use_proxy BOOLEAN DEFAULT TRUE;
+
+-- SQLite version (handled in code)
+`
+
+// Migration 10 collided with migrations from another development branch and
+// also used an information_schema lookup that was not scoped to the active
+// schema. Keep this as a separate, globally unused migration ID so databases
+// that already recorded a different migration 10 or 11 are repaired.
+const repairWebhookUseProxySQL = `
+ALTER TABLE users ADD COLUMN IF NOT EXISTS webhook_use_proxy BOOLEAN DEFAULT TRUE;
+`
+
 // GenerateRandomID creates a random string ID
 func GenerateRandomID() (string, error) {
 	bytes := make([]byte, 16) // 128 bits
@@ -237,11 +283,51 @@ func initializeSchema(db *sqlx.DB) error {
 	}
 
 	// Apply missing migrations
+	sourceMigrations := make(map[int]string, len(migrations))
+	for _, migration := range migrations {
+		sourceMigrations[migration.ID] = migration.Name
+		if appliedName, ok := applied[migration.ID]; ok && appliedName != migration.Name {
+			log.Warn().
+				Int("migration_id", migration.ID).
+				Str("database_name", appliedName).
+				Str("binary_name", migration.Name).
+				Msg("Database migration ID has a different name in this binary")
+		}
+	}
+	for id, appliedName := range applied {
+		if _, ok := sourceMigrations[id]; !ok {
+			log.Warn().
+				Int("migration_id", id).
+				Str("database_name", appliedName).
+				Msg("Database contains a migration unknown to this binary")
+		}
+	}
+
+	pending := 0
 	for _, migration := range migrations {
 		if _, ok := applied[migration.ID]; !ok {
+			pending++
+		}
+	}
+	log.Info().
+		Str("driver", db.DriverName()).
+		Int("applied", len(applied)).
+		Int("pending", pending).
+		Msg("Database migration status")
+
+	for _, migration := range migrations {
+		if _, ok := applied[migration.ID]; !ok {
+			log.Info().
+				Int("migration_id", migration.ID).
+				Str("migration_name", migration.Name).
+				Msg("Applying database migration")
 			if err := applyMigration(db, migration); err != nil {
 				return fmt.Errorf("failed to apply migration %d: %w", migration.ID, err)
 			}
+			log.Info().
+				Int("migration_id", migration.ID).
+				Str("migration_name", migration.Name).
+				Msg("Database migration applied")
 		}
 	}
 
@@ -290,8 +376,8 @@ func createMigrationsTable(db *sqlx.DB) error {
 	return nil
 }
 
-func getAppliedMigrations(db *sqlx.DB) (map[int]struct{}, error) {
-	applied := make(map[int]struct{})
+func getAppliedMigrations(db *sqlx.DB) (map[int]string, error) {
+	applied := make(map[int]string)
 	var rows []struct {
 		ID   int    `db:"id"`
 		Name string `db:"name"`
@@ -303,7 +389,7 @@ func getAppliedMigrations(db *sqlx.DB) (map[int]struct{}, error) {
 	}
 
 	for _, row := range rows {
-		applied[row.ID] = struct{}{}
+		applied[row.ID] = row.Name
 	}
 
 	return applied, nil
@@ -432,6 +518,24 @@ func applyMigration(db *sqlx.DB, migration Migration) error {
 		if db.DriverName() == "sqlite" {
 			// Add dataJson column to message_history table for SQLite
 			err = addColumnIfNotExistsSQLite(tx, "message_history", "datajson", "TEXT")
+		} else {
+			_, err = tx.Exec(migration.UpSQL)
+		}
+	} else if migration.ID == 9 {
+		if db.DriverName() == "sqlite" {
+			err = nil
+		} else {
+			_, err = tx.Exec(migration.UpSQL)
+		}
+	} else if migration.ID == 13 {
+		if db.DriverName() == "sqlite" {
+			err = addColumnIfNotExistsSQLite(tx, "users", "days_to_sync_history", "INTEGER DEFAULT 0")
+		} else {
+			_, err = tx.Exec(migration.UpSQL)
+		}
+	} else if migration.ID == 10 || migration.ID == 12 {
+		if db.DriverName() == "sqlite" {
+			err = addColumnIfNotExistsSQLite(tx, "users", "webhook_use_proxy", "BOOLEAN DEFAULT 1")
 		} else {
 			_, err = tx.Exec(migration.UpSQL)
 		}

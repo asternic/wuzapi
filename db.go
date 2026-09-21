@@ -8,6 +8,7 @@ import (
 
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
+	"github.com/rs/zerolog/log"
 	_ "modernc.org/sqlite"
 )
 
@@ -85,6 +86,20 @@ func initializePostgres(config DatabaseConfig) (*sqlx.DB, error) {
 		return nil, fmt.Errorf("failed to ping postgres database: %w", err)
 	}
 
+	var databaseName, schemaName string
+	if err := db.QueryRow("SELECT current_database(), current_schema()").Scan(&databaseName, &schemaName); err != nil {
+		return nil, fmt.Errorf("failed to identify postgres database: %w", err)
+	}
+	log.Info().
+		Str("driver", "postgres").
+		Str("host", config.Host).
+		Str("port", config.Port).
+		Str("database", databaseName).
+		Str("schema", schemaName).
+		Str("user", config.User).
+		Str("sslmode", config.SSLMode).
+		Msg("Database connection established")
+
 	return db, nil
 }
 
@@ -93,8 +108,8 @@ func initializeSQLite(config DatabaseConfig) (*sqlx.DB, error) {
 		return nil, fmt.Errorf("could not create dbdata directory: %w", err)
 	}
 
-	dbPath := filepath.Join(config.Path, "users.db")
-	db, err := sqlx.Open("sqlite", dbPath+"?_pragma=foreign_keys(1)&_busy_timeout=3000")
+	dbPath := filepath.ToSlash(filepath.Join(config.Path, "users.db"))
+	db, err := sqlx.Open("sqlite", dbPath+"?_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)&_pragma=busy_timeout(10000)")
 	if err != nil {
 		return nil, fmt.Errorf("failed to open sqlite database: %w", err)
 	}
@@ -121,12 +136,16 @@ type HistoryMessage struct {
 }
 
 func (s *server) saveMessageToHistory(userID, chatJID, senderJID, messageID, messageType, textContent, mediaLink, quotedMessageID, dataJson string) error {
-	query := `INSERT INTO message_history (user_id, chat_jid, sender_jid, message_id, timestamp, message_type, text_content, media_link, quoted_message_id, datajson)
-              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`
-	if s.db.DriverName() == "sqlite" {
-		query = `INSERT INTO message_history (user_id, chat_jid, sender_jid, message_id, timestamp, message_type, text_content, media_link, quoted_message_id, datajson)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-	}
+	// Idempotent insert: HistorySync batches (and reconnects) routinely redeliver
+	// messages already persisted via the live Message event. The (user_id, message_id)
+	// unique constraint makes those duplicates an expected condition, not an error,
+	// so skip them silently instead of failing the insert and logging at ERROR. See #292.
+	// Rebind adapts the ? placeholders to the active driver ($1.. on Postgres,
+	// ? on SQLite), so the query is defined once. ON CONFLICT DO NOTHING is valid
+	// on both Postgres and modern SQLite.
+	query := s.db.Rebind(`INSERT INTO message_history (user_id, chat_jid, sender_jid, message_id, timestamp, message_type, text_content, media_link, quoted_message_id, datajson)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              ON CONFLICT (user_id, message_id) DO NOTHING`)
 	_, err := s.db.Exec(query, userID, chatJID, senderJID, messageID, time.Now(), messageType, textContent, mediaLink, quotedMessageID, dataJson)
 	if err != nil {
 		return fmt.Errorf("failed to save message to history: %w", err)
@@ -150,7 +169,7 @@ func (s *server) trimMessageHistory(userID, chatJID string, limit int) error {
 		querySecrets = `
             DELETE FROM whatsmeow_message_secrets
             WHERE message_id IN (
-                SELECT id FROM message_history
+                SELECT message_id FROM message_history
                 WHERE user_id = $1 AND chat_jid = $2
                 ORDER BY timestamp DESC
                 OFFSET $3
@@ -168,7 +187,7 @@ func (s *server) trimMessageHistory(userID, chatJID string, limit int) error {
 		querySecrets = `
             DELETE FROM whatsmeow_message_secrets
             WHERE message_id IN (
-                SELECT id FROM message_history
+                SELECT message_id FROM message_history
                 WHERE user_id = ? AND chat_jid = ?
                 ORDER BY timestamp DESC
                 LIMIT -1 OFFSET ?

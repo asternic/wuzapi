@@ -912,11 +912,13 @@ a#menulogout, a:visited#menulogout {
 }
 
 /* Proxy Configuration Styles */
-#proxyUrlField {
+#proxyUrlField,
+#proxyWebhookUseProxyField {
   display: none;
 }
 
-#proxyUrlField.show {
+#proxyUrlField.show,
+#proxyWebhookUseProxyField.show {
   display: block;
 }
 

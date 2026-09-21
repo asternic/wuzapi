@@ -62,11 +62,14 @@ document.addEventListener('DOMContentLoaded', function() {
       const enabled = $('#proxyEnabled').is(':checked');
       if (enabled) {
         $('#proxyUrlField').addClass('show');
+        $('#proxyWebhookUseProxyField').addClass('show');
       } else {
         $('#proxyUrlField').removeClass('show');
+        $('#proxyWebhookUseProxyField').removeClass('show');
       }
     }
   });
+  $('#proxyWebhookUseProxyToggle').checkbox();
 
   // Initialize add instance proxy toggle
   $('#addInstanceProxyToggle').checkbox({
@@ -74,12 +77,15 @@ document.addEventListener('DOMContentLoaded', function() {
       const enabled = $('input[name="proxy_enabled"]').is(':checked');
       if (enabled) {
         $('#addInstanceProxyUrlField').show();
+        $('#addInstanceProxyWebhookUseProxyField').show();
       } else {
         $('#addInstanceProxyUrlField').hide();
+        $('#addInstanceProxyWebhookUseProxyField').hide();
         $('input[name="proxy_url"]').val('');
       }
     }
   });
+  $('#addInstanceProxyWebhookUseProxyToggle').checkbox();
 
   // Initialize add instance S3 toggle
   $('#addInstanceS3Toggle').checkbox({
@@ -183,31 +189,31 @@ document.addEventListener('DOMContentLoaded', function() {
     return false;
   });
 
-  document.getElementById('pairphoneinput').addEventListener('keypress', function(e) {
-    if (e.key === 'Enter') {
-      const phone = pairPhoneInput.value.trim();
-      if (phone) {
-        connect().then((data) => {
-          if(data.success==true) {
-            pairPhone(phone)
-              .then((data) => {
-                document.getElementById('pairHelp').classList.add('hidden');;
-                // Success case
-                if (data.success && data.data && data.data.LinkingCode) {
-                  document.getElementById('pairInfo').innerHTML = `Your link code is: ${data.data.LinkingCode}`;
-                  scanInterval = setInterval(checkStatus, 1000);
-                } else {
-                  document.getElementById('pairInfo').innerHTML = "Problem getting pairing code";
-                }
-              })
-              .catch((error) => {
-                // Error case
-                document.getElementById('pairInfo').innerHTML = "Problem getting pairing code";
-                console.error('Pairing error:', error);
-              });
-          }
-      });
+  document.getElementById('pairphoneinput').addEventListener('keypress', async function(e) {
+    if (e.key !== 'Enter') return;
+
+    e.preventDefault();
+    const input = e.currentTarget;
+    const phone = input.value.trim();
+    if (!phone || input.disabled) return;
+
+    // This modal is shown only after /session/connect has established the
+    // WhatsApp socket. Calling connect() again here made the pairing flow fail
+    // with "already connected" before /session/pairphone was ever requested.
+    input.disabled = true;
+    try {
+      const data = await pairPhone(phone);
+      document.getElementById('pairHelp').classList.add('hidden');
+      if (data.success && data.data && data.data.LinkingCode) {
+        document.getElementById('pairInfo').textContent = `Your link code is: ${data.data.LinkingCode}`;
+      } else {
+        document.getElementById('pairInfo').textContent = `Problem getting pairing code: ${data.error || 'unknown error'}`;
       }
+    } catch (error) {
+      document.getElementById('pairInfo').textContent = "Problem getting pairing code: request failed";
+      console.error('Pairing error:', error);
+    } finally {
+      input.disabled = false;
     }
   });
 
@@ -412,6 +418,14 @@ document.addEventListener('DOMContentLoaded', function() {
           prompt: 'History must be a non-negative integer'
         }]
       },
+      days_to_sync_history: {
+        identifier: 'days_to_sync_history',
+        optional: true,
+        rules: [{
+          type: 'integer[0..365]',
+          prompt: 'History sync days must be an integer between 0 and 365'
+        }]
+      },
       proxy_url: {
         identifier: 'proxy_url',
         optional: true,
@@ -495,6 +509,8 @@ document.addEventListener('DOMContentLoaded', function() {
       $('#addInstanceS3Toggle').checkbox('set unchecked');
       $('#addInstanceHmacToggle').checkbox('set unchecked');
       $('#addInstanceProxyUrlField').hide();
+      $('#addInstanceProxyWebhookUseProxyField').hide();
+      $('#addInstanceProxyWebhookUseProxyToggle').checkbox('set checked');
       $('#addInstanceS3Fields').hide();
       $('#addInstanceHmacKeyWarningMessage').hide();
       $('#addInstanceHmacKeyField').hide();
@@ -513,9 +529,11 @@ async function addInstance(data) {
 
   // Build proxy configuration
   const proxyEnabled = data.proxy_enabled === 'on' || data.proxy_enabled === true;
+  const proxyWebhookUseProxy = data.proxy_webhook_use_proxy === 'on' || data.proxy_webhook_use_proxy === true;
   const proxyConfig = {
     enabled: proxyEnabled,
-    proxyURL: proxyEnabled ? (data.proxy_url || '') : ''
+    proxyURL: proxyEnabled ? (data.proxy_url || '') : '',
+    webhookUseProxy: proxyEnabled ? proxyWebhookUseProxy : true
   };
   
   // Build S3 configuration
@@ -545,6 +563,7 @@ async function addInstance(data) {
     webhook: data.webhook_url || '',
     expiration: 0,
     history: parseInt(data.history) || 0,
+    days_to_sync_history: Number(data.days_to_sync_history || 0),
     proxyConfig: proxyConfig,
     s3Config: s3Config,
     hmacKey: hmacKey
@@ -1057,12 +1076,12 @@ async function pairPhone(phone) {
   const myHeaders = new Headers();
   myHeaders.append('token', token);
   myHeaders.append('Content-Type', 'application/json');
-  res = await fetch(baseUrl + "/session/pairphone", {
+  const res = await fetch(baseUrl + "/session/pairphone", {
     method: "POST",
     headers: myHeaders,
     body: JSON.stringify({Phone: phone})
   });
-  data = await res.json();
+  const data = await res.json();
   return data;
 }
 
@@ -1157,7 +1176,6 @@ function init() {
 
   // Starting
   let notoken=0;
-  let scanInterval;
   let token = getLocalStorageItem('token');
   let admintoken = getLocalStorageItem('admintoken');
   let isAdminLogin = getLocalStorageItem('isAdmin');
@@ -1175,6 +1193,192 @@ function init() {
   }
 }
 
+// ===== Passkey functions =====
+let currentPasskeyPublicKey = null;
+let passkeyPollInterval = null;
+let passkeyPollTimeout = null;
+
+/**
+ * Clear any active passkey polling interval and timeout.
+ * Call this when modal closes, connection succeeds, or navigating away.
+ */
+function clearPasskeyPolling() {
+  if (passkeyPollInterval) { clearInterval(passkeyPollInterval); passkeyPollInterval = null; }
+  if (passkeyPollTimeout) { clearTimeout(passkeyPollTimeout); passkeyPollTimeout = null; }
+}
+
+function formatPasskeyCode(publicKey) {
+  const pkStr = JSON.stringify(publicKey, null, 2);
+  return `const publicKey = ${pkStr};\n\n(async () => {\n  const credential = await navigator.credentials.get({\n    publicKey: PublicKeyCredential.parseRequestOptionsFromJSON(publicKey)\n  });\n  console.log(JSON.stringify(credential.toJSON()));\n})();`;
+}
+
+function copyPasskeyCode() {
+  const code = document.getElementById('passkeyCodeBlock').textContent;
+  navigator.clipboard.writeText(code).then(() => {
+    $.toast({ class: 'success', message: 'Code copied to clipboard!' });
+  }).catch(() => {
+    const textarea = document.createElement('textarea');
+    textarea.value = code;
+    document.body.appendChild(textarea);
+    textarea.select();
+    document.execCommand('copy');
+    document.body.removeChild(textarea);
+    $.toast({ class: 'success', message: 'Code copied to clipboard!' });
+  });
+}
+
+function showPasskeyModal(publicKey) {
+  currentPasskeyPublicKey = publicKey;
+  const code = formatPasskeyCode(publicKey);
+  document.getElementById('passkeyCodeBlock').textContent = code;
+  document.getElementById('passkeyResponseInput').value = '';
+  $('#modalPasskeyPairing')
+    .modal({
+      closable: true,
+      onHidden: function() { clearPasskeyPolling(); }
+    })
+    .modal('show');
+}
+
+async function submitPasskeyResponse() {
+  const input = document.getElementById('passkeyResponseInput').value.trim();
+  if (!input) {
+    $.toast({ class: 'error', message: 'Paste the console result before sending.' });
+    return;
+  }
+
+  let parsed;
+  try {
+    parsed = JSON.parse(input);
+  } catch (e) {
+    $.toast({ class: 'error', message: 'Invalid JSON. Check the format and try again.' });
+    return;
+  }
+
+  const btn = document.getElementById('sendPasskeyBtn');
+  btn.classList.add('loading');
+
+  const token = getLocalStorageItem('token');
+  const myHeaders = new Headers();
+  myHeaders.append('token', token);
+  myHeaders.append('Content-Type', 'application/json');
+
+  try {
+    const res = await fetch(baseUrl + "/session/passkey-response", {
+      method: "POST",
+      headers: myHeaders,
+      body: JSON.stringify({ response: parsed })
+    });
+    const data = await res.json();
+    const errorDetail = data.errors?.error || data.error;
+
+    if (!res.ok || !data.success) {
+      $.toast({ class: 'error', message: 'Error sending passkey: ' + (errorDetail || 'Unknown error') });
+      btn.classList.remove('loading');
+      return;
+    }
+
+    const status = data.data?.status || data.status;
+
+    if (status === 'passkey_finished') {
+      $.toast({ class: 'success', message: 'Channel connected successfully!' });
+      $('#modalPasskeyPairing').modal('hide');
+      updateInterval = 5000;
+      btn.classList.remove('loading');
+      return;
+    }
+
+    if (status === 'passkey_response_sent') {
+      $.toast({ class: 'info', message: 'Response sent! Awaiting WhatsApp confirmation...' });
+
+      // Now call passkey-confirm to trigger the pairing code display
+      const confirmRes = await fetch(baseUrl + "/session/passkey-confirm", {
+        method: "POST",
+        headers: myHeaders,
+        body: JSON.stringify({})
+      });
+      const confirmData = await confirmRes.json();
+      const confirmError = confirmData.errors?.error || confirmData.error;
+
+      if (!confirmRes.ok || !confirmData.success) {
+        $.toast({ class: 'error', message: 'Error confirming: ' + (confirmError || 'Unknown') });
+        btn.classList.remove('loading');
+        return;
+      }
+
+      const confirmStatus = confirmData.data?.status || confirmData.status;
+
+      if (confirmStatus === 'passkey_finished') {
+        // Connected immediately (SkipHandoffUX was true)
+        $.toast({ class: 'success', message: 'Channel connected successfully!' });
+        $('#modalPasskeyPairing').modal('hide');
+        updateInterval = 5000;
+      } else if (confirmStatus === 'passkey_confirmed') {
+        // Confirmation sent — now wait for status to change via polling
+        $.toast({ class: 'success', message: 'Passkey confirmed! Waiting for connection...' });
+        document.getElementById('passkeyCodeBlock').textContent = 'Waiting for connection...';
+        document.getElementById('passkeyResponseInput').value = '';
+        document.getElementById('passkeyResponseInput').placeholder = 'Waiting for WhatsApp to confirm...';
+
+        // Start polling — the modal stays open until loggedIn becomes true
+        startPasskeyPolling(token);
+      } else {
+        $.toast({ class: 'success', message: 'Passkey confirmed. Waiting for connection...' });
+        $('#modalPasskeyPairing').modal('hide');
+      }
+    } else {
+      $.toast({ class: 'success', message: 'Passkey response sent.' });
+      $('#modalPasskeyPairing').modal('hide');
+    }
+  } catch (err) {
+    $.toast({ class: 'error', message: 'Network error: ' + err.message });
+  }
+
+  btn.classList.remove('loading');
+}
+
+function startPasskeyPolling(token) {
+  // Clear any existing polling before starting a new one
+  clearPasskeyPolling();
+
+  passkeyPollInterval = setInterval(async () => {
+    try {
+      const myHeaders = new Headers();
+      myHeaders.append('token', token);
+      const res = await fetch(baseUrl + "/session/status", {
+        method: "GET",
+        headers: myHeaders,
+      });
+      const data = await res.json();
+
+      if (data.success && data.data) {
+        if (data.data.loggedIn) {
+          // Connected!
+          clearPasskeyPolling();
+          $.toast({ class: 'success', message: 'Channel connected successfully!' });
+          $('#modalPasskeyPairing').modal('hide');
+          updateInterval = 5000;
+        } else if (!data.data.passkeyPending) {
+          // Passkey was consumed but not yet logged in — keep polling briefly
+        } else {
+          // Still waiting
+        }
+      }
+    } catch (e) {
+      // Silently continue polling on network errors
+    }
+  }, 2000);
+
+  // Safety: stop polling after 60 seconds
+  passkeyPollTimeout = setTimeout(() => {
+    clearPasskeyPolling();
+    const modalVisible = $('#modalPasskeyPairing').modal('is active');
+    if (modalVisible) {
+      $.toast({ class: 'warning', message: 'Passkey polling timed out. Check connection status.' });
+    }
+  }, 60000);
+}
+
 function populateInstances(instances) {
   const tableBody = $('#instances-body');
   const cardsContainer = $('#instances-cards'); // Assuming you have a container for cards
@@ -1186,7 +1390,7 @@ function populateInstances(instances) {
     const nodatarow = '<tr><td style="text-align:center;" colspan=5>No instances found</td></tr>'
     tableBody.append(nodatarow);
   }
-  instances.forEach(instance => {
+  instances.forEach((instance, idx) => {
 
   const row = `
       <tr>
@@ -1262,6 +1466,10 @@ function populateInstances(instances) {
                               <div class="content">${instance.proxy_config.proxy_url || 'Not configured'}</div>
                           </div>
                           <div class="item">
+                              <div class="header">Webhook Proxy</div>
+                              <div class="content">${instance.proxy_config.webhook_use_proxy === false ? 'Bypass proxy' : 'Use proxy'}</div>
+                          </div>
+                          <div class="item">
                               <div class="header">S3</div>
                               <div class="content">${instance.s3_config.enabled ? 'Enabled' : 'Disabled'}</div>
                           </div>
@@ -1272,9 +1480,23 @@ function populateInstances(instances) {
                       </div>
                   </div>
                   
-                  <!-- Right Column - QR Code (only shown if not logged in) -->
+                  <!-- Right Column - QR Code / Passkey (only shown if not logged in) -->
                   ${!instance.loggedIn ? `
                   <div class="column" style="display: flex; flex-direction: column; justify-content: center; align-items: center;">
+                      ${instance.passkeyPending && instance.publicKey ? `
+                      <!-- Passkey Mode -->
+                      <div class="ui segment" style="width: 100%; max-width: 300px; text-align: center;">
+                        <i class="key icon" style="font-size: 3em; color: #f2711c;"></i>
+                        <h4 class="ui header">Passkey Required</h4>
+                        <p style="font-size: 12px; color: #666;">
+                          WhatsApp requested passkey verification.
+                        </p>
+                        <button class="ui orange button passkey-setup-btn" data-passkey-index="${idx}">
+                          <i class="key icon"></i> Setup Passkey
+                        </button>
+                      </div>
+                      ` : `
+                      <!-- QR Code Mode -->
                       <div class="ui segment" style="width: 100%; max-width: 200px; height: 200px; display: flex; justify-content: center; align-items: center;">
                         ${instance.qrcode ? 
                           `<img src="${instance.qrcode}" style="max-height: 100%; max-width: 100%;">
@@ -1288,6 +1510,7 @@ function populateInstances(instances) {
                                 </div>`
                            }
                       </div>
+                      `}
                     </div>
                     ` : `
                     <!--one column when no qr to display-->
@@ -1298,7 +1521,7 @@ function populateInstances(instances) {
             <div class="extra content">
               <button class="ui primary positive button dashboard-button ${instance.connected === true ? 'hidden' : ''}" id="button-connect-${instance.id}" onclick="connect('${instance.token}')">Connect</button>
               <button class="ui primary negative button dashboard-button ${instance.connected === true ? '' : 'hidden'}" id="button-logout-${instance.id}" onclick="logout('${instance.token}')">Logout</button>
-              <button class="ui primary positive button dashboard-button ${instance.connected === true && instance.loggedIn === false ? '' : 'hidden'} id="button-logout-${instance.id}" onclick="modalPairPhone()">Login with Pairing Code</button>
+              <button class="ui primary positive button dashboard-button ${instance.connected === true && instance.loggedIn === false ? '' : 'hidden'}" id="button-pair-${instance.id}" onclick="modalPairPhone()">Login with Pairing Code</button>
               </div>
         </div>
         `;
@@ -1313,7 +1536,16 @@ function populateInstances(instances) {
      if (currentInstanceObj) {
        currentInstanceData = currentInstanceObj;
      }
-  } 
+  }
+
+  // Bind passkey setup buttons
+  document.querySelectorAll('.passkey-setup-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      const idx = parseInt(this.getAttribute('data-passkey-index'), 10);
+      const pk = instances[idx] && instances[idx].publicKey;
+      if (pk) showPasskeyModal(pk);
+    });
+  });
 }
 
 /**
@@ -1618,6 +1850,7 @@ async function loadHistoryConfig() {
     
     if (res.ok) {
       const data = await res.json();
+      $('#historySyncDays').val(data.data?.days_to_sync_history ?? 0);
       if (data.code === 200 && data.data && data.data.history) {
         const historyConfig = data.data.history;
         $('#history').val(historyConfig);
@@ -1637,10 +1870,17 @@ async function saveHistoryConfig() {
   myHeaders.append('token', token);
   myHeaders.append('Content-Type', 'application/json');
   
-  const historyConfig = parseInt($('#history').val());
+  const historyConfig = Number($('#history').val());
+  const syncDays = Number($('#historySyncDays').val());
+  if (!Number.isInteger(historyConfig) || historyConfig < 0 ||
+      !Number.isInteger(syncDays) || syncDays < 0 || syncDays > 365) {
+    showError('History must be a non-negative integer and sync days must be between 0 and 365.');
+    return;
+  }
   
   const config = {
     history: historyConfig,
+    days_to_sync_history: syncDays,
   };
   
   try {
@@ -1652,7 +1892,7 @@ async function saveHistoryConfig() {
     
     const data = await res.json();
     if (data.success) {
-      showSuccess('History configuration saved successfully');
+      showSuccess('History configuration saved. Sync days apply on the next pairing.');
       $('#modalHistoryConfig').modal('hide');
     } else {
       showError('Failed to save history configuration: ' + (data.error || 'Unknown error'));
@@ -1682,6 +1922,7 @@ async function loadProxyConfig() {
         const proxyConfig = data.data.proxy_config;
         const proxyUrl = proxyConfig.proxy_url || '';
         const enabled = proxyConfig.enabled || false;
+        const webhookUseProxy = proxyConfig.webhook_use_proxy !== false;
         
         // Set checkbox state
         $('#proxyEnabled').prop('checked', enabled);
@@ -1689,12 +1930,17 @@ async function loadProxyConfig() {
         
         // Set proxy URL
         $('#proxyUrl').val(proxyUrl);
+
+        $('#proxyWebhookUseProxy').prop('checked', webhookUseProxy);
+        $('#proxyWebhookUseProxyToggle').checkbox(webhookUseProxy ? 'set checked' : 'set unchecked');
         
         // Show/hide URL field based on enabled state
         if (enabled) {
           $('#proxyUrlField').addClass('show');
+          $('#proxyWebhookUseProxyField').addClass('show');
         } else {
           $('#proxyUrlField').removeClass('show');
+          $('#proxyWebhookUseProxyField').removeClass('show');
         }
       } else {
         // No proxy config, set defaults
@@ -1702,6 +1948,9 @@ async function loadProxyConfig() {
         $('#proxyEnabledToggle').checkbox('set unchecked');
         $('#proxyUrl').val('');
         $('#proxyUrlField').removeClass('show');
+        $('#proxyWebhookUseProxy').prop('checked', true);
+        $('#proxyWebhookUseProxyToggle').checkbox('set checked');
+        $('#proxyWebhookUseProxyField').removeClass('show');
       }
     }
   } catch (error) {
@@ -1717,12 +1966,14 @@ async function saveProxyConfig() {
   
   const enabled = $('#proxyEnabled').is(':checked');
   const proxyUrl = $('#proxyUrl').val().trim();
+  const webhookUseProxy = $('#proxyWebhookUseProxy').is(':checked');
   
   // If proxy is disabled, send disable request
   if (!enabled) {
     const config = {
       enable: false,
-      proxy_url: ''
+      proxy_url: '',
+      webhook_use_proxy: webhookUseProxy
     };
     
     try {
@@ -1760,7 +2011,8 @@ async function saveProxyConfig() {
   
   const config = {
     enable: true,
-    proxy_url: proxyUrl
+    proxy_url: proxyUrl,
+    webhook_use_proxy: webhookUseProxy
   };
   
   try {
