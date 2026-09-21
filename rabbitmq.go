@@ -206,6 +206,10 @@ func PublishToRabbit(data []byte, queueOverride ...string) error {
 	rabbitMu.Lock()
 	defer rabbitMu.Unlock()
 
+	return publishToRabbitLocked(data, queueOverride...)
+}
+
+func publishToRabbitLocked(data []byte, queueOverride ...string) error {
 	if !rabbitEnabled {
 		return nil
 	}
@@ -334,4 +338,19 @@ func PublishDataErrorToQueue(payload WebhookErrorPayload) {
 	} else {
 		log.Info().Str("queue", queueName).Msg("Data error payload successfully published to queue")
 	}
+}
+
+// Allocation occurs only while holding the shared channel lock. Waiting
+// publishers retain disk files, not an additional payload-sized byte slice.
+func publishMediaToRabbit(body *mediaFile, queue ...string) error {
+	rabbitMu.Lock()
+	defer rabbitMu.Unlock()
+	if !rabbitEnabled {
+		return nil
+	}
+	data, err := os.ReadFile(body.Path)
+	if err != nil {
+		return err
+	}
+	return publishToRabbitLocked(data, queue...)
 }

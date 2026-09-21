@@ -133,7 +133,34 @@ WEBHOOK_RETRY_ENABLED=true
 WEBHOOK_RETRY_COUNT=2
 WEBHOOK_RETRY_DELAY_SECONDS=30
 WEBHOOK_ERROR_QUEUE_NAME=wuzapi_dead_letter_webhooks
+WUZAPI_MEDIA_CONCURRENCY=2
+# WUZAPI_MEDIA_TMPDIR=/path/to/disk-backed/temp
 ```
+
+### Attachment temporary storage
+
+Incoming event attachments and outgoing document, audio, image, video, sticker,
+and optional button-image uploads use private temporary files automatically.
+`WUZAPI_MEDIA_TMPDIR` defaults to the operating system temporary directory.
+`WUZAPI_MEDIA_CONCURRENCY` defaults to `2` and limits simultaneous media downloads,
+uploads, decoding, conversions, and delivery-body preparation. Waiting operations
+honor cancellation; webhook retry backoff does not hold a media slot.
+
+Use a **disk-backed** writable directory or container volume for memory savings.
+A tmpfs mount still consumes RAM. Set the path inside the container and mount the
+backing storage there; setting a host path in `.env` alone does not mount it.
+The directory must support file locks. Allow space for plaintext, encryption or
+conversion scratch files, and base64 delivery bodies (approximately 4/3 of the
+attachment size each). Slow receivers and pending retries retain delivery files.
+
+Files are removed when their consumers finish. Each process owns a locked private
+directory; later starts reclaim abandoned directories without touching another
+running instance. Temporary files are not a durable queue and do not recover
+in-flight messages after a crash. Existing API inputs, delivery formats, and URL
+size limits are unchanged. JSON request decoding, image pixel decoding, and
+RabbitMQ's final payload buffer still have size-dependent memory costs.
+
+See [attachment memory validation](media-memory.md) for measurements and test limits.
 
 ### Important Notes
 
