@@ -2953,9 +2953,9 @@ func (s *server) SendPoll() http.HandlerFunc {
 func (s *server) DeleteMessage() http.HandlerFunc {
 
 	type textStruct struct {
-		Phone     string 
-		Id        string 
-		SenderJID string 
+		Phone     string
+		Id        string
+		SenderJID string
 	}
 
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -2990,23 +2990,16 @@ func (s *server) DeleteMessage() http.HandlerFunc {
 			return
 		}
 
-		// Determine the sender JID: if provided, convert; otherwise use EmptyJID
-		var sender types.JID
-		if t.SenderJID != "" {
-			var parseErr error
-			sender, parseErr = types.ParseJID(t.SenderJID)
-			if parseErr != nil {
-				s.Respond(w, r, http.StatusBadRequest, errors.New("invalid SenderJID"))
-				return
-			}
-		} else {
-			sender = types.EmptyJID
+		message, err := buildDeleteMessage(client, recipient, t.SenderJID, t.Id)
+		if err != nil {
+			s.Respond(w, r, http.StatusBadRequest, err)
+			return
 		}
 
 		resp, err := client.SendMessage(
-			context.Background(),
+			r.Context(),
 			recipient,
-			client.BuildRevoke(recipient, sender, t.Id),
+			message,
 		)
 		if err != nil {
 			s.Respond(w, r, http.StatusInternalServerError, errors.New(fmt.Sprintf("error sending message: %v", err)))

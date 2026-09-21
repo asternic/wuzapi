@@ -1095,8 +1095,15 @@ paths:
     post:
       tags:
         - Chat 
-      summary: Deletes a message sent by user
-      description: Deletes a messages sent by the same user
+      summary: Deletes an own message or another participant's group message
+      description: >-
+        Omit SenderJID (or send an empty string) to delete your own message.
+        To delete another participant's message, use the group JID in Phone and
+        the original author's full PN or LID in SenderJID. The connected WhatsApp
+        account must be a group admin; WhatsApp enforces deletion permissions.
+        Providing your own PN or LID also deletes an own message and does not
+        require group admin privileges. Use the sender identity from the original
+        message event; PN and LID are not automatically interconverted.
       security:
         - ApiKeyAuth: []
       requestBody:
@@ -1112,7 +1119,11 @@ paths:
           content:
             application/json:
               schema:
-                example: { "code": 200, "data": { "Details": "Message deleted" }, "success": true }
+                example: { "code": 200, "data": { "Details": "Deleted", "Id": "AABBCC11223344", "Timestamp": 1700000000 }, "success": true }
+        400:
+          description: Missing fields, invalid SenderJID, or another sender outside a group
+        500:
+          description: No session or an error sending the revocation to WhatsApp
   /chat/markread:
     post:
       tags:
@@ -3049,7 +3060,17 @@ definitions:
         example: "1234-abcd-21234"
       Phone:
         type: string
-        example: "5491155553934"
+        description: Destination chat; use the full group JID ending in @g.us for group messages.
+        example: "120363000000000000@g.us"
+      SenderJID:
+        type: string
+        description: >-
+          Optional original message author. Omit or leave empty for own messages.
+          Otherwise provide a numeric user JID ending in @s.whatsapp.net or @lid.
+          Legacy @c.us is normalized to @s.whatsapp.net. Device/agent suffixes are
+          validated and removed. Bare numbers, whitespace, multiple @ signs and
+          group, broadcast or newsletter JIDs are rejected with HTTP 400.
+        example: "5491155553935@s.whatsapp.net"
   Markread:
     type: object
     required:
