@@ -164,6 +164,20 @@ RabbitMQ's final payload buffer still have size-dependent memory costs.
 
 See [attachment memory validation](media-memory.md) for measurements and test limits.
 
+### Log verbosity
+
+Set `LOG_LEVEL=warn` in `.env` or the process environment to show warnings and
+more severe WuzAPI logs. Accepted values are `trace`, `debug`, `info`, `warn`,
+`error`, `fatal`, and `panic`, ignoring case and surrounding whitespace. An unset,
+empty, or invalid value preserves the existing verbosity; numeric values and
+`disabled` are not accepted. Existing process environment values take precedence
+over `.env`, including an explicitly empty value.
+
+The filter is applied before startup messages and works with console and JSON
+output. It controls WuzAPI's zerolog logger, not Whatsmeow's `-wadebug` output.
+Compose and Swarm forward `LOG_LEVEL`; for Swarm, export it before deploying since
+`docker stack deploy` does not automatically read `.env` for substitution.
+
 ### Important Notes
 
 #### Auto-Generated Credentials
