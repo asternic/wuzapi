@@ -1188,6 +1188,27 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 					textContent = protocolMsg.GetKey().GetID() // Store the deleted message ID
 				}
 				log.Info().Str("deletedMessageID", textContent).Str("messageID", evt.Info.ID).Msg("Delete message detected")
+				// Check for message edits
+			} else if protocolMsg := evt.Message.GetProtocolMessage(); protocolMsg != nil && protocolMsg.GetType() == 14 {
+				messageType = "edit"
+				if protocolMsg.GetKey() != nil {
+					replyToMessageID = protocolMsg.GetKey().GetID() // Store the edited message ID
+				}
+				if edited := protocolMsg.GetEditedMessage(); edited != nil {
+					// Extract the replacement text or media caption
+					if conv := edited.GetConversation(); conv != "" {
+						textContent = conv
+					} else if ext := edited.GetExtendedTextMessage(); ext != nil {
+						textContent = ext.GetText()
+					} else if img := edited.GetImageMessage(); img != nil {
+						textContent = img.GetCaption()
+					} else if video := edited.GetVideoMessage(); video != nil {
+						textContent = video.GetCaption()
+					} else if doc := edited.GetDocumentMessage(); doc != nil {
+						textContent = doc.GetCaption()
+					}
+				}
+				log.Info().Str("editedMessageID", replyToMessageID).Str("messageID", evt.Info.ID).Msg("Edit message detected")
 				// Check for reactions
 			} else if reaction := evt.Message.GetReactionMessage(); reaction != nil {
 				messageType = "reaction"
@@ -1214,8 +1235,8 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 				textContent = location.GetName()
 			}
 
-			// Extract text content for non-reaction and non-delete messages
-			if messageType != "reaction" && messageType != "delete" {
+			// Extract text content for other message types
+			if messageType != "reaction" && messageType != "delete" && messageType != "edit" {
 				if conv := evt.Message.GetConversation(); conv != "" {
 					textContent = conv
 				} else if ext := evt.Message.GetExtendedTextMessage(); ext != nil {
