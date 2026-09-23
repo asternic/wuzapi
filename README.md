@@ -656,3 +656,17 @@ distribution makes it eligible for export under the License Exception ENC
 Technology Software Unrestricted (TSU) exception (see the BIS Export
 Administration Regulations, Section 740.13) for both object code and source
 code.
+
+### Message history edits
+
+`/chat/history` returns stored events, newest first, rather than the current state of
+each message. Both live and HistorySync edits are stored as separate `edit` rows:
+`message_id` identifies the edit, `quoted_message_id` identifies its target, and
+`text_content` contains the replacement text or caption, including an empty caption.
+The original message stays unchanged. Consumers must apply edits to their targets;
+use the protocol message's `timestampMS` in `datajson` to order successive edits when
+available, since database timestamps record insertion time, including HistorySync.
+A limited response can include an edit without the original message.
+
+Previously imported `unknown` edits are repaired when redelivered. This does not
+backfill existing history or recover events that WhatsApp does not redeliver.

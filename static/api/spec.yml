@@ -1752,7 +1752,17 @@ paths:
       tags:
         - Chat
       summary: Get chat message history
-      description: Retrieves message history for a specific chat. Returns messages in reverse chronological order (newest first). Requires message history to be enabled on the server.
+      description: |
+        Retrieves message history for a specific chat, newest first. Requires history to be enabled.
+        History contains events, not a materialized view of the latest message contents.
+        An edit is a separate row with message_type `edit`, its own message_id, the target
+        message ID in quoted_message_id, and replacement text or caption in text_content
+        (which can be empty). The original row is not modified. Consumers must apply edits
+        to their targets, using protocolMessage.timestampMS in datajson for edit ordering
+        when available. Database timestamps represent insertion time, including for HistorySync.
+        A limited result may contain an edit without its original message.
+        Live and HistorySync edits use the same fields. Legacy unknown rows are repaired
+        when the same edit is redelivered; existing rows are not scanned or backfilled.
       security:
         - ApiKeyAuth: []
       parameters:

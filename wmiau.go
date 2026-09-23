@@ -26,6 +26,7 @@ import (
 	"go.mau.fi/whatsmeow"
 	"go.mau.fi/whatsmeow/appstate"
 	"go.mau.fi/whatsmeow/proto/waCompanionReg"
+	"go.mau.fi/whatsmeow/proto/waE2E"
 	"go.mau.fi/whatsmeow/store"
 	"go.mau.fi/whatsmeow/types"
 	"go.mau.fi/whatsmeow/types/events"
@@ -1182,32 +1183,17 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 			replyToMessageID := ""
 
 			// Check for delete messages first
-			if protocolMsg := evt.Message.GetProtocolMessage(); protocolMsg != nil && protocolMsg.GetType() == 0 {
+			if protocolMsg := evt.Message.GetProtocolMessage(); protocolMsg != nil && protocolMsg.GetType() == waE2E.ProtocolMessage_REVOKE {
 				messageType = "delete"
 				if protocolMsg.GetKey() != nil {
 					textContent = protocolMsg.GetKey().GetID() // Store the deleted message ID
 				}
 				log.Info().Str("deletedMessageID", textContent).Str("messageID", evt.Info.ID).Msg("Delete message detected")
 				// Check for message edits
-			} else if protocolMsg := evt.Message.GetProtocolMessage(); protocolMsg != nil && protocolMsg.GetType() == 14 {
+			} else if edit, ok := historyEdit(evt.Message); ok {
 				messageType = "edit"
-				if protocolMsg.GetKey() != nil {
-					replyToMessageID = protocolMsg.GetKey().GetID() // Store the edited message ID
-				}
-				if edited := protocolMsg.GetEditedMessage(); edited != nil {
-					// Extract the replacement text or media caption
-					if conv := edited.GetConversation(); conv != "" {
-						textContent = conv
-					} else if ext := edited.GetExtendedTextMessage(); ext != nil {
-						textContent = ext.GetText()
-					} else if img := edited.GetImageMessage(); img != nil {
-						textContent = img.GetCaption()
-					} else if video := edited.GetVideoMessage(); video != nil {
-						textContent = video.GetCaption()
-					} else if doc := edited.GetDocumentMessage(); doc != nil {
-						textContent = doc.GetCaption()
-					}
-				}
+				replyToMessageID = edit.target
+				textContent = edit.text
 				log.Info().Str("editedMessageID", replyToMessageID).Str("messageID", evt.Info.ID).Msg("Edit message detected")
 				// Check for reactions
 			} else if reaction := evt.Message.GetReactionMessage(); reaction != nil {
@@ -1446,7 +1432,12 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 						mediaLink := ""
 						quotedMessageID := ""
 
-						if message.GetConversation() != "" {
+						edit, isEdit := historyEdit(message)
+						if isEdit {
+							messageType = "edit"
+							textContent = edit.text
+							quotedMessageID = edit.target
+						} else if message.GetConversation() != "" {
 							messageType = "text"
 							textContent = message.GetConversation()
 						} else if ext := message.GetExtendedTextMessage(); ext != nil {
@@ -1578,7 +1569,7 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 							"IsDocumentWithCaption": false,
 							"IsLottieSticker":       false,
 							"IsBotInvoke":           false,
-							"IsEdit":                false,
+							"IsEdit":                isEdit,
 							"SourceWebMsg":          nil,
 							"UnavailableRequestID":  "",
 							"RetryCount":            0,
