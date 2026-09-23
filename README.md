@@ -503,6 +503,12 @@ go build .
     </a>
   </td>
 <td align="center">
+    <a href="https://github.com/eliasmeireles">
+      <img src="https://avatars.githubusercontent.com/u/13203692?v=4" width="100px;" style="border-radius:50%;"/><br />
+      <sub><b>eliasmeireles</b></sub>
+    </a>
+  </td>
+<td align="center">
     <a href="https://github.com/jeffersonfelixdev">
       <img src="https://avatars.githubusercontent.com/u/3003222?v=4" width="100px;" style="border-radius:50%;"/><br />
       <sub><b>jeffersonfelixdev</b></sub>
@@ -514,13 +520,13 @@ go build .
       <sub><b>My-con</b></sub>
     </a>
   </td>
+</tr><tr>
 <td align="center">
     <a href="https://github.com/paul-lestyo">
       <img src="https://avatars.githubusercontent.com/u/51690314?v=4" width="100px;" style="border-radius:50%;"/><br />
       <sub><b>paul-lestyo</b></sub>
     </a>
   </td>
-</tr><tr>
 <td align="center">
     <a href="https://github.com/luiis716">
       <img src="https://avatars.githubusercontent.com/u/97978347?v=4" width="100px;" style="border-radius:50%;"/><br />
@@ -543,12 +549,6 @@ go build .
     <a href="https://github.com/gusnips">
       <img src="https://avatars.githubusercontent.com/u/981265?v=4" width="100px;" style="border-radius:50%;"/><br />
       <sub><b>gusnips</b></sub>
-    </a>
-  </td>
-<td align="center">
-    <a href="https://github.com/Flow-Mind-Company">
-      <img src="https://avatars.githubusercontent.com/u/228500487?v=4" width="100px;" style="border-radius:50%;"/><br />
-      <sub><b>Flow-Mind-Company</b></sub>
     </a>
   </td>
 </tr></table>
