@@ -587,12 +587,6 @@ account, the explicit `GET /session/history` endpoint remains available for
 message-based history requests; changing sync days alone does not backfill it.
 Both SQLite and PostgreSQL are supported, with existing accounts defaulting to 0.
 
-Regression tests run on SQLite with `go test ./...`. To run the same migration,
-API, and pairing-payload checks on PostgreSQL, set `WUZAPI_TEST_POSTGRES_DSN` to a
-test database connection string and run `go test -run TestHistorySync ./...`.
-The database role must be able to create schemas; tests create and remove their
-own schemas.
-
 ## Star History
 
 <a href="https://www.star-history.com/?type=date&repos=asternic%2Fwuzapi">
