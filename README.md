@@ -599,7 +599,7 @@ Both SQLite and PostgreSQL are supported, with existing accounts defaulting to 0
 
 ## License
 
-Copyright &copy; 2025 Nicolás Gudiño and contributors
+Copyright &copy; 2026 Nicolás Gudiño and contributors
 
 [MIT](https://choosealicense.com/licenses/mit/)
 
