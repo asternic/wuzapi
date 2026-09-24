@@ -995,6 +995,12 @@ func (s *server) GetStatus() http.HandlerFunc {
 		}
 		proxyConfig := proxyConfigResponse(proxyURL, webhookUseProxy)
 
+		var daysToSyncHistory int
+		if err := s.db.Get(&daysToSyncHistory, s.db.Rebind("SELECT COALESCE(days_to_sync_history, 0) FROM users WHERE id = ?"), txtid); err != nil {
+			s.Respond(w, r, http.StatusInternalServerError, errors.New("failed to read history sync configuration"))
+			return
+		}
+
 		passkeyPending := false
 		var publicKey interface{} = nil
 		if pk := peekPendingPasskey(txtid); pk != nil && pk.Request != nil {
@@ -1003,22 +1009,23 @@ func (s *server) GetStatus() http.HandlerFunc {
 		}
 
 		response := map[string]interface{}{
-			"id":              txtid,
-			"name":            userInfo.Get("Name"),
-			"connected":       isConnected,
-			"loggedIn":        isLoggedIn,
-			"token":           userInfo.Get("Token"),
-			"jid":             jid,
-			"webhook":         userInfo.Get("Webhook"),
-			"events":          userInfo.Get("Events"),
-			"proxy_url":       userInfo.Get("Proxy"),
-			"qrcode":          userInfo.Get("Qrcode"),
-			"passkeyPending":  passkeyPending,
-			"publicKey":       publicKey,
-			"history":         userInfo.Get("History"),
-			"proxy_config":    proxyConfig,
-			"s3_config":       s3Config,
-			"hmac_configured": hmacConfigured,
+			"id":                   txtid,
+			"name":                 userInfo.Get("Name"),
+			"connected":            isConnected,
+			"loggedIn":             isLoggedIn,
+			"token":                userInfo.Get("Token"),
+			"jid":                  jid,
+			"webhook":              userInfo.Get("Webhook"),
+			"events":               userInfo.Get("Events"),
+			"proxy_url":            userInfo.Get("Proxy"),
+			"qrcode":               userInfo.Get("Qrcode"),
+			"passkeyPending":       passkeyPending,
+			"publicKey":            publicKey,
+			"history":              userInfo.Get("History"),
+			"days_to_sync_history": daysToSyncHistory,
+			"proxy_config":         proxyConfig,
+			"s3_config":            s3Config,
+			"hmac_configured":      hmacConfigured,
 		}
 		responseJson, err := json.Marshal(response)
 		if err != nil {
@@ -1093,36 +1100,30 @@ func (s *server) SendDocument() http.HandlerFunc {
 		}
 
 		var uploaded whatsmeow.UploadResponse
-		var filedata []byte
-
-		if strings.HasPrefix(t.Document, "data:") {
-			var dataURL, err = dataurl.DecodeString(t.Document)
-			if err != nil {
-				s.Respond(w, r, http.StatusBadRequest, errors.New("could not decode base64 encoded data from payload"))
-				return
-			}
-			filedata = dataURL.Data
-		} else if isHTTPURL(t.Document) {
-			data, ct, err := fetchURLBytes(r.Context(), t.Document, fetchDocumentMaxBytes)
-			if err != nil {
-				s.Respond(w, r, http.StatusBadRequest, errors.New(fmt.Sprintf("failed to fetch document from url: %v", err)))
-				return
-			}
-			if t.MimeType == "" {
-				t.MimeType = ct
-			}
-			filedata = data
-		} else {
+		if !strings.HasPrefix(t.Document, "data:") && !isHTTPURL(t.Document) {
 			s.Respond(w, r, http.StatusBadRequest, errors.New("document data should start with \"data:\" or be a valid HTTP URL"))
 			return
 		}
-
-		mimeType := t.MimeType
-		if mimeType == "" {
-			mimeType = http.DetectContentType(filedata)
+		media, err := readOutgoingMedia(r.Context(), t.Document, fetchDocumentMaxBytes)
+		if err != nil {
+			message := "could not decode base64 encoded data from payload"
+			if isHTTPURL(t.Document) {
+				message = fmt.Sprintf("failed to fetch document from url: %v", err)
+			}
+			s.Respond(w, r, http.StatusBadRequest, errors.New(message))
+			return
+		}
+		defer media.Close()
+		sniffed, err := media.sniff()
+		if err != nil {
+			s.Respond(w, r, http.StatusInternalServerError, err)
+			return
+		}
+		if isHTTPURL(t.Document) && t.MimeType == "" {
+			t.MimeType = media.MIME
 		}
 
-		uploaded, err = clientManager.GetWhatsmeowClient(txtid).Upload(context.Background(), filedata, whatsmeow.MediaDocument)
+		uploaded, err = uploadMedia(r.Context(), clientManager.GetWhatsmeowClient(txtid), media, whatsmeow.MediaDocument)
 		if err != nil {
 			s.Respond(w, r, http.StatusInternalServerError, errors.New(fmt.Sprintf("failed to upload file: %v", err)))
 			return
@@ -1137,11 +1138,11 @@ func (s *server) SendDocument() http.HandlerFunc {
 				if t.MimeType != "" {
 					return t.MimeType
 				}
-				return http.DetectContentType(filedata)
+				return sniffed
 			}()),
 			FileEncSHA256: uploaded.FileEncSHA256,
 			FileSHA256:    uploaded.FileSHA256,
-			FileLength:    proto.Uint64(uint64(len(filedata))),
+			FileLength:    proto.Uint64(uint64(media.Size)),
 			Caption:       proto.String(t.Caption),
 		}}
 
@@ -1263,36 +1264,28 @@ func (s *server) SendAudio() http.HandlerFunc {
 		}
 
 		var uploaded whatsmeow.UploadResponse
-		var filedata []byte
-		var detectedMime string
-
-		if strings.HasPrefix(t.Audio, "data:audio/") {
-
-			dataURL, err := dataurl.DecodeString(t.Audio)
-			if err != nil {
-				s.Respond(w, r, http.StatusBadRequest, errors.New("could not decode base64 encoded data"))
-				return
-			}
-
-			filedata = dataURL.Data
-			detectedMime = dataURL.ContentType()
-
-		} else if isHTTPURL(t.Audio) {
-
-			data, ct, err := fetchURLBytes(r.Context(), t.Audio, fetchAudioMaxBytes)
-			if err != nil {
-				s.Respond(w, r, http.StatusBadRequest, errors.New(fmt.Sprintf("failed to fetch audio: %v", err)))
-				return
-			}
-
-			filedata = data
-			if strings.HasPrefix(strings.ToLower(ct), "audio/") {
-				detectedMime = ct
-			}
-
-		} else {
+		if !strings.HasPrefix(t.Audio, "data:audio/") && !isHTTPURL(t.Audio) {
 			s.Respond(w, r, http.StatusBadRequest, errors.New("audio must be base64 (data:audio/) or valid HTTP URL"))
 			return
+		}
+		media, err := readOutgoingMedia(r.Context(), t.Audio, fetchAudioMaxBytes)
+		if err != nil {
+			message := "could not decode base64 encoded data"
+			if isHTTPURL(t.Audio) {
+				message = fmt.Sprintf("failed to fetch audio: %v", err)
+			}
+			s.Respond(w, r, http.StatusBadRequest, errors.New(message))
+			return
+		}
+		defer media.Close()
+		sniffed, err := media.sniff()
+		if err != nil {
+			s.Respond(w, r, http.StatusInternalServerError, err)
+			return
+		}
+		detectedMime := ""
+		if strings.HasPrefix(t.Audio, "data:audio/") || strings.HasPrefix(strings.ToLower(media.MIME), "audio/") {
+			detectedMime = media.MIME
 		}
 
 		ptt := true
@@ -1306,8 +1299,8 @@ func (s *server) SendAudio() http.HandlerFunc {
 			mime = t.MimeType
 		case detectedMime != "":
 			mime = detectedMime
-		case http.DetectContentType(filedata) != "application/octet-stream":
-			mime = http.DetectContentType(filedata)
+		case sniffed != "application/octet-stream":
+			mime = sniffed
 		default:
 			if ptt {
 				mime = "audio/ogg; codecs=opus"
@@ -1316,7 +1309,7 @@ func (s *server) SendAudio() http.HandlerFunc {
 			}
 		}
 
-		uploaded, err = client.Upload(context.Background(), filedata, whatsmeow.MediaAudio)
+		uploaded, err = uploadMedia(r.Context(), client, media, whatsmeow.MediaAudio)
 		if err != nil {
 			s.Respond(w, r, http.StatusInternalServerError, errors.New(fmt.Sprintf("failed to upload file: %v", err)))
 			return
@@ -1330,7 +1323,7 @@ func (s *server) SendAudio() http.HandlerFunc {
 				Mimetype:      &mime,
 				FileEncSHA256: uploaded.FileEncSHA256,
 				FileSHA256:    uploaded.FileSHA256,
-				FileLength:    proto.Uint64(uint64(len(filedata))),
+				FileLength:    proto.Uint64(uint64(media.Size)),
 				PTT:           &ptt,
 				Seconds:       proto.Uint32(t.Seconds),
 				Waveform:      t.Waveform,
@@ -1469,58 +1462,35 @@ func (s *server) SendImage() http.HandlerFunc {
 		}
 
 		var uploaded whatsmeow.UploadResponse
-		var filedata []byte
-		var thumbnailBytes []byte
-
-		if len(t.Image) >= 10 && t.Image[0:10] == "data:image" {
-			var dataURL, err = dataurl.DecodeString(t.Image)
-			if err != nil {
-				s.Respond(w, r, http.StatusBadRequest, errors.New("could not decode base64 encoded data from payload"))
-				return
-			} else {
-				filedata = dataURL.Data
-			}
-		} else if isHTTPURL(t.Image) {
-			data, ct, err := fetchURLBytes(r.Context(), t.Image, fetchImageMaxBytes)
-			if err != nil {
-				s.Respond(w, r, http.StatusBadRequest, errors.New(fmt.Sprintf("failed to fetch image from url: %v", err)))
-				return
-			}
-			mimeType := ct
-			if !strings.HasPrefix(strings.ToLower(mimeType), "image/") {
-				mimeType = "image/jpeg"
-			}
-			imgDataURL := dataurl.New(data, mimeType)
-			parsed, err := dataurl.DecodeString(imgDataURL.String())
-			if err != nil {
-				s.Respond(w, r, http.StatusInternalServerError, errors.New("could not re-encode image to base64"))
-				return
-			}
-			filedata = parsed.Data
-		} else {
+		if !strings.HasPrefix(t.Image, "data:image") && !isHTTPURL(t.Image) {
 			s.Respond(w, r, http.StatusBadRequest, errors.New("Image data should start with \"data:image/png;base64,\""))
 			return
 		}
+		media, err := readOutgoingMedia(r.Context(), t.Image, fetchImageMaxBytes)
+		if err != nil {
+			message := "could not decode base64 encoded data from payload"
+			if isHTTPURL(t.Image) {
+				message = fmt.Sprintf("failed to fetch image from url: %v", err)
+			}
+			s.Respond(w, r, http.StatusBadRequest, errors.New(message))
+			return
+		}
+		defer media.Close()
+		sniffed, err := media.sniff()
+		if err != nil {
+			s.Respond(w, r, http.StatusInternalServerError, err)
+			return
+		}
 
-		uploaded, err = clientManager.GetWhatsmeowClient(txtid).Upload(context.Background(), filedata, whatsmeow.MediaImage)
+		uploaded, err = uploadMedia(r.Context(), clientManager.GetWhatsmeowClient(txtid), media, whatsmeow.MediaImage)
 		if err != nil {
 			s.Respond(w, r, http.StatusInternalServerError, errors.New(fmt.Sprintf("failed to upload file: %v", err)))
 			return
 		}
 
-		// decode jpeg into image.Image
-		reader := bytes.NewReader(filedata)
-		img, _, err := image.Decode(reader)
+		thumbnailBytes, err := mediaThumbnail(r.Context(), media)
 		if err != nil {
-			s.Respond(w, r, http.StatusInternalServerError, errors.New(fmt.Sprintf("could not decode image for thumbnail preparation: %v", err)))
-			return
-		}
-
-		// resize to 72x72 (preserving aspect ratio) and encode the thumbnail in
-		// memory — no temp file, so there is nothing to leak.
-		thumbnailBytes, err = jpegThumbnail(img, 72, 72)
-		if err != nil {
-			s.Respond(w, r, http.StatusInternalServerError, errors.New(fmt.Sprintf("Failed to encode jpeg thumbnail: %v", err)))
+			s.Respond(w, r, http.StatusInternalServerError, err)
 			return
 		}
 
@@ -1533,11 +1503,11 @@ func (s *server) SendImage() http.HandlerFunc {
 				if t.MimeType != "" {
 					return t.MimeType
 				}
-				return http.DetectContentType(filedata)
+				return sniffed
 			}()),
 			FileEncSHA256: uploaded.FileEncSHA256,
 			FileSHA256:    uploaded.FileSHA256,
-			FileLength:    proto.Uint64(uint64(len(filedata))),
+			FileLength:    proto.Uint64(uint64(media.Size)),
 			JPEGThumbnail: thumbnailBytes,
 		}}
 
@@ -1661,28 +1631,22 @@ func (s *server) SendSticker() http.HandlerFunc {
 			msgid = t.Id
 		}
 
-		if isHTTPURL(t.Sticker) {
-			data, ct, err := fetchURLBytes(r.Context(), t.Sticker, fetchImageMaxBytes)
-			if err != nil {
-				s.Respond(w, r, http.StatusBadRequest, errors.New(fmt.Sprintf("failed to fetch sticker from url: %v", err)))
-				return
-			}
-			mimeType := ct
-			if !strings.HasPrefix(strings.ToLower(mimeType), "image/") {
-				mimeType = "image/webp"
-			}
-			imgDataURL := dataurl.New(data, mimeType)
-			t.Sticker = imgDataURL.String()
+		if !strings.HasPrefix(t.Sticker, "data") && !isHTTPURL(t.Sticker) {
+			s.Respond(w, r, http.StatusBadRequest, errors.New("data should start with \"data:mime/type;base64,\""))
+			return
 		}
+		source, err := readOutgoingMedia(r.Context(), t.Sticker, fetchImageMaxBytes)
+		if err != nil {
+			message := "could not decode base64 encoded data from payload"
+			if isHTTPURL(t.Sticker) {
+				message = fmt.Sprintf("failed to fetch sticker from url: %v", err)
+			}
+			s.Respond(w, r, http.StatusBadRequest, errors.New(message))
+			return
+		}
+		defer source.Close()
+		processed, err := processStickerFile(r.Context(), source, t.MimeType, t.PackId, t.PackName, t.PackPublisher, t.Emojis)
 
-		processedData, detectedMimeType, err := processStickerData(
-			t.Sticker,
-			t.MimeType,
-			t.PackId,
-			t.PackName,
-			t.PackPublisher,
-			t.Emojis,
-		)
 		if err != nil {
 			log.Error().Err(err).Msg("Failed to process sticker data")
 			status := http.StatusBadRequest
@@ -1693,7 +1657,8 @@ func (s *server) SendSticker() http.HandlerFunc {
 			return
 		}
 
-		uploaded, err := clientManager.GetWhatsmeowClient(txtid).Upload(context.Background(), processedData, whatsmeow.MediaImage)
+		defer processed.Close()
+		uploaded, err := uploadMedia(r.Context(), clientManager.GetWhatsmeowClient(txtid), processed, whatsmeow.MediaImage)
 		if err != nil {
 			s.Respond(w, r, http.StatusInternalServerError, errors.New(fmt.Sprintf("Failed to upload file: %v", err)))
 			return
@@ -1703,10 +1668,10 @@ func (s *server) SendSticker() http.HandlerFunc {
 			URL:           proto.String(uploaded.URL),
 			DirectPath:    proto.String(uploaded.DirectPath),
 			MediaKey:      uploaded.MediaKey,
-			Mimetype:      proto.String(detectedMimeType),
+			Mimetype:      proto.String(processed.MIME),
 			FileEncSHA256: uploaded.FileEncSHA256,
 			FileSHA256:    uploaded.FileSHA256,
-			FileLength:    proto.Uint64(uint64(len(processedData))),
+			FileLength:    proto.Uint64(uint64(processed.Size)),
 			PngThumbnail:  t.PngThumbnail,
 		}}
 
@@ -1827,41 +1792,27 @@ func (s *server) SendVideo() http.HandlerFunc {
 		}
 
 		var uploaded whatsmeow.UploadResponse
-		var filedata []byte
-
-		if t.Video[0:4] == "data" {
-			var dataURL, err = dataurl.DecodeString(t.Video)
-			if err != nil {
-				s.Respond(w, r, http.StatusBadRequest, errors.New("could not decode base64 encoded data from payload"))
-				return
-			} else {
-				filedata = dataURL.Data
-
-			}
-		} else if isHTTPURL(t.Video) {
-			data, ct, err := fetchURLBytes(r.Context(), t.Video, fetchVideoMaxBytes)
-			if err != nil {
-				s.Respond(w, r, http.StatusBadRequest, errors.New(fmt.Sprintf("failed to fetch video from url: %v", err)))
-				return
-			}
-			mimeType := ct
-			if !strings.HasPrefix(strings.ToLower(mimeType), "video/") {
-				mimeType = "video/mpeg"
-			}
-			imgDataURL := dataurl.New(data, mimeType)
-			parsed, err := dataurl.DecodeString(imgDataURL.String())
-			if err != nil {
-				s.Respond(w, r, http.StatusInternalServerError, errors.New("could not re-encode video to base64"))
-				return
-			}
-			filedata = parsed.Data
-
-		} else {
+		if !strings.HasPrefix(t.Video, "data") && !isHTTPURL(t.Video) {
 			s.Respond(w, r, http.StatusBadRequest, errors.New("data should start with \"data:mime/type;base64,\""))
 			return
 		}
+		media, err := readOutgoingMedia(r.Context(), t.Video, fetchVideoMaxBytes)
+		if err != nil {
+			message := "could not decode base64 encoded data from payload"
+			if isHTTPURL(t.Video) {
+				message = fmt.Sprintf("failed to fetch video from url: %v", err)
+			}
+			s.Respond(w, r, http.StatusBadRequest, errors.New(message))
+			return
+		}
+		defer media.Close()
+		sniffed, err := media.sniff()
+		if err != nil {
+			s.Respond(w, r, http.StatusInternalServerError, err)
+			return
+		}
 
-		uploaded, err = clientManager.GetWhatsmeowClient(txtid).Upload(context.Background(), filedata, whatsmeow.MediaVideo)
+		uploaded, err = uploadMedia(r.Context(), clientManager.GetWhatsmeowClient(txtid), media, whatsmeow.MediaVideo)
 		if err != nil {
 			s.Respond(w, r, http.StatusInternalServerError, errors.New(fmt.Sprintf("failed to upload file: %v", err)))
 			return
@@ -1876,11 +1827,11 @@ func (s *server) SendVideo() http.HandlerFunc {
 				if t.MimeType != "" {
 					return t.MimeType
 				}
-				return http.DetectContentType(filedata)
+				return sniffed
 			}()),
 			FileEncSHA256: uploaded.FileEncSHA256,
 			FileSHA256:    uploaded.FileSHA256,
-			FileLength:    proto.Uint64(uint64(len(filedata))),
+			FileLength:    proto.Uint64(uint64(media.Size)),
 			JPEGThumbnail: t.JPEGThumbnail,
 		}}
 
@@ -2321,31 +2272,17 @@ func (s *server) SendButtons() http.HandlerFunc {
 			msgid = client.GenerateMessageID()
 		}
 
-		// --- Upload de Imagem (Header) ---
+		// Optional button images remain best-effort.
 		var imgMsg *waE2E.ImageMessage
-		if t.Image != "" {
-			var filedata []byte
-			if len(t.Image) > 10 && t.Image[:10] == "data:image" {
-				if du, decErr := dataurl.DecodeString(t.Image); decErr == nil {
-					filedata = du.Data
-				}
-			} else if isHTTPURL(t.Image) {
-				if data, _, fetchErr := fetchURLBytes(r.Context(), t.Image, openGraphImageMaxBytes); fetchErr == nil {
-					filedata = data
-				}
-			}
-
-			if len(filedata) > 0 {
-				uploaded, uploadErr := client.Upload(context.Background(), filedata, whatsmeow.MediaImage)
-				if uploadErr == nil {
-					imgMsg = &waE2E.ImageMessage{
-						URL:           proto.String(uploaded.URL),
-						DirectPath:    proto.String(uploaded.DirectPath),
-						MediaKey:      uploaded.MediaKey,
-						Mimetype:      proto.String(http.DetectContentType(filedata)),
-						FileEncSHA256: uploaded.FileEncSHA256,
-						FileSHA256:    uploaded.FileSHA256,
-						FileLength:    proto.Uint64(uint64(len(filedata))),
+		if strings.HasPrefix(t.Image, "data:image") || isHTTPURL(t.Image) {
+			media, readErr := readOutgoingMedia(r.Context(), t.Image, openGraphImageMaxBytes)
+			if readErr == nil {
+				defer media.Close()
+				if media.Size > 0 {
+					uploaded, uploadErr := uploadMedia(r.Context(), client, media, whatsmeow.MediaImage)
+					mimeType, sniffErr := media.sniff()
+					if uploadErr == nil && sniffErr == nil {
+						imgMsg = &waE2E.ImageMessage{URL: proto.String(uploaded.URL), DirectPath: proto.String(uploaded.DirectPath), MediaKey: uploaded.MediaKey, Mimetype: proto.String(mimeType), FileEncSHA256: uploaded.FileEncSHA256, FileSHA256: uploaded.FileSHA256, FileLength: proto.Uint64(uint64(media.Size))}
 					}
 				}
 			}
@@ -2768,7 +2705,7 @@ func (s *server) SetStatusMessage() http.HandlerFunc {
 
 		msg := proto.String(t.Body)
 
-		err = clientManager.GetWhatsmeowClient(txtid).SetStatusMessage(context.Background(), *msg)
+		err = clientManager.GetWhatsmeowClient(txtid).SetStatusMessage(context.Background(), types.SetStatusInput{Text: msg})
 		if err != nil {
 			s.Respond(w, r, http.StatusInternalServerError, errors.New(fmt.Sprintf("error sending status message: %v", err)))
 			return
@@ -3016,41 +2953,36 @@ func (s *server) SendPoll() http.HandlerFunc {
 func (s *server) DeleteMessage() http.HandlerFunc {
 
 	type textStruct struct {
-		Phone string
-		Id    string
+		Phone     string
+		Id        string
+		SenderJID string
 	}
 
 	return func(w http.ResponseWriter, r *http.Request) {
 
 		txtid := r.Context().Value("userinfo").(Values).Get("Id")
 
-		if clientManager.GetWhatsmeowClient(txtid) == nil {
+		client := clientManager.GetWhatsmeowClient(txtid)
+		if client == nil {
 			s.Respond(w, r, http.StatusInternalServerError, errors.New("no session"))
 			return
 		}
 
-		msgid := ""
-		var resp whatsmeow.SendResponse
-
-		decoder := json.NewDecoder(r.Body)
 		var t textStruct
-		err := decoder.Decode(&t)
-		if err != nil {
-			s.Respond(w, r, http.StatusBadRequest, errors.New("could not decode Payload"))
+		if err := json.NewDecoder(r.Body).Decode(&t); err != nil {
+			s.Respond(w, r, http.StatusBadRequest, errors.New("could not decode payload"))
 			return
 		}
 
 		if t.Phone == "" {
-			s.Respond(w, r, http.StatusBadRequest, errors.New("missing Phone in Payload"))
+			s.Respond(w, r, http.StatusBadRequest, errors.New("missing Phone in payload"))
 			return
 		}
 
 		if t.Id == "" {
-			s.Respond(w, r, http.StatusBadRequest, errors.New("missing Id in Payload"))
+			s.Respond(w, r, http.StatusBadRequest, errors.New("missing Id in payload"))
 			return
 		}
-
-		msgid = t.Id
 
 		recipient, ok := parseJID(t.Phone)
 		if !ok {
@@ -3058,22 +2990,35 @@ func (s *server) DeleteMessage() http.HandlerFunc {
 			return
 		}
 
-		resp, err = clientManager.GetWhatsmeowClient(txtid).SendMessage(context.Background(), recipient, clientManager.GetWhatsmeowClient(txtid).BuildRevoke(recipient, types.EmptyJID, msgid))
+		message, err := buildDeleteMessage(client, recipient, t.SenderJID, t.Id)
+		if err != nil {
+			s.Respond(w, r, http.StatusBadRequest, err)
+			return
+		}
+
+		resp, err := client.SendMessage(
+			r.Context(),
+			recipient,
+			message,
+		)
 		if err != nil {
 			s.Respond(w, r, http.StatusInternalServerError, errors.New(fmt.Sprintf("error sending message: %v", err)))
 			return
 		}
 
-		log.Info().Str("timestamp", fmt.Sprintf("%v", resp.Timestamp)).Str("id", msgid).Msg("Message deleted")
-		response := map[string]interface{}{"Details": "Deleted", "Timestamp": resp.Timestamp.Unix(), "Id": msgid}
+		log.Info().Str("timestamp", fmt.Sprintf("%v", resp.Timestamp)).Str("id", t.Id).Msg("Message deleted")
+		response := map[string]interface{}{
+			"Details":   "Deleted",
+			"Timestamp": resp.Timestamp.Unix(),
+			"Id":        t.Id,
+		}
+
 		responseJson, err := json.Marshal(response)
 		if err != nil {
 			s.Respond(w, r, http.StatusInternalServerError, err)
 		} else {
 			s.Respond(w, r, http.StatusOK, string(responseJson))
 		}
-
-		return
 	}
 }
 
@@ -5634,21 +5579,148 @@ func (s *server) ListNewsletter() http.HandlerFunc {
 	}
 }
 
+// NewsletterJoin follows (joins) a WhatsApp channel.
+func (s *server) NewsletterJoin() http.HandlerFunc {
+	type newsletterJoinStruct struct {
+		NewsletterJID string
+	}
+
+	return func(w http.ResponseWriter, r *http.Request) {
+		txtid := r.Context().Value("userinfo").(Values).Get("Id")
+		client := clientManager.GetWhatsmeowClient(txtid)
+		if client == nil {
+			s.Respond(w, r, http.StatusInternalServerError, errors.New("no session"))
+			return
+		}
+
+		var t newsletterJoinStruct
+		if err := json.NewDecoder(r.Body).Decode(&t); err != nil {
+			s.Respond(w, r, http.StatusBadRequest, errors.New("could not decode Payload"))
+			return
+		}
+
+		newsletter, ok := parseNewsletterJID(t.NewsletterJID)
+		if !ok {
+			s.Respond(w, r, http.StatusBadRequest, errors.New("could not parse NewsletterJID"))
+			return
+		}
+
+		if err := client.FollowNewsletter(context.Background(), newsletter); err != nil {
+			msg := fmt.Sprintf("failed to join newsletter: %v", err)
+			log.Error().Msg(msg)
+			s.Respond(w, r, http.StatusInternalServerError, msg)
+			return
+		}
+
+		s.respondNewsletterSuccess(w, r, "Newsletter joined successfully")
+	}
+}
+
+// NewsletterLeave unfollows (leaves) a WhatsApp channel.
+func (s *server) NewsletterLeave() http.HandlerFunc {
+	type newsletterLeaveStruct struct {
+		NewsletterJID string
+	}
+
+	return func(w http.ResponseWriter, r *http.Request) {
+		txtid := r.Context().Value("userinfo").(Values).Get("Id")
+		client := clientManager.GetWhatsmeowClient(txtid)
+		if client == nil {
+			s.Respond(w, r, http.StatusInternalServerError, errors.New("no session"))
+			return
+		}
+
+		var t newsletterLeaveStruct
+		if err := json.NewDecoder(r.Body).Decode(&t); err != nil {
+			s.Respond(w, r, http.StatusBadRequest, errors.New("could not decode Payload"))
+			return
+		}
+
+		newsletter, ok := parseNewsletterJID(t.NewsletterJID)
+		if !ok {
+			s.Respond(w, r, http.StatusBadRequest, errors.New("could not parse NewsletterJID"))
+			return
+		}
+
+		if err := client.UnfollowNewsletter(context.Background(), newsletter); err != nil {
+			msg := fmt.Sprintf("failed to leave newsletter: %v", err)
+			log.Error().Msg(msg)
+			s.Respond(w, r, http.StatusInternalServerError, msg)
+			return
+		}
+
+		s.respondNewsletterSuccess(w, r, "Newsletter left successfully")
+	}
+}
+
+// NewsletterMute changes whether notifications for a WhatsApp channel are muted.
+func (s *server) NewsletterMute() http.HandlerFunc {
+	type newsletterMuteStruct struct {
+		NewsletterJID string
+		Mute          bool
+	}
+
+	return func(w http.ResponseWriter, r *http.Request) {
+		txtid := r.Context().Value("userinfo").(Values).Get("Id")
+		client := clientManager.GetWhatsmeowClient(txtid)
+		if client == nil {
+			s.Respond(w, r, http.StatusInternalServerError, errors.New("no session"))
+			return
+		}
+
+		var t newsletterMuteStruct
+		if err := json.NewDecoder(r.Body).Decode(&t); err != nil {
+			s.Respond(w, r, http.StatusBadRequest, errors.New("could not decode Payload"))
+			return
+		}
+
+		newsletter, ok := parseNewsletterJID(t.NewsletterJID)
+		if !ok {
+			s.Respond(w, r, http.StatusBadRequest, errors.New("could not parse NewsletterJID"))
+			return
+		}
+
+		if err := client.NewsletterToggleMute(context.Background(), newsletter, t.Mute); err != nil {
+			msg := fmt.Sprintf("failed to change newsletter mute status: %v", err)
+			log.Error().Msg(msg)
+			s.Respond(w, r, http.StatusInternalServerError, msg)
+			return
+		}
+
+		s.respondNewsletterSuccess(w, r, "Newsletter mute status changed successfully")
+	}
+}
+
+func parseNewsletterJID(value string) (types.JID, bool) {
+	jid, ok := parseJID(value)
+	return jid, ok && jid.Server == types.NewsletterServer
+}
+
+func (s *server) respondNewsletterSuccess(w http.ResponseWriter, r *http.Request, details string) {
+	responseJSON, err := json.Marshal(map[string]interface{}{"Details": details})
+	if err != nil {
+		s.Respond(w, r, http.StatusInternalServerError, err)
+		return
+	}
+	s.Respond(w, r, http.StatusOK, string(responseJSON))
+}
+
 // Admin List users
 func (s *server) ListUsers() http.HandlerFunc {
 	type usersStruct struct {
-		Id              string         `db:"id"`
-		Name            string         `db:"name"`
-		Token           string         `db:"token"`
-		Webhook         string         `db:"webhook"`
-		Jid             string         `db:"jid"`
-		Qrcode          string         `db:"qrcode"`
-		Connected       sql.NullBool   `db:"connected"`
-		Expiration      sql.NullInt64  `db:"expiration"`
-		ProxyURL        sql.NullString `db:"proxy_url"`
-		WebhookUseProxy bool           `db:"webhook_use_proxy"`
-		Events          string         `db:"events"`
-		History         sql.NullInt64  `db:"history"`
+		Id                string         `db:"id"`
+		Name              string         `db:"name"`
+		Token             string         `db:"token"`
+		Webhook           string         `db:"webhook"`
+		Jid               string         `db:"jid"`
+		Qrcode            string         `db:"qrcode"`
+		Connected         sql.NullBool   `db:"connected"`
+		Expiration        sql.NullInt64  `db:"expiration"`
+		ProxyURL          sql.NullString `db:"proxy_url"`
+		WebhookUseProxy   bool           `db:"webhook_use_proxy"`
+		Events            string         `db:"events"`
+		History           sql.NullInt64  `db:"history"`
+		DaysToSyncHistory int            `db:"days_to_sync_history"`
 	}
 	return func(w http.ResponseWriter, r *http.Request) {
 		vars := mux.Vars(r)
@@ -5659,11 +5731,11 @@ func (s *server) ListUsers() http.HandlerFunc {
 
 		if hasID {
 			// Fetch a single user
-			query = "SELECT id, name, token, webhook, jid, qrcode, connected, expiration, proxy_url, COALESCE(webhook_use_proxy, true) AS webhook_use_proxy, events, history FROM users WHERE id = $1"
+			query = "SELECT id, name, token, webhook, jid, qrcode, connected, expiration, proxy_url, COALESCE(webhook_use_proxy, true) AS webhook_use_proxy, events, history, COALESCE(days_to_sync_history, 0) AS days_to_sync_history FROM users WHERE id = $1"
 			args = append(args, userID)
 		} else {
 			// Fetch all users
-			query = "SELECT id, name, token, webhook, jid, qrcode, connected, expiration, proxy_url, COALESCE(webhook_use_proxy, true) AS webhook_use_proxy, events, history FROM users"
+			query = "SELECT id, name, token, webhook, jid, qrcode, connected, expiration, proxy_url, COALESCE(webhook_use_proxy, true) AS webhook_use_proxy, events, history, COALESCE(days_to_sync_history, 0) AS days_to_sync_history FROM users"
 		}
 
 		rows, err := s.db.Queryx(query, args...)
@@ -5702,17 +5774,19 @@ func (s *server) ListUsers() http.HandlerFunc {
 
 			//"connected":  user.Connected.Bool,
 			userMap := map[string]interface{}{
-				"id":         user.Id,
-				"name":       user.Name,
-				"token":      user.Token,
-				"webhook":    user.Webhook,
-				"jid":        user.Jid,
-				"qrcode":     user.Qrcode,
-				"connected":  isConnected,
-				"loggedIn":   isLoggedIn,
-				"expiration": user.Expiration.Int64,
-				"proxy_url":  user.ProxyURL.String,
-				"events":     user.Events,
+				"id":                   user.Id,
+				"name":                 user.Name,
+				"token":                user.Token,
+				"webhook":              user.Webhook,
+				"jid":                  user.Jid,
+				"qrcode":               user.Qrcode,
+				"connected":            isConnected,
+				"loggedIn":             isLoggedIn,
+				"expiration":           user.Expiration.Int64,
+				"proxy_url":            user.ProxyURL.String,
+				"events":               user.Events,
+				"history":              user.History.Int64,
+				"days_to_sync_history": user.DaysToSyncHistory,
 			}
 			// Add proxy_config
 			proxyURL := user.ProxyURL.String
@@ -5782,15 +5856,16 @@ func (s *server) AddUser() http.HandlerFunc {
 
 		// Parse the request body
 		var user struct {
-			Name        string       `json:"name"`
-			Token       string       `json:"token"`
-			Webhook     string       `json:"webhook,omitempty"`
-			Expiration  int          `json:"expiration,omitempty"`
-			Events      string       `json:"events,omitempty"`
-			ProxyConfig *ProxyConfig `json:"proxyConfig,omitempty"`
-			S3Config    *S3Config    `json:"s3Config,omitempty"`
-			HmacKey     string       `json:"hmacKey,omitempty"`
-			History     int          `json:"history,omitempty"`
+			Name              string       `json:"name"`
+			Token             string       `json:"token"`
+			Webhook           string       `json:"webhook,omitempty"`
+			Expiration        int          `json:"expiration,omitempty"`
+			Events            string       `json:"events,omitempty"`
+			ProxyConfig       *ProxyConfig `json:"proxyConfig,omitempty"`
+			S3Config          *S3Config    `json:"s3Config,omitempty"`
+			HmacKey           string       `json:"hmacKey,omitempty"`
+			History           int          `json:"history,omitempty"`
+			DaysToSyncHistory *int         `json:"days_to_sync_history,omitempty"`
 		}
 
 		if err := json.NewDecoder(r.Body).Decode(&user); err != nil {
@@ -5801,6 +5876,13 @@ func (s *server) AddUser() http.HandlerFunc {
 				"success": false,
 			})
 			return
+		}
+
+		if user.DaysToSyncHistory != nil {
+			if err := validateHistorySyncDays(*user.DaysToSyncHistory); err != nil {
+				s.Respond(w, r, http.StatusBadRequest, err)
+				return
+			}
 		}
 
 		log.Info().Interface("proxyConfig", user.ProxyConfig).Interface("s3Config", user.S3Config).Msg("Received values for proxyConfig and s3Config")
@@ -5898,9 +5980,9 @@ func (s *server) AddUser() http.HandlerFunc {
 
 		// Insert user with all proxy, S3 and HMAC fields
 		if _, err = s.db.Exec(
-			"INSERT INTO users (id, name, token, webhook, expiration, events, jid, qrcode, proxy_url, webhook_use_proxy, s3_enabled, s3_endpoint, s3_region, s3_bucket, s3_access_key, s3_secret_key, s3_path_style, s3_public_url, media_delivery, s3_retention_days, hmac_key, history) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)",
+			"INSERT INTO users (id, name, token, webhook, expiration, events, jid, qrcode, proxy_url, webhook_use_proxy, s3_enabled, s3_endpoint, s3_region, s3_bucket, s3_access_key, s3_secret_key, s3_path_style, s3_public_url, media_delivery, s3_retention_days, hmac_key, history, days_to_sync_history) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, COALESCE($23, 0))",
 			id, user.Name, user.Token, user.Webhook, user.Expiration, user.Events, "", "", user.ProxyConfig.ProxyURL, webhookUseProxy,
-			user.S3Config.Enabled, user.S3Config.Endpoint, user.S3Config.Region, user.S3Config.Bucket, user.S3Config.AccessKey, user.S3Config.SecretKey, user.S3Config.PathStyle, user.S3Config.PublicURL, user.S3Config.MediaDelivery, user.S3Config.RetentionDays, encryptedHmacKey, user.History,
+			user.S3Config.Enabled, user.S3Config.Endpoint, user.S3Config.Region, user.S3Config.Bucket, user.S3Config.AccessKey, user.S3Config.SecretKey, user.S3Config.PathStyle, user.S3Config.PublicURL, user.S3Config.MediaDelivery, user.S3Config.RetentionDays, encryptedHmacKey, user.History, user.DaysToSyncHistory,
 		); err != nil {
 			log.Error().Str("error", fmt.Sprintf("%v", err)).Msg("admin DB error")
 			s.respondWithJSON(w, http.StatusInternalServerError, map[string]interface{}{
@@ -5942,15 +6024,20 @@ func (s *server) AddUser() http.HandlerFunc {
 			"retention_days": user.S3Config.RetentionDays,
 		}
 		userMap := map[string]interface{}{
-			"id":           id,
-			"name":         user.Name,
-			"token":        user.Token,
-			"webhook":      user.Webhook,
-			"expiration":   user.Expiration,
-			"events":       user.Events,
-			"proxy_config": proxyConfig,
-			"s3_config":    s3Config,
-			"hmac_key":     user.HmacKey != "",
+			"id":                   id,
+			"name":                 user.Name,
+			"token":                user.Token,
+			"webhook":              user.Webhook,
+			"expiration":           user.Expiration,
+			"events":               user.Events,
+			"proxy_config":         proxyConfig,
+			"s3_config":            s3Config,
+			"hmac_key":             user.HmacKey != "",
+			"history":              user.History,
+			"days_to_sync_history": 0,
+		}
+		if user.DaysToSyncHistory != nil {
+			userMap["days_to_sync_history"] = *user.DaysToSyncHistory
 		}
 		s.respondWithJSON(w, http.StatusCreated, map[string]interface{}{
 			"code":    http.StatusCreated,
@@ -5971,14 +6058,15 @@ func (s *server) EditUser() http.HandlerFunc {
 
 		// Parse the request body
 		var user struct {
-			Name        string       `json:"name,omitempty"`
-			Token       string       `json:"token,omitempty"`
-			Webhook     string       `json:"webhook,omitempty"`
-			Expiration  int          `json:"expiration,omitempty"`
-			Events      string       `json:"events,omitempty"`
-			ProxyConfig *ProxyConfig `json:"proxyConfig,omitempty"`
-			S3Config    *S3Config    `json:"s3Config,omitempty"`
-			History     int          `json:"history,omitempty"`
+			Name              string       `json:"name,omitempty"`
+			Token             string       `json:"token,omitempty"`
+			Webhook           string       `json:"webhook,omitempty"`
+			Expiration        int          `json:"expiration,omitempty"`
+			Events            string       `json:"events,omitempty"`
+			ProxyConfig       *ProxyConfig `json:"proxyConfig,omitempty"`
+			S3Config          *S3Config    `json:"s3Config,omitempty"`
+			History           int          `json:"history,omitempty"`
+			DaysToSyncHistory *int         `json:"days_to_sync_history,omitempty"`
 		}
 
 		if err := json.NewDecoder(r.Body).Decode(&user); err != nil {
@@ -5989,6 +6077,13 @@ func (s *server) EditUser() http.HandlerFunc {
 				"success": false,
 			})
 			return
+		}
+
+		if user.DaysToSyncHistory != nil {
+			if err := validateHistorySyncDays(*user.DaysToSyncHistory); err != nil {
+				s.Respond(w, r, http.StatusBadRequest, err)
+				return
+			}
 		}
 
 		log.Info().Interface("proxyConfig", user.ProxyConfig).Interface("s3Config", user.S3Config).Msg("Received values for proxyConfig and s3Config")
@@ -6057,6 +6152,9 @@ func (s *server) EditUser() http.HandlerFunc {
 		addField("expiration", user.Expiration, user.Expiration != 0)
 		addField("events", user.Events, user.Events != "")
 		addField("history", user.History, user.History != 0)
+		if user.DaysToSyncHistory != nil {
+			addField("days_to_sync_history", *user.DaysToSyncHistory, true)
+		}
 
 		// Handle proxy config
 		if user.ProxyConfig != nil {
@@ -6465,62 +6563,61 @@ func validateMessageFields(ctx context.Context, client *whatsmeow.Client, phone 
 	return recipient, nil
 }
 
-// Set history
+// SetHistory configures local retention and the history window requested on next pairing.
 func (s *server) SetHistory() http.HandlerFunc {
-	type historyStruct struct {
-		History int `json:"history"`
-	}
-
 	return func(w http.ResponseWriter, r *http.Request) {
-		txtid := r.Context().Value("userinfo").(Values).Get("Id")
-
-		// Check if client exists and is connected
-
-		if clientManager.GetWhatsmeowClient(txtid) == nil {
-			s.Respond(w, r, http.StatusBadRequest, errors.New("no session"))
-			return
+		info := r.Context().Value("userinfo").(Values)
+		var config struct {
+			History *int `json:"history"`
+			Days    *int `json:"days_to_sync_history"`
 		}
-
-		decoder := json.NewDecoder(r.Body)
-		var t historyStruct
-		err := decoder.Decode(&t)
-		if err != nil {
+		if err := json.NewDecoder(r.Body).Decode(&config); err != nil {
 			s.Respond(w, r, http.StatusBadRequest, errors.New("could not decode payload"))
 			return
 		}
-
-		// Validate history value
-		if t.History < 0 {
+		if config.History == nil && config.Days == nil {
+			s.Respond(w, r, http.StatusBadRequest, errors.New("provide history or days_to_sync_history"))
+			return
+		}
+		if config.History != nil && *config.History < 0 {
 			s.Respond(w, r, http.StatusBadRequest, errors.New("history cannot be negative"))
 			return
 		}
-
-		// Store history configuration in database
-		_, err = s.db.Exec("UPDATE users SET history = $1 WHERE id = $2", t.History, txtid)
-		if err != nil {
+		if config.Days != nil {
+			if err := validateHistorySyncDays(*config.Days); err != nil {
+				s.Respond(w, r, http.StatusBadRequest, err)
+				return
+			}
+		}
+		// Configuration must be possible before a WhatsApp client or QR exists.
+		query := s.db.Rebind("UPDATE users SET history = COALESCE(?, history), days_to_sync_history = COALESCE(?, days_to_sync_history) WHERE id = ?")
+		if _, err := s.db.Exec(query, config.History, config.Days, info.Get("Id")); err != nil {
 			s.Respond(w, r, http.StatusInternalServerError, errors.New("failed to save history configuration"))
 			return
 		}
-
-		token := r.Context().Value("userinfo").(Values).Get("Token")
-		if cachedUserInfo, found := userinfocache.Get(token); found {
-			updatedUserInfo := cachedUserInfo.(Values)
-			// Update history in cache
-			updatedUserInfo = updateUserInfo(updatedUserInfo, "History", strconv.Itoa(t.History)).(Values)
-			userinfocache.Set(token, updatedUserInfo, cache.NoExpiration)
-			log.Info().Str("userID", txtid).Msg("User info cache updated with History configuration")
+		if config.History != nil {
+			if cached, found := userinfocache.Get(info.Get("Token")); found {
+				updated := updateUserInfo(cached, "History", strconv.Itoa(*config.History))
+				userinfocache.Set(info.Get("Token"), updated, cache.NoExpiration)
+			}
 		}
-
-		response := map[string]interface{}{
-			"Details": "History configured successfully",
-			"History": t.History,
+		var saved struct {
+			History int `db:"history" json:"History"`
+			Days    int `db:"days_to_sync_history" json:"days_to_sync_history"`
 		}
-		responseJson, err := json.Marshal(response)
-		if err != nil {
-			s.Respond(w, r, http.StatusInternalServerError, err)
-		} else {
-			s.Respond(w, r, http.StatusOK, string(responseJson))
+		if err := s.db.Get(&saved, s.db.Rebind("SELECT COALESCE(history, 0) AS history, COALESCE(days_to_sync_history, 0) AS days_to_sync_history FROM users WHERE id = ?"), info.Get("Id")); err != nil {
+			s.Respond(w, r, http.StatusInternalServerError, errors.New("failed to read history configuration"))
+			return
 		}
+		s.respondWithJSON(w, http.StatusOK, map[string]interface{}{
+			"code":    http.StatusOK,
+			"success": true,
+			"data": map[string]interface{}{
+				"Details":              "History configured successfully; sync days apply on the next pairing",
+				"History":              saved.History,
+				"days_to_sync_history": saved.Days,
+			},
+		})
 	}
 }
 
@@ -7083,110 +7180,6 @@ func (s *server) GetHistory() http.HandlerFunc {
 			s.Respond(w, r, http.StatusOK, string(responseJson))
 		}
 	}
-}
-
-// syncHistoryForChat syncs history for a specific chat
-func (s *server) syncHistoryForChat(ctx context.Context, userID string, chatJID types.JID, count int) error {
-	chatJIDStr := chatJID.String()
-
-	// Try to get last message info for this chat from database
-	var query string
-	if s.db.DriverName() == "postgres" {
-		query = `
-			SELECT message_id, chat_jid, sender_jid
-			FROM message_history
-			WHERE user_id = $1 AND chat_jid = $2
-			ORDER BY timestamp DESC
-			LIMIT 1`
-	} else {
-		query = `
-			SELECT message_id, chat_jid, sender_jid
-			FROM message_history
-			WHERE user_id = ? AND chat_jid = ?
-			ORDER BY timestamp DESC
-			LIMIT 1`
-	}
-
-	var lastMsg struct {
-		MessageID string `db:"message_id"`
-		ChatJID   string `db:"chat_jid"`
-		SenderJID string `db:"sender_jid"`
-	}
-
-	var lastMessageInfo *types.MessageInfo
-	err := s.db.Get(&lastMsg, query, userID, chatJIDStr)
-	if err != nil && !errors.Is(err, sql.ErrNoRows) {
-		return fmt.Errorf("failed to get last message from history: %w", err)
-	}
-
-	if err == nil && lastMsg.MessageID != "" {
-		// Parse sender JID
-		var senderJID types.JID
-		if lastMsg.SenderJID != "" && lastMsg.SenderJID != "me" {
-			var pErr error
-			senderJID, pErr = types.ParseJID(lastMsg.SenderJID)
-			if pErr != nil {
-				log.Warn().Err(pErr).Str("senderJID", lastMsg.SenderJID).Msg("Failed to parse sender JID from history, using empty JID")
-				senderJID = types.EmptyJID
-			}
-		} else {
-			senderJID = types.EmptyJID
-		}
-
-		// MessageInfo embeds MessageSource which contains Chat, Sender, IsGroup
-		lastMessageInfo = &types.MessageInfo{
-			MessageSource: types.MessageSource{
-				Chat:    chatJID,
-				Sender:  senderJID,
-				IsGroup: chatJID.Server == types.GroupServer || chatJID.Server == types.BroadcastServer,
-			},
-			ID: lastMsg.MessageID,
-		}
-	} else {
-		// If no last message found, create MessageInfo with just the chat
-		lastMessageInfo = &types.MessageInfo{
-			MessageSource: types.MessageSource{
-				Chat:    chatJID,
-				IsGroup: chatJID.Server == types.GroupServer || chatJID.Server == types.BroadcastServer,
-			},
-		}
-	}
-
-	// Build history sync request
-	historyMsg := clientManager.GetWhatsmeowClient(userID).BuildHistorySyncRequest(lastMessageInfo, count)
-	if historyMsg == nil {
-		return errors.New("failed to build history sync request")
-	}
-
-	// Send the history sync request
-	myClient := clientManager.GetMyClient(userID)
-	if myClient == nil || myClient.WAClient == nil || myClient.WAClient.Store == nil || myClient.WAClient.Store.ID == nil {
-		return errors.New("client store not available")
-	}
-
-	_, err = clientManager.GetWhatsmeowClient(userID).SendMessage(
-		ctx,
-		myClient.WAClient.Store.ID.ToNonAD(),
-		historyMsg,
-		whatsmeow.SendRequestExtra{Peer: true},
-	)
-
-	if err != nil {
-		log.Error().
-			Str("userID", userID).
-			Str("chatJID", chatJIDStr).
-			Err(err).
-			Msg("Failed to send WhatsApp history sync request")
-		return fmt.Errorf("failed to send history sync request: %w", err)
-	}
-
-	log.Info().
-		Str("userID", userID).
-		Str("chatJID", chatJIDStr).
-		Int("count", count).
-		Msg("WhatsApp history sync request sent successfully")
-
-	return nil
 }
 
 // save outgoing message to history

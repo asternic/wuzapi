@@ -227,6 +227,107 @@ paths:
             application/json:
               schema:
                 example: {"code": 200, "data": {"Newsletter": [{"id": "120363144038483540@newsletter", "state": {"type": "active" }, "thread_metadata": {"creation_time": "1688746895", "description": {"id": "1689653839450668", "text": "WhatsApp's official channel. Follow for our latest feature launches, updates, exclusive drops and more.", "update_time": "1689653839450668" }, "invite": "0029Va4K0PZ5a245NkngBA2M", "name": {"id": "1688746895480511", "text": "WhatsApp", "update_time": "1688746895480511" }, "picture": {"direct_path": "/v/t61.24694-24/416962407_970228831134395_8869146381947923973_n.jpg?ccb=11-4&oh=01_Q5AaIRyTfP806JEGJDm0XWU5E-D4LcA-Wj3csSwh1jJTVanC&oe=67D550F1&_nc_sid=5e03e0&_nc_cat=110", "id": "1707950960975554", "type": "IMAGE", "url": "" }, "preview": {"direct_path": "/v/t61.24694-24/416962407_970228831134395_8869146381947923973_n.jpg?stp=dst-jpg_s192x192_tt6&ccb=11-4&oh=01_Q5AaIawuPXJUw9grRFJZtAJEc6QNm0XpqJq4X1Ssi9xNI0Qf&oe=67D550F1&_nc_sid=5e03e0&_nc_cat=110", "id": "1707950960975554", "type": "PREVIEW", "url": "" }, "settings": {"reaction_codes": {"value": "ALL" } }, "subscribers_count": "0", "verification": "verified" }, "viewer_metadata": {"mute": "on", "role": "subscriber" } } ] }, "success": true }
+  /newsletter/join:
+    post:
+      tags:
+        - Newsletter
+      summary: Join a newsletter
+      description: Follows a WhatsApp channel. The channel JID must use the `@newsletter` server.
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - NewsletterJID
+              properties:
+                NewsletterJID:
+                  type: string
+                  example: 120363144038483540@newsletter
+                  description: The WhatsApp channel JID.
+      responses:
+        200:
+          description: Newsletter joined
+          content:
+            application/json:
+              schema:
+                example: {"code": 200, "data": {"Details": "Newsletter joined successfully"}, "success": true}
+        400:
+          description: Invalid or missing newsletter JID
+        500:
+          description: No active session or WhatsApp rejected the operation
+  /newsletter/leave:
+    post:
+      tags:
+        - Newsletter
+      summary: Leave a newsletter
+      description: Unfollows a WhatsApp channel. The channel JID must use the `@newsletter` server.
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - NewsletterJID
+              properties:
+                NewsletterJID:
+                  type: string
+                  example: 120363144038483540@newsletter
+                  description: The WhatsApp channel JID.
+      responses:
+        200:
+          description: Newsletter left
+          content:
+            application/json:
+              schema:
+                example: {"code": 200, "data": {"Details": "Newsletter left successfully"}, "success": true}
+        400:
+          description: Invalid or missing newsletter JID
+        500:
+          description: No active session or WhatsApp rejected the operation
+  /newsletter/mute:
+    post:
+      tags:
+        - Newsletter
+      summary: Change newsletter notification settings
+      description: Mutes or unmutes notifications for a WhatsApp channel. The channel JID must use the `@newsletter` server.
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - NewsletterJID
+                - Mute
+              properties:
+                NewsletterJID:
+                  type: string
+                  example: 120363144038483540@newsletter
+                  description: The WhatsApp channel JID.
+                Mute:
+                  type: boolean
+                  example: true
+                  description: Set to true to mute notifications, false to unmute them.
+      responses:
+        200:
+          description: Newsletter notification setting changed
+          content:
+            application/json:
+              schema:
+                example: {"code": 200, "data": {"Details": "Newsletter mute status changed successfully"}, "success": true}
+        400:
+          description: Invalid or missing newsletter JID
+        500:
+          description: No active session or WhatsApp rejected the operation
   /webhook:
     get:
       tags:
@@ -639,6 +740,39 @@ paths:
         500:
           description: S3 connection test failed
   /session/history:
+    post:
+      tags:
+        - Session
+      summary: Configure message retention and pairing history
+      description: Save before starting pairing. No active WhatsApp session is required. Omitted fields retain their current values. Sync days affect the next new pairing, not an ordinary reconnect or a QR already issued. Zero preserves WhatsApp default sync behavior; it does not disable incoming HistorySync events.
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              minProperties: 1
+              properties:
+                history:
+                  type: integer
+                  minimum: 0
+                  description: Local message retention count per chat, independent of sync days.
+                  example: 1000
+                days_to_sync_history:
+                  type: integer
+                  minimum: 0
+                  maximum: 365
+                  description: Requested full history window on next pairing. Availability is determined by WhatsApp and the phone.
+                  example: 30
+      responses:
+        '200':
+          description: Configuration saved
+        '400':
+          description: Missing settings or invalid values
+        '500':
+          description: Database error
     get:
       tags:
         - Session
@@ -1062,8 +1196,15 @@ paths:
     post:
       tags:
         - Chat 
-      summary: Deletes a message sent by user
-      description: Deletes a messages sent by the same user
+      summary: Deletes an own message or another participant's group message
+      description: >-
+        Omit SenderJID (or send an empty string) to delete your own message.
+        To delete another participant's message, use the group JID in Phone and
+        the original author's full PN or LID in SenderJID. The connected WhatsApp
+        account must be a group admin; WhatsApp enforces deletion permissions.
+        Providing your own PN or LID also deletes an own message and does not
+        require group admin privileges. Use the sender identity from the original
+        message event; PN and LID are not automatically interconverted.
       security:
         - ApiKeyAuth: []
       requestBody:
@@ -1079,7 +1220,11 @@ paths:
           content:
             application/json:
               schema:
-                example: { "code": 200, "data": { "Details": "Message deleted" }, "success": true }
+                example: { "code": 200, "data": { "Details": "Deleted", "Id": "AABBCC11223344", "Timestamp": 1700000000 }, "success": true }
+        400:
+          description: Missing fields, invalid SenderJID, or another sender outside a group
+        500:
+          description: No session or an error sending the revocation to WhatsApp
   /chat/markread:
     post:
       tags:
@@ -1708,7 +1853,17 @@ paths:
       tags:
         - Chat
       summary: Get chat message history
-      description: Retrieves message history for a specific chat. Returns messages in reverse chronological order (newest first). Requires message history to be enabled on the server.
+      description: |
+        Retrieves message history for a specific chat, newest first. Requires history to be enabled.
+        History contains events, not a materialized view of the latest message contents.
+        An edit is a separate row with message_type `edit`, its own message_id, the target
+        message ID in quoted_message_id, and replacement text or caption in text_content
+        (which can be empty). The original row is not modified. Consumers must apply edits
+        to their targets, using protocolMessage.timestampMS in datajson for edit ordering
+        when available. Database timestamps represent insertion time, including for HistorySync.
+        A limited result may contain an edit without its original message.
+        Live and HistorySync edits use the same fields. Legacy unknown rows are repaired
+        when the same edit is redelivered; existing rows are not scanned or backfilled.
       security:
         - ApiKeyAuth: []
       parameters:
@@ -2325,6 +2480,14 @@ definitions:
             type: integer
             example: 30
 
+      days_to_sync_history:
+        type: integer
+        minimum: 0
+        maximum: 365
+        default: 0
+        example: 30
+        description: "History window requested in days on the next new pairing. 0 uses WhatsApp defaults. Configure before starting pairing; reconnecting an already linked device does not trigger a new full sync. Independent of local history retention."
+
   CreateUser:
     type: object
     required:
@@ -2403,6 +2566,14 @@ definitions:
         example: 0
         description: "Number of messages to store in history per chat for this user. 0 means no history is saved, any positive number enables history storage for that many messages per chat. Default is 0"
         default: 0
+
+      days_to_sync_history:
+        type: integer
+        minimum: 0
+        maximum: 365
+        default: 0
+        example: 30
+        description: "History window requested in days on the next new pairing. 0 uses WhatsApp defaults. Configure before starting pairing; reconnecting an already linked device does not trigger a new full sync. Independent of local history retention."
 
   DeleteUser:
     type: object
@@ -3000,7 +3171,17 @@ definitions:
         example: "1234-abcd-21234"
       Phone:
         type: string
-        example: "5491155553934"
+        description: Destination chat; use the full group JID ending in @g.us for group messages.
+        example: "120363000000000000@g.us"
+      SenderJID:
+        type: string
+        description: >-
+          Optional original message author. Omit or leave empty for own messages.
+          Otherwise provide a numeric user JID ending in @s.whatsapp.net or @lid.
+          Legacy @c.us is normalized to @s.whatsapp.net. Device/agent suffixes are
+          validated and removed. Bare numbers, whitespace, multiple @ signs and
+          group, broadcast or newsletter JIDs are rejected with HTTP 400.
+        example: "5491155553935@s.whatsapp.net"
   Markread:
     type: object
     required:

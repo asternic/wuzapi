@@ -1432,7 +1432,39 @@
               "host": ["{{baseUrl}}"],
               "path": ["chat", "delete"]
             },
-            "description": "Delete a message from a chat."
+            "description": "Delete an own message by omitting SenderJID (or leaving it empty). To delete another participant's group message, set Phone to the full group JID (@g.us) and add SenderJID with the original author's numeric PN (@s.whatsapp.net) or LID (@lid) from the message event. The connected account must be a group admin; WhatsApp enforces permissions. Your own PN/LID is also accepted without requiring group admin privileges. Legacy @c.us is normalized, and valid device/agent suffixes are removed. Malformed SenderJID values and another sender outside a group return HTTP 400. PN and LID are not automatically interconverted."
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Group Participant Message",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Phone\": \"120363000000000000@g.us\",\n  \"Id\": \"AABBCC11223344\",\n  \"SenderJID\": \"5491155553935@s.whatsapp.net\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/chat/delete",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "chat",
+                "delete"
+              ]
+            },
+            "description": "Delete an own message by omitting SenderJID (or leaving it empty). To delete another participant's group message, set Phone to the full group JID (@g.us) and add SenderJID with the original author's numeric PN (@s.whatsapp.net) or LID (@lid) from the message event. The connected account must be a group admin; WhatsApp enforces permissions. Your own PN/LID is also accepted without requiring group admin privileges. Legacy @c.us is normalized, and valid device/agent suffixes are removed. Malformed SenderJID values and another sender outside a group return HTTP 400. PN and LID are not automatically interconverted."
           },
           "response": []
         }
@@ -2002,6 +2034,69 @@
               "path": ["newsletter", "list"]
             },
             "description": "List newsletters"
+          },
+          "response": []
+        },
+        {
+          "name": "Join Newsletter",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "token", "value": "{{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"NewsletterJID\": \"120363144038483540@newsletter\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/newsletter/join",
+              "host": ["{{baseUrl}}"],
+              "path": ["newsletter", "join"]
+            },
+            "description": "Follow a WhatsApp channel. NewsletterJID must end in @newsletter."
+          },
+          "response": []
+        },
+        {
+          "name": "Leave Newsletter",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "token", "value": "{{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"NewsletterJID\": \"120363144038483540@newsletter\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/newsletter/leave",
+              "host": ["{{baseUrl}}"],
+              "path": ["newsletter", "leave"]
+            },
+            "description": "Unfollow a WhatsApp channel."
+          },
+          "response": []
+        },
+        {
+          "name": "Mute Newsletter",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "token", "value": "{{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"NewsletterJID\": \"120363144038483540@newsletter\",\n  \"Mute\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/newsletter/mute",
+              "host": ["{{baseUrl}}"],
+              "path": ["newsletter", "mute"]
+            },
+            "description": "Mute (true) or unmute (false) notifications for a WhatsApp channel."
           },
           "response": []
         }

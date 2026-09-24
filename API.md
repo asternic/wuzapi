@@ -805,8 +805,68 @@ Response:
 
 # Chat
 
-The following _chat_ endpoints are used to send messages or mark them as read or indicating composing/not composing presence. The sample response is listed only once, as it is the
-same for all message types.
+Chat endpoints support sending, deleting and editing messages, read receipts, and presence.
+
+## Delete a message
+
+*POST /chat/delete*
+
+`Phone` identifies the chat and `Id` identifies the original message. Omit the
+optional `SenderJID`, or send an empty string, to delete your own message:
+
+```json
+{
+  "Phone": "5491155553934",
+  "Id": "AABBCC11223344"
+}
+```
+
+To delete another participant's message, the connected WhatsApp account must be
+an administrator of the group. Use the full group JID as `Phone` and the original
+author's JID from the message event as `SenderJID`:
+
+```json
+{
+  "Phone": "120363000000000000@g.us",
+  "Id": "AABBCC11223344",
+  "SenderJID": "5491155553935@s.whatsapp.net"
+}
+```
+
+`SenderJID` accepts numeric phone-number JIDs (`@s.whatsapp.net`) and LIDs
+(`@lid`). Legacy `@c.us` is normalized to `@s.whatsapp.net`. Valid device/agent
+suffixes are removed. PN and LID are not automatically interconverted: use the
+identity provided by the original message. Supplying the account's own PN or LID
+also deletes an own message, including in a direct chat, without requiring group
+administrator privileges.
+
+Incomplete JIDs, bare numbers, whitespace, invalid device/agent suffixes, multiple
+`@` signs, and group/broadcast/newsletter sender JIDs return HTTP `400`. Specifying
+another sender outside a group also returns `400`. WhatsApp enforces the actual
+deletion permissions and applicable restrictions; local validation does not grant
+administrator privileges.
+
+A successful request retains the existing response format:
+
+```json
+{
+  "code": 200,
+  "data": {
+    "Details": "Deleted",
+    "Timestamp": 1700000000,
+    "Id": "AABBCC11223344"
+  },
+  "success": true
+}
+```
+
+In stdio mode, the same fields are supported by `chat.delete`, alongside the
+session's `token`:
+
+```json
+{"jsonrpc":"2.0","id":"delete-1","method":"chat.delete","params":{"token":"YOUR_USER_TOKEN","Phone":"120363000000000000@g.us","Id":"AABBCC11223344","SenderJID":"987654321@lid"}}
+```
+
 
 ## Send Text Message
 
@@ -1011,8 +1071,10 @@ curl -X POST -H 'Token: 1234ABCD' -H 'Content-Type: application/json' --data '{"
 
 Subscribes to a contact's presence updates (online/offline and last seen). After
 subscribing, your configured webhook receives `Presence` events for that contact. You
-should be online yourself to receive presence (wuzapi sends an available presence on
-connect). Whether `last_seen` is available depends on the contact's privacy settings.
+should be online yourself to receive presence. By default WuzAPI sends an available
+presence on connect. When `WUZAPI_AUTO_PRESENCE=unavailable` is configured to preserve
+primary-phone push notifications, set your global presence to available before
+subscribing. Whether `last_seen` is available depends on the contact's privacy settings.
 
 endpoint: _/user/presence/subscribe_
 

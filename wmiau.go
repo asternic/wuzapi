@@ -9,7 +9,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -27,6 +26,7 @@ import (
 	"go.mau.fi/whatsmeow"
 	"go.mau.fi/whatsmeow/appstate"
 	"go.mau.fi/whatsmeow/proto/waCompanionReg"
+	"go.mau.fi/whatsmeow/proto/waE2E"
 	"go.mau.fi/whatsmeow/store"
 	"go.mau.fi/whatsmeow/types"
 	"go.mau.fi/whatsmeow/types/events"
@@ -281,6 +281,11 @@ func sendEventWithWebHook(mycli *MyClient, postmap map[string]interface{}, path 
 	// In stdio mode, send as JSON-RPC notification instead of HTTP webhook
 	if mycli.s != nil && mycli.s.mode == Stdio {
 		mycli.s.SendNotification(eventType, postmap)
+		return
+	}
+
+	if _, ok := postmap["base64"].(*mediaFile); ok {
+		sendMediaEvent(mycli, postmap, webhookurl)
 		return
 	}
 
@@ -631,8 +636,7 @@ func (s *server) startClient(userID string, textjid string, token string, kill c
 	// Now we can use the client with the manager
 	clientManager.SetWhatsmeowClient(userID, client)
 
-	store.DeviceProps.PlatformType = getPlatformTypeEnum(*platformType)
-	store.DeviceProps.Os = osName
+	s.configureHistorySyncClient(client, userID)
 
 	mycli := MyClient{
 		WAClient:       client,
@@ -922,31 +926,31 @@ func (s *server) startClient(userID string, textjid string, token string, kill c
 	deleteKillChannel(userID, kill)
 }
 
-func fileToBase64(filepath string) (string, string, error) {
-	data, err := os.ReadFile(filepath)
+func (mycli *MyClient) sendAutomaticPresence() {
+	err := mycli.WAClient.SendPresence(context.Background(), automaticPresence)
 	if err != nil {
-		return "", "", err
+		log.Warn().Err(err).Str("presence", string(automaticPresence)).Msg("Failed to send automatic presence")
+	} else {
+		log.Info().Str("presence", string(automaticPresence)).Msg("Set automatic presence")
 	}
-	mimeType := http.DetectContentType(data)
-	return base64.StdEncoding.EncodeToString(data), mimeType, nil
 }
 
 func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 	txtid := mycli.userID
 	postmap := make(map[string]interface{})
 	postmap["event"] = rawEvt
+	defer func() {
+		if media, ok := postmap["base64"].(*mediaFile); ok {
+			media.Close()
+		}
+	}()
 	dowebhook := 0
 	path := ""
 
 	switch evt := rawEvt.(type) {
 	case *events.AppStateSyncComplete:
 		if len(mycli.WAClient.Store.PushName) > 0 && evt.Name == appstate.WAPatchCriticalBlock {
-			err := mycli.WAClient.SendPresence(context.Background(), types.PresenceAvailable)
-			if err != nil {
-				log.Warn().Err(err).Msg("Failed to send available presence")
-			} else {
-				log.Info().Msg("Marked self as available")
-			}
+			mycli.sendAutomaticPresence()
 		}
 	case *events.Connected, *events.PushNameSetting:
 		postmap["type"] = "Connected"
@@ -954,16 +958,11 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 		if len(mycli.WAClient.Store.PushName) == 0 {
 			break
 		}
-		// Send presence available when connecting and when the pushname is changed.
-		// This makes sure that outgoing messages always have the right pushname.
-		err := mycli.WAClient.SendPresence(context.Background(), types.PresenceAvailable)
-		if err != nil {
-			log.Warn().Err(err).Msg("Failed to send available presence")
-		} else {
-			log.Info().Msg("Marked self as available")
-		}
+		// Announce the push name with the configured presence when connecting and
+		// when the push name changes.
+		mycli.sendAutomaticPresence()
 		sqlStmt := `UPDATE users SET connected=1 WHERE id=$1`
-		_, err = mycli.db.Exec(sqlStmt, mycli.userID)
+		_, err := mycli.db.Exec(sqlStmt, mycli.userID)
 		if err != nil {
 			log.Error().Err(err).Msg(sqlStmt)
 			return
@@ -1005,87 +1004,6 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 			log.Info().Str("jid", jidStr).Str("userid", txtid).Str("token", token).Msg("User information set")
 		}
 
-		// Check if automatic history sync is enabled and trigger it after QR code is scanned
-		var daysToSyncHistory int
-		query := "SELECT COALESCE(days_to_sync_history, 0) FROM users WHERE id=$1"
-		query = mycli.db.Rebind(query)
-		err = mycli.db.Get(&daysToSyncHistory, query, mycli.userID)
-		if err != nil {
-			log.Warn().Err(err).Str("userID", mycli.userID).Msg("Failed to get days_to_sync_history from database")
-		} else if daysToSyncHistory > 0 {
-			// Trigger history sync in a goroutine to avoid blocking
-			// Wait a bit for the connection to be fully established
-			go func() {
-				time.Sleep(2 * time.Second) // Give WhatsApp time to fully establish connection
-
-				log.Info().
-					Str("userID", mycli.userID).
-					Int("days", daysToSyncHistory).
-					Msg("Triggering automatic history sync after QR code scan")
-
-				// Use the SyncWhatsAppHistory logic but for a single user
-				// Calculate message count based on days (estimate: 15 messages per day)
-				count := daysToSyncHistory * 15
-				if count > 500 {
-					count = 500 // WhatsApp limit
-				}
-				if count < 50 {
-					count = 50 // Minimum reasonable count
-				}
-
-				// Get chats from WhatsApp (contacts and groups)
-				ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-				defer cancel()
-
-				var chatJIDs []string
-
-				// Get all contacts
-				contacts, err := mycli.WAClient.Store.Contacts.GetAllContacts(ctx)
-				if err != nil {
-					log.Error().Err(err).Str("userID", mycli.userID).Msg("Failed to get contacts for history sync")
-				} else {
-					for jid := range contacts {
-						chatJIDs = append(chatJIDs, jid.String())
-					}
-				}
-
-				// Get all groups
-				groups, err := mycli.WAClient.GetJoinedGroups(ctx)
-				if err != nil {
-					log.Error().Err(err).Str("userID", mycli.userID).Msg("Failed to get groups for history sync")
-				} else {
-					for _, group := range groups {
-						chatJIDs = append(chatJIDs, group.JID.String())
-					}
-				}
-
-				// Sync each chat with a small delay between requests
-				for _, chatJIDStr := range chatJIDs {
-					chatJID, err := types.ParseJID(chatJIDStr)
-					if err != nil {
-						log.Warn().Err(err).Str("chatJID", chatJIDStr).Msg("Failed to parse chat JID, skipping")
-						continue
-					}
-
-					// Use the syncHistoryForChat function from handlers.go
-					err = mycli.s.syncHistoryForChat(context.Background(), mycli.userID, chatJID, count)
-					if err != nil {
-						log.Warn().Err(err).Str("chatJID", chatJIDStr).Msg("Failed to sync history for chat")
-					} else {
-						log.Info().Str("chatJID", chatJIDStr).Int("count", count).Msg("History sync request sent for chat")
-					}
-
-					// Small delay between requests to avoid overwhelming WhatsApp
-					time.Sleep(100 * time.Millisecond)
-				}
-
-				log.Info().
-					Str("userID", mycli.userID).
-					Int("days", daysToSyncHistory).
-					Int("chatsSynced", len(chatJIDs)).
-					Msg("Automatic history sync completed after QR code scan")
-			}()
-		}
 	case *events.StreamReplaced:
 		log.Info().Msg("Received StreamReplaced event")
 		return
@@ -1176,24 +1094,24 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 				}
 			}
 		}
-    
-    if encMessage := evt.Message.GetSecretEncryptedMessage(); encMessage != nil {
-        decrypted, derr := mycli.WAClient.DecryptSecretEncryptedMessage(context.Background(), evt)
-        if derr != nil {
-            log.Warn().
-                Err(derr).
-                Str("messageID", evt.Info.ID).
-                Str("secretEncType", encMessage.GetSecretEncType().String()).
-                Msg("DecryptSecretEncryptedMessage failed")
-        } else if decrypted != nil {
-            log.Info().
-                Str("messageID", evt.Info.ID).
-                Str("secretEncType", encMessage.GetSecretEncType().String()).
-                Msg("Decrypted secretEncryptedMessage; swapping evt.Message")
-                evt.Message = decrypted
-        }
-    }
-    
+
+		if encMessage := evt.Message.GetSecretEncryptedMessage(); encMessage != nil {
+			decrypted, derr := mycli.WAClient.DecryptSecretEncryptedMessage(context.Background(), evt)
+			if derr != nil {
+				log.Warn().
+					Err(derr).
+					Str("messageID", evt.Info.ID).
+					Str("secretEncType", encMessage.GetSecretEncType().String()).
+					Msg("DecryptSecretEncryptedMessage failed")
+			} else if decrypted != nil {
+				log.Info().
+					Str("messageID", evt.Info.ID).
+					Str("secretEncType", encMessage.GetSecretEncType().String()).
+					Msg("Decrypted secretEncryptedMessage; swapping evt.Message")
+				evt.Message = decrypted
+			}
+		}
+
 		if !*skipMedia {
 
 			isIncoming := !evt.Info.IsFromMe
@@ -1265,12 +1183,18 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 			replyToMessageID := ""
 
 			// Check for delete messages first
-			if protocolMsg := evt.Message.GetProtocolMessage(); protocolMsg != nil && protocolMsg.GetType() == 0 {
+			if protocolMsg := evt.Message.GetProtocolMessage(); protocolMsg != nil && protocolMsg.GetType() == waE2E.ProtocolMessage_REVOKE {
 				messageType = "delete"
 				if protocolMsg.GetKey() != nil {
 					textContent = protocolMsg.GetKey().GetID() // Store the deleted message ID
 				}
 				log.Info().Str("deletedMessageID", textContent).Str("messageID", evt.Info.ID).Msg("Delete message detected")
+				// Check for message edits
+			} else if edit, ok := historyEdit(evt.Message); ok {
+				messageType = "edit"
+				replyToMessageID = edit.target
+				textContent = edit.text
+				log.Info().Str("editedMessageID", replyToMessageID).Str("messageID", evt.Info.ID).Msg("Edit message detected")
 				// Check for reactions
 			} else if reaction := evt.Message.GetReactionMessage(); reaction != nil {
 				messageType = "reaction"
@@ -1297,8 +1221,8 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 				textContent = location.GetName()
 			}
 
-			// Extract text content for non-reaction and non-delete messages
-			if messageType != "reaction" && messageType != "delete" {
+			// Extract text content for other message types
+			if messageType != "reaction" && messageType != "delete" && messageType != "edit" {
 				if conv := evt.Message.GetConversation(); conv != "" {
 					textContent = conv
 				} else if ext := evt.Message.GetExtendedTextMessage(); ext != nil {
@@ -1508,7 +1432,12 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 						mediaLink := ""
 						quotedMessageID := ""
 
-						if message.GetConversation() != "" {
+						edit, isEdit := historyEdit(message)
+						if isEdit {
+							messageType = "edit"
+							textContent = edit.text
+							quotedMessageID = edit.target
+						} else if message.GetConversation() != "" {
 							messageType = "text"
 							textContent = message.GetConversation()
 						} else if ext := message.GetExtendedTextMessage(); ext != nil {
@@ -1640,7 +1569,7 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 							"IsDocumentWithCaption": false,
 							"IsLottieSticker":       false,
 							"IsBotInvoke":           false,
-							"IsEdit":                false,
+							"IsEdit":                isEdit,
 							"SourceWebMsg":          nil,
 							"UnavailableRequestID":  "",
 							"RetryCount":            0,
