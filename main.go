@@ -91,7 +91,6 @@ var (
 	ogProxyURL  *url.URL
 )
 
-const version = "1.0.8"
 const version = "1.0.9"
 
 func parseAutomaticPresence(value string) (types.Presence, error) {
