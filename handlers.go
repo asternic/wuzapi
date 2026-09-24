@@ -5579,6 +5579,132 @@ func (s *server) ListNewsletter() http.HandlerFunc {
 	}
 }
 
+// NewsletterJoin follows (joins) a WhatsApp channel.
+func (s *server) NewsletterJoin() http.HandlerFunc {
+	type newsletterJoinStruct struct {
+		NewsletterJID string
+	}
+
+	return func(w http.ResponseWriter, r *http.Request) {
+		txtid := r.Context().Value("userinfo").(Values).Get("Id")
+		client := clientManager.GetWhatsmeowClient(txtid)
+		if client == nil {
+			s.Respond(w, r, http.StatusInternalServerError, errors.New("no session"))
+			return
+		}
+
+		var t newsletterJoinStruct
+		if err := json.NewDecoder(r.Body).Decode(&t); err != nil {
+			s.Respond(w, r, http.StatusBadRequest, errors.New("could not decode Payload"))
+			return
+		}
+
+		newsletter, ok := parseNewsletterJID(t.NewsletterJID)
+		if !ok {
+			s.Respond(w, r, http.StatusBadRequest, errors.New("could not parse NewsletterJID"))
+			return
+		}
+
+		if err := client.FollowNewsletter(context.Background(), newsletter); err != nil {
+			msg := fmt.Sprintf("failed to join newsletter: %v", err)
+			log.Error().Msg(msg)
+			s.Respond(w, r, http.StatusInternalServerError, msg)
+			return
+		}
+
+		s.respondNewsletterSuccess(w, r, "Newsletter joined successfully")
+	}
+}
+
+// NewsletterLeave unfollows (leaves) a WhatsApp channel.
+func (s *server) NewsletterLeave() http.HandlerFunc {
+	type newsletterLeaveStruct struct {
+		NewsletterJID string
+	}
+
+	return func(w http.ResponseWriter, r *http.Request) {
+		txtid := r.Context().Value("userinfo").(Values).Get("Id")
+		client := clientManager.GetWhatsmeowClient(txtid)
+		if client == nil {
+			s.Respond(w, r, http.StatusInternalServerError, errors.New("no session"))
+			return
+		}
+
+		var t newsletterLeaveStruct
+		if err := json.NewDecoder(r.Body).Decode(&t); err != nil {
+			s.Respond(w, r, http.StatusBadRequest, errors.New("could not decode Payload"))
+			return
+		}
+
+		newsletter, ok := parseNewsletterJID(t.NewsletterJID)
+		if !ok {
+			s.Respond(w, r, http.StatusBadRequest, errors.New("could not parse NewsletterJID"))
+			return
+		}
+
+		if err := client.UnfollowNewsletter(context.Background(), newsletter); err != nil {
+			msg := fmt.Sprintf("failed to leave newsletter: %v", err)
+			log.Error().Msg(msg)
+			s.Respond(w, r, http.StatusInternalServerError, msg)
+			return
+		}
+
+		s.respondNewsletterSuccess(w, r, "Newsletter left successfully")
+	}
+}
+
+// NewsletterMute changes whether notifications for a WhatsApp channel are muted.
+func (s *server) NewsletterMute() http.HandlerFunc {
+	type newsletterMuteStruct struct {
+		NewsletterJID string
+		Mute          bool
+	}
+
+	return func(w http.ResponseWriter, r *http.Request) {
+		txtid := r.Context().Value("userinfo").(Values).Get("Id")
+		client := clientManager.GetWhatsmeowClient(txtid)
+		if client == nil {
+			s.Respond(w, r, http.StatusInternalServerError, errors.New("no session"))
+			return
+		}
+
+		var t newsletterMuteStruct
+		if err := json.NewDecoder(r.Body).Decode(&t); err != nil {
+			s.Respond(w, r, http.StatusBadRequest, errors.New("could not decode Payload"))
+			return
+		}
+
+		newsletter, ok := parseNewsletterJID(t.NewsletterJID)
+		if !ok {
+			s.Respond(w, r, http.StatusBadRequest, errors.New("could not parse NewsletterJID"))
+			return
+		}
+
+		if err := client.NewsletterToggleMute(context.Background(), newsletter, t.Mute); err != nil {
+			msg := fmt.Sprintf("failed to change newsletter mute status: %v", err)
+			log.Error().Msg(msg)
+			s.Respond(w, r, http.StatusInternalServerError, msg)
+			return
+		}
+
+		s.respondNewsletterSuccess(w, r, "Newsletter mute status changed successfully")
+	}
+}
+
+func parseNewsletterJID(value string) (types.JID, bool) {
+	jid, ok := parseJID(value)
+	return jid, ok && jid.Server == types.NewsletterServer
+}
+
+func (s *server) respondNewsletterSuccess(w http.ResponseWriter, r *http.Request, details string) {
+	responseJSON, err := json.Marshal(map[string]interface{}{"Details": details})
+	if err != nil {
+		s.Respond(w, r, http.StatusInternalServerError, err)
+		return
+	}
+	s.Respond(w, r, http.StatusOK, string(responseJSON))
+}
+
 // Admin List users
 func (s *server) ListUsers() http.HandlerFunc {
 	type usersStruct struct {

@@ -227,6 +227,107 @@ paths:
             application/json:
               schema:
                 example: {"code": 200, "data": {"Newsletter": [{"id": "120363144038483540@newsletter", "state": {"type": "active" }, "thread_metadata": {"creation_time": "1688746895", "description": {"id": "1689653839450668", "text": "WhatsApp's official channel. Follow for our latest feature launches, updates, exclusive drops and more.", "update_time": "1689653839450668" }, "invite": "0029Va4K0PZ5a245NkngBA2M", "name": {"id": "1688746895480511", "text": "WhatsApp", "update_time": "1688746895480511" }, "picture": {"direct_path": "/v/t61.24694-24/416962407_970228831134395_8869146381947923973_n.jpg?ccb=11-4&oh=01_Q5AaIRyTfP806JEGJDm0XWU5E-D4LcA-Wj3csSwh1jJTVanC&oe=67D550F1&_nc_sid=5e03e0&_nc_cat=110", "id": "1707950960975554", "type": "IMAGE", "url": "" }, "preview": {"direct_path": "/v/t61.24694-24/416962407_970228831134395_8869146381947923973_n.jpg?stp=dst-jpg_s192x192_tt6&ccb=11-4&oh=01_Q5AaIawuPXJUw9grRFJZtAJEc6QNm0XpqJq4X1Ssi9xNI0Qf&oe=67D550F1&_nc_sid=5e03e0&_nc_cat=110", "id": "1707950960975554", "type": "PREVIEW", "url": "" }, "settings": {"reaction_codes": {"value": "ALL" } }, "subscribers_count": "0", "verification": "verified" }, "viewer_metadata": {"mute": "on", "role": "subscriber" } } ] }, "success": true }
+  /newsletter/join:
+    post:
+      tags:
+        - Newsletter
+      summary: Join a newsletter
+      description: Follows a WhatsApp channel. The channel JID must use the `@newsletter` server.
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - NewsletterJID
+              properties:
+                NewsletterJID:
+                  type: string
+                  example: 120363144038483540@newsletter
+                  description: The WhatsApp channel JID.
+      responses:
+        200:
+          description: Newsletter joined
+          content:
+            application/json:
+              schema:
+                example: {"code": 200, "data": {"Details": "Newsletter joined successfully"}, "success": true}
+        400:
+          description: Invalid or missing newsletter JID
+        500:
+          description: No active session or WhatsApp rejected the operation
+  /newsletter/leave:
+    post:
+      tags:
+        - Newsletter
+      summary: Leave a newsletter
+      description: Unfollows a WhatsApp channel. The channel JID must use the `@newsletter` server.
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - NewsletterJID
+              properties:
+                NewsletterJID:
+                  type: string
+                  example: 120363144038483540@newsletter
+                  description: The WhatsApp channel JID.
+      responses:
+        200:
+          description: Newsletter left
+          content:
+            application/json:
+              schema:
+                example: {"code": 200, "data": {"Details": "Newsletter left successfully"}, "success": true}
+        400:
+          description: Invalid or missing newsletter JID
+        500:
+          description: No active session or WhatsApp rejected the operation
+  /newsletter/mute:
+    post:
+      tags:
+        - Newsletter
+      summary: Change newsletter notification settings
+      description: Mutes or unmutes notifications for a WhatsApp channel. The channel JID must use the `@newsletter` server.
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - NewsletterJID
+                - Mute
+              properties:
+                NewsletterJID:
+                  type: string
+                  example: 120363144038483540@newsletter
+                  description: The WhatsApp channel JID.
+                Mute:
+                  type: boolean
+                  example: true
+                  description: Set to true to mute notifications, false to unmute them.
+      responses:
+        200:
+          description: Newsletter notification setting changed
+          content:
+            application/json:
+              schema:
+                example: {"code": 200, "data": {"Details": "Newsletter mute status changed successfully"}, "success": true}
+        400:
+          description: Invalid or missing newsletter JID
+        500:
+          description: No active session or WhatsApp rejected the operation
   /webhook:
     get:
       tags:

@@ -2036,6 +2036,69 @@
             "description": "List newsletters"
           },
           "response": []
+        },
+        {
+          "name": "Join Newsletter",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "token", "value": "{{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"NewsletterJID\": \"120363144038483540@newsletter\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/newsletter/join",
+              "host": ["{{baseUrl}}"],
+              "path": ["newsletter", "join"]
+            },
+            "description": "Follow a WhatsApp channel. NewsletterJID must end in @newsletter."
+          },
+          "response": []
+        },
+        {
+          "name": "Leave Newsletter",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "token", "value": "{{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"NewsletterJID\": \"120363144038483540@newsletter\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/newsletter/leave",
+              "host": ["{{baseUrl}}"],
+              "path": ["newsletter", "leave"]
+            },
+            "description": "Unfollow a WhatsApp channel."
+          },
+          "response": []
+        },
+        {
+          "name": "Mute Newsletter",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "token", "value": "{{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"NewsletterJID\": \"120363144038483540@newsletter\",\n  \"Mute\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/newsletter/mute",
+              "host": ["{{baseUrl}}"],
+              "path": ["newsletter", "mute"]
+            },
+            "description": "Mute (true) or unmute (false) notifications for a WhatsApp channel."
+          },
+          "response": []
         }
       ]
     }

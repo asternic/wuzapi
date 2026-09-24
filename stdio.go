@@ -461,6 +461,15 @@ func (ss *stdioServer) routeRequest(req *jsonRpcRequest) {
 	case "newsletter.list":
 		httpMethod = "GET"
 		httpPath = "/newsletter/list"
+	case "newsletter.join":
+		httpMethod = "POST"
+		httpPath = "/newsletter/join"
+	case "newsletter.leave":
+		httpMethod = "POST"
+		httpPath = "/newsletter/leave"
+	case "newsletter.mute":
+		httpMethod = "POST"
+		httpPath = "/newsletter/mute"
 
 	// Webhook management
 	case "webhook.get":

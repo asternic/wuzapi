@@ -171,6 +171,9 @@ func (s *server) routes() {
 	s.router.Handle("/group/joinapprovalmode", c.Then(s.SetGroupJoinApprovalMode())).Methods("POST")
 
 	s.router.Handle("/newsletter/list", c.Then(s.ListNewsletter())).Methods("GET")
+	s.router.Handle("/newsletter/join", c.Then(s.NewsletterJoin())).Methods("POST")
+	s.router.Handle("/newsletter/leave", c.Then(s.NewsletterLeave())).Methods("POST")
+	s.router.Handle("/newsletter/mute", c.Then(s.NewsletterMute())).Methods("POST")
 
 	s.router.PathPrefix("/").Handler(http.FileServer(http.Dir(exPath + "/static/")))
 }
