@@ -48,6 +48,32 @@ func (cm *ClientManager) DeleteWhatsmeowClient(userID string) {
 	delete(cm.whatsmeowClients, userID)
 }
 
+// DeleteSessionIfCurrent drops every per-user entry of a session, but only if
+// the whatsmeow client registered for userID is still `client`. It is the
+// clientManager counterpart of deleteKillChannel's staleness guard.
+//
+// A session goroutine passes the client it created at startup. If a newer
+// session has replaced the entry in the meantime (a reconnect for the same
+// user), the maps hold a different client and this is a no-op. Without the
+// guard, a late cleanup from an abandoned session evicts the LIVE session's
+// entries: the user stays paired on WhatsApp while wuzapi forgets the client,
+// so every subsequent send fails with "no session" until the process restarts.
+//
+// The three maps are dropped under a single lock so no reader can observe a
+// half-torn-down session.
+func (cm *ClientManager) DeleteSessionIfCurrent(userID string, client *whatsmeow.Client) bool {
+	cm.Lock()
+	defer cm.Unlock()
+	if cm.whatsmeowClients[userID] != client {
+		return false
+	}
+	delete(cm.whatsmeowClients, userID)
+	delete(cm.myClients, userID)
+	delete(cm.pollOptions, userID)
+	delete(cm.httpClients, userID)
+	return true
+}
+
 func (cm *ClientManager) SetHTTPClient(userID string, client *resty.Client) {
 	cm.Lock()
 	defer cm.Unlock()
