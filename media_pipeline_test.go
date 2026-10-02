@@ -817,3 +817,27 @@ func TestMediaFailedDownloadCleansFile(t *testing.T) {
 		t.Fatal("failed download leaked file")
 	}
 }
+
+func TestDocumentMimeType(t *testing.T) {
+	const xlsx = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+	tests := []struct {
+		name, declared, fileName, sniffed, want string
+	}{
+		{"declared type wins over sniffed zip", xlsx, "report.bin", "application/zip", xlsx},
+		{"generic declared type falls back to extension", "application/octet-stream", "report.xlsx", "application/zip", xlsx},
+		{"legacy S3 generic type falls back to extension", "binary/octet-stream", "report.xlsx", "application/zip", xlsx},
+		{"extension lookup ignores case", "", "REPORT.DOCX", "application/zip", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"},
+		{"OLE document resolves from extension", "", "sheet.xls", "application/octet-stream", "application/vnd.ms-excel"},
+		{"standard library extension table", "", "doc.pdf", "application/octet-stream", "application/pdf"},
+		{"unknown extension falls back to sniffed type", "", "doc.unknown", "application/pdf", "application/pdf"},
+		{"parameters are stripped", "application/pdf; charset=binary", "doc.unknown", "application/zip", "application/pdf"},
+		{"all generic stays octet-stream", "", "doc.unknown", "application/octet-stream", "application/octet-stream"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := documentMimeType(tt.declared, tt.fileName, tt.sniffed); got != tt.want {
+				t.Fatalf("documentMimeType(%q, %q, %q) = %q, want %q", tt.declared, tt.fileName, tt.sniffed, got, tt.want)
+			}
+		})
+	}
+}
