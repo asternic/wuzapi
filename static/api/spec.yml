@@ -3116,6 +3116,7 @@ definitions:
         example: file.txt
       MimeType:
         type: string
+        description: Explicit document MIME override. If omitted, uses the declared data URL or HTTP type, then the filename extension, then content detection. Missing, invalid, and generic octet-stream source types fall back; an implicit data URL text/plain default is not a declaration.
         example: "text/plain"
       Id:
         type: string

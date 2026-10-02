@@ -1120,7 +1120,7 @@ func (s *server) SendDocument() http.HandlerFunc {
 			return
 		}
 		if t.MimeType == "" {
-			t.MimeType = documentMimeType(media.MIME, t.FileName, sniffed)
+			t.MimeType = documentMimeType(media.DeclaredMIME, t.FileName, sniffed)
 		}
 
 		uploaded, err = uploadMedia(r.Context(), clientManager.GetWhatsmeowClient(txtid), media, whatsmeow.MediaDocument)

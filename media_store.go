@@ -16,6 +16,8 @@ import (
 // mediaFile owns one private file. Consumers must finish before Close; each Open
 // returns an independent cursor. Delivery goroutines own their prepared files.
 type mediaFile struct {
+	// DeclaredMIME is the explicit source type, without sniffing or data URL defaults.
+	DeclaredMIME     string
 	Path, Name, MIME string
 	Size             int64
 	store            *mediaStore

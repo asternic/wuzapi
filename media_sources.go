@@ -151,7 +151,7 @@ func readOutgoingMedia(parent context.Context, value string, limit int64) (*medi
 	}
 	defer release()
 	var reader io.Reader
-	var mimeType string
+	var mimeType, declaredMIME string
 	if isHTTPURL(value) {
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, value, nil)
 		if err != nil {
@@ -170,16 +170,24 @@ func readOutgoingMedia(parent context.Context, value string, limit int64) (*medi
 		}
 		reader = io.LimitReader(resp.Body, limit+1)
 		mimeType = resp.Header.Get("Content-Type")
+		declaredMIME = mimeType
 	} else {
 		reader, mimeType, err = dataURLReader(value)
 		if err != nil {
 			return nil, err
+		}
+		// The parser supplies text/plain for data:;base64,... and data:,... .
+		// Keep that legacy MIME for other consumers, but do not treat the
+		// implicit default as a declaration when resolving document types.
+		if strings.IndexAny(strings.TrimPrefix(value, "data:"), ";,") > 0 {
+			declaredMIME = mimeType
 		}
 	}
 	media, file, err := store.create("", mimeType)
 	if err != nil {
 		return nil, err
 	}
+	media.DeclaredMIME = declaredMIME
 	media.Size, err = io.Copy(file, contextReader{ctx, reader})
 	closeErr := file.Close()
 	if err == nil {
