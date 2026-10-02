@@ -955,7 +955,9 @@ curl -X POST -H 'Token: 1234ABCD' -H 'Content-Type: application/json' --data '{"
 
 ## Send Document Message
 
-Sends a Document message. A `FileName` must be supplied in the request body. `MimeType` is optional; when provided, it overrides automatic MIME type detection. Otherwise, the endpoint considers the data URL MIME type, an HTTP URL response's `Content-Type`, the `FileName` extension, and finally the file bytes.
+Sends a Document message. Any mime type can be attached. A FileName must be supplied in the request body. The Document must be passed in base64 embedded format or as an HTTP URL.
+
+The optional MimeType field sets the document type sent to WhatsApp. When omitted, the data URL type or HTTP Content-Type is used, unless it is `application/octet-stream`, in which case the type is taken from the FileName extension and then from the file contents.
 
 Endpoint: _/chat/send/document_
 
@@ -964,17 +966,6 @@ Method: **POST**
 
 ```
 curl -X POST -H 'Token: 1234ABCD' -H 'Content-Type: application/json' --data '{"Phone":"5491155554444","FileName":"hola.txt","Document":"data:application/octet-stream;base64,aG9sYSBxdWUgdGFsCg=="}' http://localhost:8080/chat/send/document
-```
-
-Example sending an Excel workbook with an explicit MIME type:
-
-```json
-{
-  "Phone": "31612345678",
-  "FileName": "report.xlsx",
-  "MimeType": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-  "Document": "data:application/octet-stream;base64,UEsDB..."
-}
 ```
 
 ---

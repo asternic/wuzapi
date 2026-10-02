@@ -1,0 +1,93 @@
+# Builds this fork and pushes it to GHCR, for the 87w home server to pull.
+#
+# Upstream's inherited `docker-publish.yml` cannot work here: it pushes to `asternic/wuzapi`,
+# which this fork cannot write to, using Docker Hub secrets it does not have. It is left
+# untouched so it keeps merging cleanly on upstream syncs; it only ever fires on a published
+# release, and this fork creates none.
+#
+# `build.yml` is deliberately not modified either, for the same merge-cleanliness reason -
+# which is why the test step lives here. Despite its name, upstream's "Build and Test" runs
+# `go vet` and `go build` but never `go test`, so the MIME-type tests had never executed
+# before this workflow existed.
+name: publish
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+
+env:
+  IMAGE: ghcr.io/${{ github.repository }}
+
+jobs:
+  # Runs on every push and PR, and gates the image below. The whole reason this fork exists is
+  # the document MIME-type fix, and these tests are the only thing that proves it works.
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+      - run: go test ./...
+
+  image:
+    needs: test
+    # Only a version tag produces an image, so an ordinary commit on main cannot become
+    # deployable by accident.
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # No `latest`: the infrastructure repo pins an exact version, never a moving tag.
+      #
+      # These versions are the FORK's own, deliberately unrelated to upstream's numbering.
+      # The fork tracks upstream `main` rather than a release, so a tag claiming to be
+      # upstream's 1.0.9 would be untrue. Each release records the upstream commit it is
+      # built on; see the release notes.
+      - id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        with:
+          images: ${{ env.IMAGE }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+
+      - id: build
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: Dockerfile
+          # The server is an Intel N100. Upstream also builds arm64, which with CGO_ENABLED=1
+          # means QEMU emulation and a far slower build for an architecture nothing here runs.
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          # Without this the tag resolves to an index holding an attestation manifest, and the
+          # digest to pin is then not the image's own. A plain manifest keeps pinning obvious.
+          provenance: false
+
+      # The reference to pin in stacks/wuzapi/compose.yaml in the 87w repo.
+      - name: Image reference to pin
+        run: |
+          echo "### Pin this in 87w" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          echo "${{ env.IMAGE }}:${{ steps.meta.outputs.version }}@${{ steps.build.outputs.digest }}" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"

@@ -3114,6 +3114,9 @@ definitions:
       FileName:
         type: string
         example: file.txt
+      MimeType:
+        type: string
+        example: "text/plain"
       Id:
         type: string
         example: "ABCDABCD1234"

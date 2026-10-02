@@ -781,14 +781,14 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"Phone\": \"31612345678\",\n  \"Document\": \"data:application/octet-stream;base64,UEsDB...\",\n  \"FileName\": \"report.xlsx\",\n  \"MimeType\": \"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet\"\n}"
+              "raw": "{\n  \"Phone\": \"5491155553935\",\n  \"Document\": \"data:application/octet-stream;base64,/9j/\",\n  \"FileName\": \"doc.pdf\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/chat/send/document",
               "host": ["{{baseUrl}}"],
               "path": ["chat", "send", "document"]
             },
-            "description": "Send a document. MimeType is optional and overrides automatic detection."
+            "description": "Send document"
           },
           "response": []
         },
