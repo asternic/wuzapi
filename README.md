@@ -50,15 +50,6 @@ When HMAC is configured, all webhooks include an `x-hmac-signature` header with 
 **Optional:**
 * Docker (for containerization)
 
-## Updating dependencies
-
-This project uses the whatsmeow library to communicate with WhatsApp. To update the library to the latest version, run:
-
-```bash
-go get -u go.mau.fi/whatsmeow@latest
-go mod tidy
-```
-
 ## Building
 
 ```
@@ -84,6 +75,7 @@ you can use to alter behaviour
 * -logtype : format for logs, either console (default) or json
 * -color : enable colored output for console logs
 * -osname : Connection OS Name in Whatsapp
+* -autopresence : automatic presence after connecting, either available (default) or unavailable
 * -skipmedia : Skip downloading media from messages
 * -wadebug : enable whatsmeow debug, either INFO or DEBUG levels are suported
 
@@ -136,13 +128,55 @@ WUZAPI_GLOBAL_HMAC_KEY=your_global_hmac_key_here
 TZ=America/New_York
 WEBHOOK_FORMAT=json
 SESSION_DEVICE_NAME=WuzAPI
+WUZAPI_AUTO_PRESENCE=available
 WUZAPI_PORT=8080
 WUZAPI_GLOBAL_WEBHOOK=https://your-global-webhook.url
 WEBHOOK_RETRY_ENABLED=true
 WEBHOOK_RETRY_COUNT=2
 WEBHOOK_RETRY_DELAY_SECONDS=30
 WEBHOOK_ERROR_QUEUE_NAME=wuzapi_dead_letter_webhooks
+WUZAPI_MEDIA_CONCURRENCY=2
+# WUZAPI_MEDIA_TMPDIR=/path/to/disk-backed/temp
 ```
+
+### Attachment temporary storage
+
+Incoming event attachments and outgoing document, audio, image, video, sticker,
+and optional button-image uploads use private temporary files automatically.
+`WUZAPI_MEDIA_TMPDIR` defaults to the operating system temporary directory.
+`WUZAPI_MEDIA_CONCURRENCY` defaults to `2` and limits simultaneous media downloads,
+uploads, decoding, conversions, and delivery-body preparation. Waiting operations
+honor cancellation; webhook retry backoff does not hold a media slot.
+
+Use a **disk-backed** writable directory or container volume for memory savings.
+A tmpfs mount still consumes RAM. Set the path inside the container and mount the
+backing storage there; setting a host path in `.env` alone does not mount it.
+The directory must support file locks. Allow space for plaintext, encryption or
+conversion scratch files, and base64 delivery bodies (approximately 4/3 of the
+attachment size each). Slow receivers and pending retries retain delivery files.
+
+Files are removed when their consumers finish. Each process owns a locked private
+directory; later starts reclaim abandoned directories without touching another
+running instance. Temporary files are not a durable queue and do not recover
+in-flight messages after a crash. Existing API inputs, delivery formats, and URL
+size limits are unchanged. JSON request decoding, image pixel decoding, and
+RabbitMQ's final payload buffer still have size-dependent memory costs.
+
+See [attachment memory validation](media-memory.md) for measurements and test limits.
+
+### Log verbosity
+
+Set `LOG_LEVEL=warn` in `.env` or the process environment to show warnings and
+more severe WuzAPI logs. Accepted values are `trace`, `debug`, `info`, `warn`,
+`error`, `fatal`, and `panic`, ignoring case and surrounding whitespace. An unset,
+empty, or invalid value preserves the existing verbosity; numeric values and
+`disabled` are not accepted. Existing process environment values take precedence
+over `.env`, including an explicitly empty value.
+
+The filter is applied before startup messages and works with console and JSON
+output. It controls WuzAPI's zerolog logger, not Whatsmeow's `-wadebug` output.
+Compose and Swarm forward `LOG_LEVEL`; for Swarm, export it before deploying since
+`docker stack deploy` does not automatically read `.env` for substitution.
 
 ### Important Notes
 
@@ -178,7 +212,13 @@ WEBHOOK_FORMAT=json # or "form" for the default
 SESSION_DEVICE_NAME=WuzAPI
 WUZAPI_PORT=8080 # Port for the WuzAPI server
 WUZAPI_GLOBAL_WEBHOOK= # Global webhook URL for all instances
+WUZAPI_AUTO_PRESENCE=available # use unavailable to preserve primary-phone push notifications
 ```
+
+`WUZAPI_AUTO_PRESENCE` controls the presence announced after a session connects or
+its push name changes. The default `available` value preserves the existing behavior
+and enables contact presence updates. Set it to `unavailable` to keep the linked
+client offline so WhatsApp continues sending push notifications to the primary phone.
 
 ### RabbitMQ Integration
 WuzAPI supports sending WhatsApp events to a RabbitMQ queue for global event distribution. When enabled, all WhatsApp events will be published to the specified queue regardless of individual user webhook configurations.
@@ -312,6 +352,22 @@ request body, always passing the Token header for authenticating the request.
 
 Check the [API Reference](https://github.com/asternic/wuzapi/blob/main/API.md)
 
+## Updating the upstream whatsmeow library
+
+> [!CAUTION]
+> This section is intended for maintainers and developers. Regular users should use the whatsmeow version pinned in `go.mod` and should not upgrade it as part of the normal installation or build process.
+
+WuzAPI uses [whatsmeow](https://github.com/tulir/whatsmeow) to communicate with WhatsApp. Its upstream API can introduce breaking changes, so upgrading to the latest version may cause WuzAPI to stop compiling or working correctly until its code is adapted.
+
+Perform upgrades in a development branch, review the resulting `go.mod` and `go.sum` changes, and verify that WuzAPI builds and its tests pass before deploying the update:
+
+```bash
+go get -u go.mau.fi/whatsmeow@latest
+go mod tidy
+go test ./...
+go build .
+```
+
 ## Contributors
 
 <!-- CONTRIBUTORS:START -->
@@ -355,15 +411,15 @@ Check the [API Reference](https://github.com/asternic/wuzapi/blob/main/API.md)
   </td>
 </tr><tr>
 <td align="center">
-    <a href="https://github.com/ramon-victor">
-      <img src="https://avatars.githubusercontent.com/u/13617054?v=4" width="100px;" style="border-radius:50%;"/><br />
-      <sub><b>ramon-victor</b></sub>
+    <a href="https://github.com/ThiagoBauken">
+      <img src="https://avatars.githubusercontent.com/u/107090829?v=4" width="100px;" style="border-radius:50%;"/><br />
+      <sub><b>ThiagoBauken</b></sub>
     </a>
   </td>
 <td align="center">
-    <a href="https://github.com/vitorsilvalima">
-      <img src="https://avatars.githubusercontent.com/u/9752658?v=4" width="100px;" style="border-radius:50%;"/><br />
-      <sub><b>vitorsilvalima</b></sub>
+    <a href="https://github.com/ramon-victor">
+      <img src="https://avatars.githubusercontent.com/u/13617054?v=4" width="100px;" style="border-radius:50%;"/><br />
+      <sub><b>ramon-victor</b></sub>
     </a>
   </td>
 <td align="center">
@@ -373,15 +429,15 @@ Check the [API Reference](https://github.com/asternic/wuzapi/blob/main/API.md)
     </a>
   </td>
 <td align="center">
-    <a href="https://github.com/Piahn">
-      <img src="https://avatars.githubusercontent.com/u/132025108?v=4" width="100px;" style="border-radius:50%;"/><br />
-      <sub><b>Piahn</b></sub>
+    <a href="https://github.com/vitorsilvalima">
+      <img src="https://avatars.githubusercontent.com/u/9752658?v=4" width="100px;" style="border-radius:50%;"/><br />
+      <sub><b>vitorsilvalima</b></sub>
     </a>
   </td>
 <td align="center">
-    <a href="https://github.com/ThiagoBauken">
-      <img src="https://avatars.githubusercontent.com/u/107090829?v=4" width="100px;" style="border-radius:50%;"/><br />
-      <sub><b>ThiagoBauken</b></sub>
+    <a href="https://github.com/Piahn">
+      <img src="https://avatars.githubusercontent.com/u/132025108?v=4" width="100px;" style="border-radius:50%;"/><br />
+      <sub><b>Piahn</b></sub>
     </a>
   </td>
 <td align="center">
@@ -422,16 +478,34 @@ Check the [API Reference](https://github.com/asternic/wuzapi/blob/main/API.md)
     </a>
   </td>
 <td align="center">
+    <a href="https://github.com/Alg0rix">
+      <img src="https://avatars.githubusercontent.com/u/53804949?v=4" width="100px;" style="border-radius:50%;"/><br />
+      <sub><b>Alg0rix</b></sub>
+    </a>
+  </td>
+</tr><tr>
+<td align="center">
     <a href="https://github.com/igortrinidad">
       <img src="https://avatars.githubusercontent.com/u/13478652?v=4" width="100px;" style="border-radius:50%;"/><br />
       <sub><b>igortrinidad</b></sub>
     </a>
   </td>
-</tr><tr>
 <td align="center">
     <a href="https://github.com/chrsmendes">
       <img src="https://avatars.githubusercontent.com/u/77082167?v=4" width="100px;" style="border-radius:50%;"/><br />
       <sub><b>chrsmendes</b></sub>
+    </a>
+  </td>
+<td align="center">
+    <a href="https://github.com/claytim">
+      <img src="https://avatars.githubusercontent.com/u/47343472?v=4" width="100px;" style="border-radius:50%;"/><br />
+      <sub><b>claytim</b></sub>
+    </a>
+  </td>
+<td align="center">
+    <a href="https://github.com/eliasmeireles">
+      <img src="https://avatars.githubusercontent.com/u/13203692?v=4" width="100px;" style="border-radius:50%;"/><br />
+      <sub><b>eliasmeireles</b></sub>
     </a>
   </td>
 <td align="center">
@@ -440,6 +514,13 @@ Check the [API Reference](https://github.com/asternic/wuzapi/blob/main/API.md)
       <sub><b>jeffersonfelixdev</b></sub>
     </a>
   </td>
+<td align="center">
+    <a href="https://github.com/My-con">
+      <img src="https://avatars.githubusercontent.com/u/123265027?v=4" width="100px;" style="border-radius:50%;"/><br />
+      <sub><b>My-con</b></sub>
+    </a>
+  </td>
+</tr><tr>
 <td align="center">
     <a href="https://github.com/paul-lestyo">
       <img src="https://avatars.githubusercontent.com/u/51690314?v=4" width="100px;" style="border-radius:50%;"/><br />
@@ -464,35 +545,10 @@ Check the [API Reference](https://github.com/asternic/wuzapi/blob/main/API.md)
       <sub><b>joaosouz4dev</b></sub>
     </a>
   </td>
-</tr><tr>
 <td align="center">
     <a href="https://github.com/gusnips">
       <img src="https://avatars.githubusercontent.com/u/981265?v=4" width="100px;" style="border-radius:50%;"/><br />
       <sub><b>gusnips</b></sub>
-    </a>
-  </td>
-<td align="center">
-    <a href="https://github.com/anilgulecha">
-      <img src="https://avatars.githubusercontent.com/u/1016984?v=4" width="100px;" style="border-radius:50%;"/><br />
-      <sub><b>anilgulecha</b></sub>
-    </a>
-  </td>
-<td align="center">
-    <a href="https://github.com/zennnez">
-      <img src="https://avatars.githubusercontent.com/u/3524740?v=4" width="100px;" style="border-radius:50%;"/><br />
-      <sub><b>zennnez</b></sub>
-    </a>
-  </td>
-<td align="center">
-    <a href="https://github.com/murilo-koko">
-      <img src="https://avatars.githubusercontent.com/u/223512888?v=4" width="100px;" style="border-radius:50%;"/><br />
-      <sub><b>murilo-koko</b></sub>
-    </a>
-  </td>
-<td align="center">
-    <a href="https://github.com/Jwenqiang">
-      <img src="https://avatars.githubusercontent.com/u/20280001?v=4" width="100px;" style="border-radius:50%;"/><br />
-      <sub><b>Jwenqiang</b></sub>
     </a>
   </td>
 </tr></table>
@@ -503,13 +559,47 @@ Check the [API Reference](https://github.com/asternic/wuzapi/blob/main/API.md)
 
 - [wuzapi TypeScript / Node Client](https://github.com/gusnips/wuzapi-node)
 
+## Pairing history sync
+
+`days_to_sync_history` requests a full history window from WhatsApp when linking
+an account. Set it through `POST /admin/users`, `PUT /admin/users/{id}`, or
+`POST /session/history` **before starting pairing**:
+
+```json
+{"history": 1000, "days_to_sync_history": 30}
+```
+
+The dashboard exposes the same setting when creating a user and in History
+Configuration. The session configuration endpoint works without an active WhatsApp
+client. Its omitted fields are preserved; sending `days_to_sync_history: 0`
+restores WhatsApp's default sync behavior. Values from 0 through 365 are accepted.
+Admin user responses and `GET /session/status` expose the saved value.
+
+Sync days and `history` are separate settings: `history` is the local per-chat
+message retention count, not a number of days. The requested window is sent in
+that user's pairing payload; WhatsApp and the phone determine which messages are
+available. Incoming batches use the existing `HistorySync` processing and webhooks.
+Zero sync days does not suppress WhatsApp's normal history events.
+
+Changes apply on the next **new pairing**, not an ordinary reconnect. If a QR has
+already been issued, restart the pairing flow after saving. For an already linked
+account, the explicit `GET /session/history` endpoint remains available for
+message-based history requests; changing sync days alone does not backfill it.
+Both SQLite and PostgreSQL are supported, with existing accounts defaulting to 0.
+
 ## Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=asternic/wuzapi&type=Date)](https://www.star-history.com/#asternic/wuzapi&Date)
+<a href="https://www.star-history.com/?type=date&repos=asternic%2Fwuzapi">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=asternic/wuzapi&type=date&theme=dark&legend=top-left&sealed_token=btZMq-H0d-DBRgXRdFTBx24bZ3x6oVGnSTwAk6DEM19J5wiWYhsN20SekiMRIbFaEkIhmwM5_SyQKT1QTvNVYF9QAaFLdvvPPEq7Y7dvZ34MoKnKNXyXlQgerN1ag_hYzp9RGYAywggEXDxTESW-asFZnacNcBq7LvO4XhspFm-KflmgBomjG_czi8vR" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=asternic/wuzapi&type=date&legend=top-left&sealed_token=btZMq-H0d-DBRgXRdFTBx24bZ3x6oVGnSTwAk6DEM19J5wiWYhsN20SekiMRIbFaEkIhmwM5_SyQKT1QTvNVYF9QAaFLdvvPPEq7Y7dvZ34MoKnKNXyXlQgerN1ag_hYzp9RGYAywggEXDxTESW-asFZnacNcBq7LvO4XhspFm-KflmgBomjG_czi8vR" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=asternic/wuzapi&type=date&legend=top-left&sealed_token=btZMq-H0d-DBRgXRdFTBx24bZ3x6oVGnSTwAk6DEM19J5wiWYhsN20SekiMRIbFaEkIhmwM5_SyQKT1QTvNVYF9QAaFLdvvPPEq7Y7dvZ34MoKnKNXyXlQgerN1ag_hYzp9RGYAywggEXDxTESW-asFZnacNcBq7LvO4XhspFm-KflmgBomjG_czi8vR" />
+ </picture>
+</a>
 
 ## License
 
-Copyright &copy; 2025 Nicolás Gudiño and contributors
+Copyright &copy; 2026 Nicolás Gudiño and contributors
 
 [MIT](https://choosealicense.com/licenses/mit/)
 
@@ -560,3 +650,17 @@ distribution makes it eligible for export under the License Exception ENC
 Technology Software Unrestricted (TSU) exception (see the BIS Export
 Administration Regulations, Section 740.13) for both object code and source
 code.
+
+### Message history edits
+
+`/chat/history` returns stored events, newest first, rather than the current state of
+each message. Both live and HistorySync edits are stored as separate `edit` rows:
+`message_id` identifies the edit, `quoted_message_id` identifies its target, and
+`text_content` contains the replacement text or caption, including an empty caption.
+The original message stays unchanged. Consumers must apply edits to their targets;
+use the protocol message's `timestampMS` in `datajson` to order successive edits when
+available, since database timestamps record insertion time, including HistorySync.
+A limited response can include an edit without the original message.
+
+Previously imported `unknown` edits are repaired when redelivered. This does not
+backfill existing history or recover events that WhatsApp does not redeliver.

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"strings"
 	"sync"
 	"time"
@@ -246,6 +247,10 @@ func (m *S3Manager) GenerateS3Key(userID, contactJID, messageID string, mimeType
 
 // UploadToS3 uploads file to S3 and returns the key
 func (m *S3Manager) UploadToS3(ctx context.Context, userID string, key string, data []byte, mimeType string) error {
+	return m.UploadReaderToS3(ctx, userID, key, bytes.NewReader(data), int64(len(data)), mimeType)
+}
+
+func (m *S3Manager) UploadReaderToS3(ctx context.Context, userID, key string, reader io.ReadSeeker, size int64, mimeType string) error {
 	client, config, ok := m.GetClient(userID)
 	if !ok {
 		// Try lazy init from DB if available (handles reconnect-after-restart)
@@ -271,12 +276,13 @@ func (m *S3Manager) UploadToS3(ctx context.Context, userID string, key string, d
 	}
 
 	input := &s3.PutObjectInput{
-		Bucket:       aws.String(config.Bucket),
-		Key:          aws.String(key),
-		Body:         bytes.NewReader(data),
-		ContentType:  aws.String(contentType),
-		CacheControl: aws.String("public, max-age=3600"),
-		ACL:          types.ObjectCannedACLPublicRead,
+		Bucket:        aws.String(config.Bucket),
+		Key:           aws.String(key),
+		Body:          reader,
+		ContentLength: aws.Int64(size),
+		ContentType:   aws.String(contentType),
+		CacheControl:  aws.String("public, max-age=3600"),
+		ACL:           types.ObjectCannedACLPublicRead,
 	}
 
 	if expires != nil {
@@ -350,12 +356,16 @@ func (m *S3Manager) TestConnection(ctx context.Context, userID string) error {
 // ProcessMediaForS3 handles the complete media upload process
 func (m *S3Manager) ProcessMediaForS3(ctx context.Context, userID, contactJID, messageID string,
 	data []byte, mimeType string, fileName string, isIncoming bool) (map[string]interface{}, error) {
+	return m.ProcessMediaReaderForS3(ctx, userID, contactJID, messageID, bytes.NewReader(data), int64(len(data)), mimeType, fileName, isIncoming)
+}
+
+func (m *S3Manager) ProcessMediaReaderForS3(ctx context.Context, userID, contactJID, messageID string, reader io.ReadSeeker, size int64, mimeType, fileName string, isIncoming bool) (map[string]interface{}, error) {
 
 	// Generate S3 key
 	key := m.GenerateS3Key(userID, contactJID, messageID, mimeType, isIncoming)
 
 	// Upload to S3
-	err := m.UploadToS3(ctx, userID, key, data, mimeType)
+	err := m.UploadReaderToS3(ctx, userID, key, reader, size, mimeType)
 	if err != nil {
 		return nil, fmt.Errorf("failed to upload to S3: %w", err)
 	}
@@ -376,7 +386,7 @@ func (m *S3Manager) ProcessMediaForS3(ctx context.Context, userID, contactJID, m
 		"url":      publicURL,
 		"key":      key,
 		"bucket":   bucket,
-		"size":     len(data),
+		"size":     size,
 		"mimeType": mimeType,
 		"fileName": fileName,
 	}

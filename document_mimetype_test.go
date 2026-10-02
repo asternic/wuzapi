@@ -1,6 +1,9 @@
 package main
 
-import "testing"
+import (
+	"net/http"
+	"testing"
+)
 
 func TestResolveDocumentMimeType(t *testing.T) {
 	zipData := []byte("PK\x03\x04\x14\x00\x00\x00")
@@ -104,7 +107,7 @@ func TestResolveDocumentMimeType(t *testing.T) {
 				tt.dataURLMimeType,
 				tt.httpContentType,
 				tt.fileName,
-				tt.fileData,
+				http.DetectContentType(tt.fileData),
 			)
 			if got != tt.want {
 				t.Fatalf("resolveDocumentMimeType() = %q, want %q", got, tt.want)

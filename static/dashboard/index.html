@@ -475,7 +475,12 @@
       <div class="ui form">
         <div class="field" id="messageHistoryField">
           <label>History</label>
-          <input id="history" type="number" placeholder="0">
+          <input id="history" type="number" min="0" step="1" placeholder="0">
+        </div>
+        <div class="field">
+          <label>History requested on next pairing (days)</label>
+          <input id="historySyncDays" type="number" min="0" max="365" step="1" value="0">
+          <small>0 uses WhatsApp defaults. Save before starting a new pairing; an existing QR must be restarted. Availability depends on the phone.</small>
         </div>
       </div>
     </div>
@@ -655,6 +660,12 @@
           <label>Message History</label>
           <input type="number" name="history" min="0" value="0" placeholder="0">
           <small>Number of messages to store in history per chat for this instance. Set to 0 to disable message history.</small>
+        </div>
+
+        <div class="field">
+          <label>History requested on pairing (days)</label>
+          <input type="number" name="days_to_sync_history" min="0" max="365" step="1" value="0">
+          <small>0 uses WhatsApp defaults. Separate from the number of messages retained per chat.</small>
         </div>
 
         <!-- Proxy Configuration -->
@@ -1306,6 +1317,44 @@
     </div>
     <div class="actions">
       <div class="ui button">Close</div>
+    </div>
+  </div>
+
+  <!-- Passkey Pairing Modal -->
+  <div class="ui modal" id="modalPasskeyPairing"><i class="close icon"></i>
+    <div class="header">
+      <i class="key icon"></i> Passkey Pairing
+    </div>
+    <div class="content">
+      <div class="ui warning message">
+        <div class="header">
+          <i class="info circle icon"></i> Passkey Authentication Required
+        </div>
+        <p>After scanning the QR code, WhatsApp requested passkey verification. Follow the steps below to complete the connection.</p>
+      </div>
+
+      <h4 class="ui header">Step 1 — Copy and run the code in your browser console</h4>
+      <p>Open <strong>https://web.whatsapp.com</strong>, press <kbd style="padding:2px 6px;border:1px solid #ccc;border-radius:3px;background:#f5f5f5;">F12</kbd>, paste in the console and press <kbd style="padding:2px 6px;border:1px solid #ccc;border-radius:3px;background:#f5f5f5;">Enter</kbd>.</p>
+      <div class="ui segment" style="position:relative;">
+        <pre id="passkeyCodeBlock" style="max-height:200px;overflow:auto;white-space:pre-wrap;word-break:break-all;background:#1e1e1e;color:#d4d4d4;padding:12px;border-radius:4px;font-size:12px;">Loading...</pre>
+        <button class="ui small button" style="position:absolute;top:8px;right:8px;" onclick="copyPasskeyCode()">
+          <i class="copy icon"></i> Copy
+        </button>
+      </div>
+
+      <h4 class="ui header" style="margin-top:20px;">Step 2 — Paste the console result here</h4>
+      <div class="ui form">
+        <div class="field">
+          <textarea id="passkeyResponseInput" rows="4" placeholder='Paste the JSON returned by the console here...'></textarea>
+        </div>
+      </div>
+    </div>
+    <div class="actions">
+      <div class="ui cancel button secondary">Close</div>
+      <div class="ui positive right labeled icon button" id="sendPasskeyBtn" onclick="submitPasskeyResponse()">
+        Send Response
+        <i class="checkmark icon"></i>
+      </div>
     </div>
   </div>
 
