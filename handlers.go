@@ -1119,8 +1119,8 @@ func (s *server) SendDocument() http.HandlerFunc {
 			s.Respond(w, r, http.StatusInternalServerError, err)
 			return
 		}
-		if isHTTPURL(t.Document) && t.MimeType == "" {
-			t.MimeType = media.MIME
+		if t.MimeType == "" {
+			t.MimeType = documentMimeType(media.MIME, t.FileName, sniffed)
 		}
 
 		uploaded, err = uploadMedia(r.Context(), clientManager.GetWhatsmeowClient(txtid), media, whatsmeow.MediaDocument)
@@ -1130,16 +1130,11 @@ func (s *server) SendDocument() http.HandlerFunc {
 		}
 
 		msg := &waE2E.Message{DocumentMessage: &waE2E.DocumentMessage{
-			URL:        proto.String(uploaded.URL),
-			FileName:   &t.FileName,
-			DirectPath: proto.String(uploaded.DirectPath),
-			MediaKey:   uploaded.MediaKey,
-			Mimetype: proto.String(func() string {
-				if t.MimeType != "" {
-					return t.MimeType
-				}
-				return sniffed
-			}()),
+			URL:           proto.String(uploaded.URL),
+			FileName:      &t.FileName,
+			DirectPath:    proto.String(uploaded.DirectPath),
+			MediaKey:      uploaded.MediaKey,
+			Mimetype:      proto.String(t.MimeType),
 			FileEncSHA256: uploaded.FileEncSHA256,
 			FileSHA256:    uploaded.FileSHA256,
 			FileLength:    proto.Uint64(uint64(media.Size)),

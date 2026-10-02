@@ -955,7 +955,9 @@ curl -X POST -H 'Token: 1234ABCD' -H 'Content-Type: application/json' --data '{"
 
 ## Send Document Message
 
-Sends a Document message. Any mime type can be attached. A FileName must be supplied in the request body. The Document must be passed as octet-stream in base64 embedded format.
+Sends a Document message. Any mime type can be attached. A FileName must be supplied in the request body. The Document must be passed in base64 embedded format or as an HTTP URL.
+
+The optional MimeType field sets the document type sent to WhatsApp. When omitted, the data URL type or HTTP Content-Type is used, unless it is `application/octet-stream`, in which case the type is taken from the FileName extension and then from the file contents.
 
 Endpoint: _/chat/send/document_
 
