@@ -98,10 +98,43 @@
             <th>Name</th>
             <th>Connected</th>
             <th>Logged In</th>
+            <th>Proxy</th>
             <th>Actions</th>
           </tr>
         </thead>
         <tbody id="instances-body"></tbody>
+      </table>
+    </div>
+
+    <!-- Proxy Pool -->
+    <div class="ui stackable grid" id="proxyPoolSection">
+      <div class="row">
+        <div class="left floated left aligned ten wide column">
+          <h2 class="ui header">
+            Proxy Pool
+            <div class="sub header">Instances that connect without their own proxy are assigned the least-loaded proxy below and keep it on every reconnect.</div>
+          </h2>
+        </div>
+        <div class="right floated right aligned six wide column">
+          <button class="ui primary button" id="addProxyPoolButton">
+            <i class="plus icon"></i> Add Proxy
+          </button>
+        </div>
+      </div>
+    </div>
+    <div class="ui mb-4">
+      <div class="ui negative message hidden" id="proxyPoolError"></div>
+      <table class="ui celled table" id="proxy-pool-table">
+        <thead>
+          <tr>
+            <th>Label</th>
+            <th>Proxy URL</th>
+            <th>Devices</th>
+            <th>Status</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="proxy-pool-body"></tbody>
       </table>
     </div>
   </div> 
@@ -820,6 +853,52 @@
     </div>
   </div>
 
+  <!-- Proxy Pool Modals -->
+  <div class="ui small modal" id="modalProxyPoolEntry"><i class="close icon"></i>
+    <div class="header" id="proxyPoolModalTitle">Add Proxy</div>
+    <div class="content">
+      <div class="ui negative message hidden" id="proxyPoolFormError"></div>
+      <form class="ui form" id="proxyPoolForm" onsubmit="return false;">
+        <div class="field">
+          <label>Label</label>
+          <input type="text" id="proxyPoolLabel" placeholder="residential-1">
+        </div>
+        <div class="required field">
+          <label>Proxy URL</label>
+          <input type="text" id="proxyPoolUrl" placeholder="socks5://user:pass@203.0.113.10:1080 or http://203.0.113.10:3128">
+          <small id="proxyPoolUrlHelp">Only http:// and socks5:// proxies are supported.</small>
+        </div>
+        <div class="required field">
+          <label>Max devices</label>
+          <input type="number" id="proxyPoolMaxDevices" min="1" value="1">
+          <small>How many instances may be assigned to this proxy.</small>
+        </div>
+        <div class="field">
+          <div class="ui toggle checkbox" id="proxyPoolEnabledToggle">
+            <input type="checkbox" id="proxyPoolEnabled" checked>
+            <label>Enabled</label>
+          </div>
+          <small>Disabled proxies keep their current instances but receive no new ones.</small>
+        </div>
+      </form>
+    </div>
+    <div class="actions">
+      <div class="ui cancel button secondary">Cancel</div>
+      <div class="ui positive right labeled icon button">Save<i class="checkmark icon"></i></div>
+    </div>
+  </div>
+
+  <div class="ui small modal" id="modalDeleteProxyPoolEntry">
+    <div class="header">Delete Proxy</div>
+    <div class="content">
+      <p>Are you sure you want to remove <b id="deleteProxyPoolLabel"></b> from the pool?</p>
+    </div>
+    <div class="actions">
+      <div class="ui negative button">No</div>
+      <div class="ui positive right labeled icon button">Yes<i class="checkmark icon"></i></div>
+    </div>
+  </div>
+
   <!-- User Modals -->
 
   <div class="ui modal" id="modalUserInfo"><i class="close icon"></i>
@@ -1360,7 +1439,8 @@
 
   <script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/fomantic-ui@2.9.4/dist/semantic.min.js"></script>
-  <script src="js/app.js"></script>
+  <script src="js/app.js?v=proxy-pool-4"></script>
   <script src="js/groups.js"></script>
+  <script src="js/proxypool.js?v=proxy-pool-4"></script>
 </body>
 </html>

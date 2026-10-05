@@ -54,6 +54,7 @@ var (
 	osName              = flag.String("osname", "Mac OS 10", "Connection OSName in Whatsapp")
 	platformType        = flag.String("platformtype", "DESKTOP", "Device platform type (DESKTOP, IPAD, ANDROID_TABLET, IOS_PHONE, ANDROID_PHONE, etc.)")
 	autoPresenceMode    = flag.String("autopresence", "available", "Automatic presence after connecting (available or unavailable)")
+	poolFallbackMode    = flag.String("proxypoolfallback", "block", "When every proxy pool entry is full: block (refuse to connect) or direct (connect without a proxy)")
 	colorOutput         = flag.Bool("color", false, "Enable colored output for console logs")
 	sslcert             = flag.String("sslcertificate", "", "SSL Certificate File")
 	sslprivkey          = flag.String("sslprivatekey", "", "SSL Certificate Private Key File")
@@ -320,6 +321,16 @@ func main() {
 	}
 	automaticPresence = configuredPresence
 	log.Info().Str("presence", string(automaticPresence)).Msg("Automatic session presence configured")
+
+	if v := os.Getenv("WUZAPI_PROXY_POOL_FALLBACK"); v != "" {
+		*poolFallbackMode = v
+	}
+	configuredFallback, err := parseProxyPoolFallback(*poolFallbackMode)
+	if err != nil {
+		log.Fatal().Err(err).Msg("Invalid proxy pool fallback configuration")
+	}
+	proxyPoolFallback = configuredFallback
+	log.Info().Str("fallback", string(proxyPoolFallback)).Msg("Proxy pool fallback configured")
 
 	if *versionFlag {
 		fmt.Printf("WuzAPI version %s\n", version)

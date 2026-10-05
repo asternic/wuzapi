@@ -22,6 +22,7 @@ services:
       - WUZAPI_MEDIA_TMPDIR=${WUZAPI_MEDIA_TMPDIR:-/tmp}
       - SESSION_DEVICE_NAME=${SESSION_DEVICE_NAME:-WuzAPI}
       - WUZAPI_AUTO_PRESENCE=${WUZAPI_AUTO_PRESENCE:-available}
+      - WUZAPI_PROXY_POOL_FALLBACK=${WUZAPI_PROXY_POOL_FALLBACK:-block}
       # RabbitMQ configuration Optional
       - RABBITMQ_URL=amqp://wuzapi:wuzapi@rabbitmq:5672/
       - RABBITMQ_QUEUE=whatsapp_events

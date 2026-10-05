@@ -76,6 +76,7 @@ you can use to alter behaviour
 * -color : enable colored output for console logs
 * -osname : Connection OS Name in Whatsapp
 * -autopresence : automatic presence after connecting, either available (default) or unavailable
+* -proxypoolfallback : when every proxy pool entry is full, either block (default, refuse to connect) or direct (connect without a proxy)
 * -skipmedia : Skip downloading media from messages
 * -wadebug : enable whatsmeow debug, either INFO or DEBUG levels are suported
 
@@ -129,6 +130,7 @@ TZ=America/New_York
 WEBHOOK_FORMAT=json
 SESSION_DEVICE_NAME=WuzAPI
 WUZAPI_AUTO_PRESENCE=available
+WUZAPI_PROXY_POOL_FALLBACK=block
 WUZAPI_PORT=8080
 WUZAPI_GLOBAL_WEBHOOK=https://your-global-webhook.url
 WEBHOOK_RETRY_ENABLED=true
@@ -213,12 +215,18 @@ SESSION_DEVICE_NAME=WuzAPI
 WUZAPI_PORT=8080 # Port for the WuzAPI server
 WUZAPI_GLOBAL_WEBHOOK= # Global webhook URL for all instances
 WUZAPI_AUTO_PRESENCE=available # use unavailable to preserve primary-phone push notifications
+WUZAPI_PROXY_POOL_FALLBACK=block # use direct to connect without a proxy when the proxy pool is full
 ```
 
 `WUZAPI_AUTO_PRESENCE` controls the presence announced after a session connects or
 its push name changes. The default `available` value preserves the existing behavior
 and enables contact presence updates. Set it to `unavailable` to keep the linked
 client offline so WhatsApp continues sending push notifications to the primary phone.
+
+`WUZAPI_PROXY_POOL_FALLBACK` applies when the admin [proxy pool](API.md#proxy-pool) has
+enabled proxies but all of them are at capacity. The default `block` refuses the connect
+with `503`, so a number never silently connects from the host IP. Set it to `direct` to
+connect without a proxy instead; nothing is saved, so the next connect tries the pool again.
 
 ### RabbitMQ Integration
 WuzAPI supports sending WhatsApp events to a RabbitMQ queue for global event distribution. When enabled, all WhatsApp events will be published to the specified queue regardless of individual user webhook configurations.
