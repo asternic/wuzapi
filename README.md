@@ -180,11 +180,18 @@ output. It controls WuzAPI's zerolog logger, not Whatsmeow's `-wadebug` output.
 Compose and Swarm forward `LOG_LEVEL`; for Swarm, export it before deploying since
 `docker stack deploy` does not automatically read `.env` for substitution.
 
-Two webhook notices are logged at `debug`, since both describe a supported
-setup rather than a problem and fire once per discarded event: `Skipping
-webhook. Not subscribed for this type` (the session subscribed to a subset of
-the events) and `No webhook set for user` (RabbitMQ-only or polling setups).
-Raise the level with `LOG_LEVEL=debug` to see them.
+Per-event traffic is logged at `debug`, since it scales with the volume the
+server receives rather than with anything an operator needs to act on:
+`Message Received`, `Message delivered`, `Message was read`, `Chat Presence
+received`, `Facebook message received` and the delete/edit detections. The
+same applies to two webhook notices that describe a supported setup rather
+than a problem, and fire once per discarded event: `Skipping webhook. Not
+subscribed for this type` (the session subscribed to a subset of the events)
+and `No webhook set for user` (RabbitMQ-only or polling setups).
+
+Actions the API performs on request — `Message sent`, `Message deleted`,
+`Message pinned` and so on — stay at `info`. Use `LOG_LEVEL=debug` to bring
+the per-event traffic back.
 
 ### Important Notes
 
