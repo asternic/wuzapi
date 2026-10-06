@@ -180,6 +180,12 @@ output. It controls WuzAPI's zerolog logger, not Whatsmeow's `-wadebug` output.
 Compose and Swarm forward `LOG_LEVEL`; for Swarm, export it before deploying since
 `docker stack deploy` does not automatically read `.env` for substitution.
 
+Two webhook notices are logged at `debug`, since both describe a supported
+setup rather than a problem and fire once per discarded event: `Skipping
+webhook. Not subscribed for this type` (the session subscribed to a subset of
+the events) and `No webhook set for user` (RabbitMQ-only or polling setups).
+Raise the level with `LOG_LEVEL=debug` to see them.
+
 ### Important Notes
 
 #### Auto-Generated Credentials
