@@ -91,7 +91,28 @@ var migrations = []Migration{
 		Name:  "add_days_to_sync_history",
 		UpSQL: `ALTER TABLE users ADD COLUMN IF NOT EXISTS days_to_sync_history INTEGER DEFAULT 0;`,
 	},
+	{
+		ID:    14,
+		Name:  "add_proxy_pool",
+		UpSQL: addProxyPoolSQL,
+	},
 }
+
+const addProxyPoolSQL = `
+-- PostgreSQL version
+CREATE TABLE IF NOT EXISTS proxy_pool (
+    id TEXT PRIMARY KEY,
+    label TEXT NOT NULL DEFAULT '',
+    proxy_url TEXT NOT NULL UNIQUE,
+    max_devices INTEGER NOT NULL DEFAULT 1 CHECK (max_devices >= 1),
+    enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS proxy_pool_id TEXT REFERENCES proxy_pool(id) ON DELETE RESTRICT;
+CREATE INDEX IF NOT EXISTS idx_users_proxy_pool_id ON users (proxy_pool_id);
+
+-- SQLite version (handled in code)
+`
 
 const changeIDToStringSQL = `
 -- Migration to change ID from integer to random string
@@ -530,6 +551,26 @@ func applyMigration(db *sqlx.DB, migration Migration) error {
 	} else if migration.ID == 13 {
 		if db.DriverName() == "sqlite" {
 			err = addColumnIfNotExistsSQLite(tx, "users", "days_to_sync_history", "INTEGER DEFAULT 0")
+		} else {
+			_, err = tx.Exec(migration.UpSQL)
+		}
+	} else if migration.ID == 14 {
+		if db.DriverName() == "sqlite" {
+			err = createTableIfNotExistsSQLite(tx, "proxy_pool", `
+				CREATE TABLE proxy_pool (
+					id TEXT PRIMARY KEY,
+					label TEXT NOT NULL DEFAULT '',
+					proxy_url TEXT NOT NULL UNIQUE,
+					max_devices INTEGER NOT NULL DEFAULT 1 CHECK (max_devices >= 1),
+					enabled BOOLEAN NOT NULL DEFAULT 1,
+					created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+				)`)
+			if err == nil {
+				err = addColumnIfNotExistsSQLite(tx, "users", "proxy_pool_id", "TEXT REFERENCES proxy_pool(id) ON DELETE RESTRICT")
+			}
+			if err == nil {
+				_, err = tx.Exec(`CREATE INDEX IF NOT EXISTS idx_users_proxy_pool_id ON users (proxy_pool_id)`)
+			}
 		} else {
 			_, err = tx.Exec(migration.UpSQL)
 		}
