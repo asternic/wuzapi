@@ -13,7 +13,6 @@ import (
 	"image"
 	"image/jpeg"
 	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -312,9 +311,29 @@ func (s *server) Connect() http.HandlerFunc {
 			log.Info().Str("events", eventstring).Msg("Preserving existing subscribed events")
 		}
 
+		// Sessions without a proxy get one from the proxy pool (if configured).
+		// When the pool is full, refuse to connect rather than silently using
+		// the host IP (unless WUZAPI_PROXY_POOL_FALLBACK=direct).
+		kill, proxyURL, err := s.prepareClientStart(txtid, true)
+		if errors.Is(err, errSessionActive) {
+			s.Respond(w, r, http.StatusConflict, err)
+			return
+		}
+		if errors.Is(err, ErrProxyPoolExhausted) {
+			log.Warn().Str("user_id", txtid).Msg("Connect request rejected because the proxy pool is exhausted")
+			s.Respond(w, r, http.StatusServiceUnavailable, err)
+			return
+		}
+		if err != nil {
+			log.Error().Err(err).Str("user_id", txtid).Msg("Failed to assign proxy from pool")
+			s.Respond(w, r, http.StatusInternalServerError, errors.New("failed to assign proxy from pool"))
+			return
+		}
+		if proxyURL != userInfo.Get("Proxy") {
+			s.refreshUserProxyCache(txtid, proxyURL)
+		}
+
 		log.Info().Str("jid", jid).Msg("Attempt to connect")
-		kill := make(chan bool, 1)
-		setKillChannel(txtid, kill)
 		go s.startClient(txtid, jid, token, kill)
 
 		if t.Immediate == false {
@@ -352,11 +371,13 @@ func (s *server) Disconnect() http.HandlerFunc {
 		jid := r.Context().Value("userinfo").(Values).Get("Jid")
 		token := r.Context().Value("userinfo").(Values).Get("Token")
 
-		if clientManager.GetWhatsmeowClient(txtid) == nil {
+		_, running := getKillChannel(txtid)
+		client := clientManager.GetWhatsmeowClient(txtid)
+		if client == nil && !running {
 			s.Respond(w, r, http.StatusInternalServerError, errors.New("no session"))
 			return
 		}
-		if clientManager.GetWhatsmeowClient(txtid).IsConnected() == true {
+		if running || (client != nil && client.IsConnected()) {
 			//if clientManager.GetWhatsmeowClient(txtid).IsLoggedIn() == true {
 			log.Info().Str("jid", jid).Msg("Disconnection successfull")
 			// Preserve event subscriptions by default; pass ?clear=true to also
@@ -942,6 +963,7 @@ func (s *server) GetStatus() http.HandlerFunc {
 
 		// Safe defaults so the response always contains every config field.
 		proxyURL := ""
+		proxyPoolID := ""
 		webhookUseProxy := *globalWebhookUseProxy
 		s3Config := map[string]interface{}{
 			"enabled":        false,
@@ -965,6 +987,7 @@ func (s *server) GetStatus() http.HandlerFunc {
 		// One query for proxy, S3 and HMAC config instead of three round-trips.
 		err := s.db.QueryRow(`
 			SELECT COALESCE(proxy_url, ''),
+			       COALESCE(proxy_pool_id, ''),
 			       COALESCE(webhook_use_proxy, true),
 			       COALESCE(s3_enabled, false),
 			       COALESCE(s3_endpoint, ''),
@@ -976,7 +999,7 @@ func (s *server) GetStatus() http.HandlerFunc {
 			       COALESCE(s3_retention_days, 0),
 			       hmac_key
 			FROM users WHERE id = $1`, txtid).Scan(
-			&proxyURL, &webhookUseProxy,
+			&proxyURL, &proxyPoolID, &webhookUseProxy,
 			&s3Enabled, &s3Endpoint, &s3Region, &s3Bucket, &s3PathStyle, &s3PublicURL, &s3MediaDelivery, &s3RetentionDays,
 			&hmacKey,
 		)
@@ -1018,6 +1041,7 @@ func (s *server) GetStatus() http.HandlerFunc {
 			"webhook":              userInfo.Get("Webhook"),
 			"events":               userInfo.Get("Events"),
 			"proxy_url":            userInfo.Get("Proxy"),
+			"proxy_pool_id":        proxyPoolID,
 			"qrcode":               userInfo.Get("Qrcode"),
 			"passkeyPending":       passkeyPending,
 			"publicKey":            publicKey,
@@ -1119,8 +1143,8 @@ func (s *server) SendDocument() http.HandlerFunc {
 			s.Respond(w, r, http.StatusInternalServerError, err)
 			return
 		}
-		if isHTTPURL(t.Document) && t.MimeType == "" {
-			t.MimeType = media.MIME
+		if t.MimeType == "" {
+			t.MimeType = documentMimeType(media.DeclaredMIME, t.FileName, sniffed)
 		}
 
 		uploaded, err = uploadMedia(r.Context(), clientManager.GetWhatsmeowClient(txtid), media, whatsmeow.MediaDocument)
@@ -1130,16 +1154,11 @@ func (s *server) SendDocument() http.HandlerFunc {
 		}
 
 		msg := &waE2E.Message{DocumentMessage: &waE2E.DocumentMessage{
-			URL:        proto.String(uploaded.URL),
-			FileName:   &t.FileName,
-			DirectPath: proto.String(uploaded.DirectPath),
-			MediaKey:   uploaded.MediaKey,
-			Mimetype: proto.String(func() string {
-				if t.MimeType != "" {
-					return t.MimeType
-				}
-				return sniffed
-			}()),
+			URL:           proto.String(uploaded.URL),
+			FileName:      &t.FileName,
+			DirectPath:    proto.String(uploaded.DirectPath),
+			MediaKey:      uploaded.MediaKey,
+			Mimetype:      proto.String(t.MimeType),
 			FileEncSHA256: uploaded.FileEncSHA256,
 			FileSHA256:    uploaded.FileSHA256,
 			FileLength:    proto.Uint64(uint64(media.Size)),
@@ -5717,6 +5736,7 @@ func (s *server) ListUsers() http.HandlerFunc {
 		Connected         sql.NullBool   `db:"connected"`
 		Expiration        sql.NullInt64  `db:"expiration"`
 		ProxyURL          sql.NullString `db:"proxy_url"`
+		ProxyPoolID       string         `db:"proxy_pool_id"`
 		WebhookUseProxy   bool           `db:"webhook_use_proxy"`
 		Events            string         `db:"events"`
 		History           sql.NullInt64  `db:"history"`
@@ -5731,11 +5751,11 @@ func (s *server) ListUsers() http.HandlerFunc {
 
 		if hasID {
 			// Fetch a single user
-			query = "SELECT id, name, token, webhook, jid, qrcode, connected, expiration, proxy_url, COALESCE(webhook_use_proxy, true) AS webhook_use_proxy, events, history, COALESCE(days_to_sync_history, 0) AS days_to_sync_history FROM users WHERE id = $1"
+			query = "SELECT id, name, token, webhook, jid, qrcode, connected, expiration, proxy_url, COALESCE(proxy_pool_id, '') AS proxy_pool_id, COALESCE(webhook_use_proxy, true) AS webhook_use_proxy, events, history, COALESCE(days_to_sync_history, 0) AS days_to_sync_history FROM users WHERE id = $1"
 			args = append(args, userID)
 		} else {
 			// Fetch all users
-			query = "SELECT id, name, token, webhook, jid, qrcode, connected, expiration, proxy_url, COALESCE(webhook_use_proxy, true) AS webhook_use_proxy, events, history, COALESCE(days_to_sync_history, 0) AS days_to_sync_history FROM users"
+			query = "SELECT id, name, token, webhook, jid, qrcode, connected, expiration, proxy_url, COALESCE(proxy_pool_id, '') AS proxy_pool_id, COALESCE(webhook_use_proxy, true) AS webhook_use_proxy, events, history, COALESCE(days_to_sync_history, 0) AS days_to_sync_history FROM users"
 		}
 
 		rows, err := s.db.Queryx(query, args...)
@@ -5784,6 +5804,7 @@ func (s *server) ListUsers() http.HandlerFunc {
 				"loggedIn":             isLoggedIn,
 				"expiration":           user.Expiration.Int64,
 				"proxy_url":            user.ProxyURL.String,
+				"proxy_pool_id":        user.ProxyPoolID,
 				"events":               user.Events,
 				"history":              user.History.Int64,
 				"days_to_sync_history": user.DaysToSyncHistory,
@@ -6158,11 +6179,28 @@ func (s *server) EditUser() http.HandlerFunc {
 
 		// Handle proxy config
 		if user.ProxyConfig != nil {
+			proxyPoolMu.Lock()
+			defer proxyPoolMu.Unlock()
+			if sessionActive(userID) {
+				var poolID sql.NullString
+				if err := s.db.Get(&poolID, "SELECT proxy_pool_id FROM users WHERE id = $1", userID); err != nil {
+					s.respondAdminError(w, http.StatusInternalServerError, "database error")
+					return
+				}
+				// Preserve admin edits to ordinary explicit proxies, but do not
+				// free a pool slot while its session still uses the old proxy.
+				if poolID.Valid && poolID.String != "" {
+					s.respondAdminError(w, http.StatusConflict, errSessionActive.Error())
+					return
+				}
+			}
 			if user.ProxyConfig.Enabled {
 				addField("proxy_url", user.ProxyConfig.ProxyURL, true)
 			} else {
 				addField("proxy_url", "", true)
 			}
+			// An explicit proxy setting always takes the user out of the proxy pool.
+			addField("proxy_pool_id", nil, true)
 			if user.ProxyConfig.WebhookUseProxy != nil {
 				addField("webhook_use_proxy", *user.ProxyConfig.WebhookUseProxy, true)
 			}
@@ -6633,9 +6671,10 @@ func (s *server) SetProxy() http.HandlerFunc {
 		txtid := r.Context().Value("userinfo").(Values).Get("Id")
 
 		// Check if client exists and is connected
-
-		if clientManager.GetWhatsmeowClient(txtid) != nil && clientManager.GetWhatsmeowClient(txtid).IsConnected() {
-			s.Respond(w, r, http.StatusBadRequest, errors.New("cannot set proxy while connected. Please disconnect first"))
+		proxyPoolMu.Lock()
+		defer proxyPoolMu.Unlock()
+		if sessionActive(txtid) {
+			s.Respond(w, r, http.StatusBadRequest, errSessionActive)
 			return
 		}
 
@@ -6655,7 +6694,7 @@ func (s *server) SetProxy() http.HandlerFunc {
 				s.db.QueryRow("SELECT COALESCE(webhook_use_proxy, true) FROM users WHERE id = $1", txtid).Scan(&webhookUseProxy)
 			}
 			_, err = s.db.Exec(
-				"UPDATE users SET proxy_url = '', webhook_use_proxy = $1 WHERE id = $2",
+				"UPDATE users SET proxy_url = '', proxy_pool_id = NULL, webhook_use_proxy = $1 WHERE id = $2",
 				webhookUseProxy,
 				txtid,
 			)
@@ -6683,21 +6722,9 @@ func (s *server) SetProxy() http.HandlerFunc {
 			return
 		}
 
-		// Validate proxy URL
-		if t.ProxyURL == "" {
-			s.Respond(w, r, http.StatusBadRequest, errors.New("missing proxy_url in payload"))
-			return
-		}
-
-		proxyURL, err := url.Parse(t.ProxyURL)
-		if err != nil {
-			s.Respond(w, r, http.StatusBadRequest, errors.New("invalid proxy URL format"))
-			return
-		}
-
-		// Only allow http and socks5 proxies
-		if proxyURL.Scheme != "http" && proxyURL.Scheme != "socks5" {
-			s.Respond(w, r, http.StatusBadRequest, errors.New("only HTTP and SOCKS5 proxies are supported"))
+		// Validate proxy URL (only http and socks5 proxies are allowed)
+		if err := validateProxyURL(t.ProxyURL); err != nil {
+			s.Respond(w, r, http.StatusBadRequest, err)
 			return
 		}
 
@@ -6708,7 +6735,7 @@ func (s *server) SetProxy() http.HandlerFunc {
 			s.db.QueryRow("SELECT COALESCE(webhook_use_proxy, true) FROM users WHERE id = $1", txtid).Scan(&webhookUseProxy)
 		}
 		_, err = s.db.Exec(
-			"UPDATE users SET proxy_url = $1, webhook_use_proxy = $2 WHERE id = $3",
+			"UPDATE users SET proxy_url = $1, proxy_pool_id = NULL, webhook_use_proxy = $2 WHERE id = $3",
 			t.ProxyURL,
 			webhookUseProxy,
 			txtid,

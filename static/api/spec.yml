@@ -212,6 +212,155 @@ paths:
             application/json:
               schema:
                 example: {"code":200,"data":{"id":"4e4942c7dee1deef99ab8fd9f7350de5","jid":"","name":"mariano"},"details":"User instance removed completely","success":true}
+  /admin/proxy-pool:
+    get:
+      tags:
+        - Admin
+      summary: List proxy pool
+      description: Lists the proxies in the pool with their current number of assigned sessions. Proxy passwords are masked.
+      security:
+        - AdminAuth: []
+      responses:
+        200:
+          description: Proxy pool entries
+          content:
+            application/json:
+              schema:
+                example: {"code":200,"data":[{"id":"8b1171837e3035ecbe793409fb58baf2","label":"residential-1","proxy_url":"socks5://user:xxxxx@203.0.113.10:1080","max_devices":2,"enabled":true,"assigned_count":1}],"success":true}
+    post:
+      tags:
+        - Admin
+      summary: Add proxy to pool
+      description: |
+        Adds a proxy to the pool. Sessions that connect without a proxy are assigned the least-loaded enabled pool proxy with free capacity, and keep it on later connects.
+        If the pool has enabled proxies but all are full, /session/connect returns 503, or connects without a proxy when WUZAPI_PROXY_POOL_FALLBACK=direct.
+      security:
+        - AdminAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                label:
+                  type: string
+                  example: residential-1
+                proxy_url:
+                  type: string
+                  description: Proxy URL in format "http://host:port" or "socks5://user:pass@host:port"
+                  example: socks5://user:pass@203.0.113.10:1080
+                max_devices:
+                  type: integer
+                  description: Maximum number of sessions assigned to this proxy (default 1)
+                  example: 2
+                enabled:
+                  type: boolean
+                  description: Whether new sessions may be assigned to this proxy (default true)
+                  example: true
+              required:
+                - proxy_url
+      responses:
+        201:
+          description: Proxy added
+          content:
+            application/json:
+              schema:
+                example: {"code":201,"data":{"id":"8b1171837e3035ecbe793409fb58baf2","label":"residential-1","proxy_url":"socks5://user:xxxxx@203.0.113.10:1080","max_devices":2,"enabled":true,"assigned_count":0},"success":true}
+        409:
+          description: proxy_url already exists in the pool
+  /admin/proxy-pool/{id}:
+    put:
+      tags:
+        - Admin
+      summary: Edit proxy in pool
+      description: |
+        Updates a pool entry. All fields are optional. Disabling stops new assignments but keeps existing ones.
+        max_devices cannot be lower than the current assigned_count. Changing proxy_url also updates the sessions assigned to the entry.
+      security:
+        - AdminAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            example: 8b1171837e3035ecbe793409fb58baf2
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                label:
+                  type: string
+                proxy_url:
+                  type: string
+                max_devices:
+                  type: integer
+                enabled:
+                  type: boolean
+            example: {"max_devices":3,"enabled":false}
+      responses:
+        200:
+          description: Proxy updated
+        404:
+          description: Proxy pool entry not found
+        409:
+          description: Duplicate proxy_url, or max_devices lower than the assigned count
+    delete:
+      tags:
+        - Admin
+      summary: Delete proxy from pool
+      description: Deletes a pool entry. Returns 409 while sessions are still assigned to it.
+      security:
+        - AdminAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            example: 8b1171837e3035ecbe793409fb58baf2
+      responses:
+        200:
+          description: Proxy deleted
+          content:
+            application/json:
+              schema:
+                example: {"code":200,"data":{"id":"8b1171837e3035ecbe793409fb58baf2"},"details":"proxy pool entry deleted successfully","success":true}
+        404:
+          description: Proxy pool entry not found
+        409:
+          description: Proxy is still assigned to sessions
+  /admin/users/{id}/proxy-pool/release:
+    post:
+      tags:
+        - Admin
+      summary: Release a user's pool proxy
+      description: Frees the pool slot held by a disconnected session and clears its proxy. Returns 409 while the session is starting, pairing, reconnecting, or shutting down; disconnect and wait for shutdown first. On its next connect the session is assigned a pool proxy again.
+      security:
+        - AdminAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ID of the user
+          schema:
+            type: string
+            example: 4e4942c7dee1deef99ab8fd9f7350de5
+      responses:
+        200:
+          description: Assignment released
+          content:
+            application/json:
+              schema:
+                example: {"code":200,"data":{"id":"4e4942c7dee1deef99ab8fd9f7350de5","proxy_pool_id":"8b1171837e3035ecbe793409fb58baf2"},"details":"proxy pool assignment released","success":true}
+        400:
+          description: User has no proxy assigned from the pool
+        409:
+          description: Session is active or its proxy assignment changed concurrently
   /newsletter/list:
     get:
       tags:
@@ -439,7 +588,7 @@ paths:
       tags:
         - Session 
       summary: connects to WhatsApp servers
-      description: "Initiates connection to WhatsApp servers.\n\nIf there is no previous session created, it will generate a QR code that can be retrieved via the [qr](#/Session/get_session_qr) API call. Alternatively, the device may initiate passkey pairing instead of QR — in that case, a PasskeyRequest webhook will be sent with the challenge data.\n\nIf the optional Subscribe is supplied it will limit webhooks to the specified event types: Message,ReadReceipt,Presence,HistorySync,ChatPresence.\n\nIf no Subscribe is supplied it will subscribe to All events.\n\nIf Immediate is set to false, the action will wait for 10 seconds to retrieve actual connection status from whatsapp, otherwise it will return immediatly.\n\nWhen setting Immediate to true you should check for actual connection status after a few seconds via the [status](#/Session/get_session_status) API call as your connection might fail if the session was closed from another device."
+      description: "Initiates connection to WhatsApp servers.\n\nIf there is no previous session created, it will generate a QR code that can be retrieved via the [qr](#/Session/get_session_qr) API call. Alternatively, the device may initiate passkey pairing instead of QR — in that case, a PasskeyRequest webhook will be sent with the challenge data.\n\nIf the optional Subscribe is supplied it will limit webhooks to the specified event types: Message,ReadReceipt,Presence,HistorySync,ChatPresence.\n\nIf no Subscribe is supplied it will subscribe to All events.\n\nIf Immediate is set to false, the action will wait for 10 seconds to retrieve actual connection status from whatsapp, otherwise it will return immediatly.\n\nWhen setting Immediate to true you should check for actual connection status after a few seconds via the [status](#/Session/get_session_status) API call as your connection might fail if the session was closed from another device.\n\nIf the session has no proxy and the admin proxy pool is in use, a pool proxy is assigned before connecting."
       security:
         - ApiKeyAuth: []
       requestBody:
@@ -457,6 +606,8 @@ paths:
             application/json:
               schema:
                 example: { "code": 200, "data": { "details": "Connected!", "events": "Message", "jid": "5491155555555.0:53@s.whatsapp.net", "webhook": "https://some.site/webhook?request=parameter" }, "success": true }
+        503:
+          description: Every enabled proxy in the admin proxy pool is at max_devices capacity (not returned when WUZAPI_PROXY_POOL_FALLBACK=direct)
   /session/disconnect:
     post:
       tags:
@@ -3114,6 +3265,10 @@ definitions:
       FileName:
         type: string
         example: file.txt
+      MimeType:
+        type: string
+        description: Explicit document MIME override. If omitted, uses the declared data URL or HTTP type, then the filename extension, then content detection. Missing, invalid, and generic octet-stream source types fall back; an implicit data URL text/plain default is not a declaration.
+        example: "text/plain"
       Id:
         type: string
         example: "ABCDABCD1234"

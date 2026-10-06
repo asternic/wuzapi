@@ -11,6 +11,19 @@ jobs:
   build:
     name: Build Go Application
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: wuzapi-test-only
+          POSTGRES_DB: wuzapi_test
+        ports:
+          - 5432/tcp
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     
     steps:
     - name: Checkout code
@@ -41,6 +54,11 @@ jobs:
 
     - name: Run go vet
       run: go vet ./...
+
+    - name: Run tests with race detection and PostgreSQL regressions
+      env:
+        WUZAPI_TEST_POSTGRES_DSN: postgres://postgres:wuzapi-test-only@localhost:${{ job.services.postgres.ports[5432] }}/wuzapi_test?sslmode=disable
+      run: go test -race ./...
 
     - name: Build application
       run: go build -v -o wuzapi

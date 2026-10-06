@@ -817,3 +817,103 @@ func TestMediaFailedDownloadCleansFile(t *testing.T) {
 		t.Fatal("failed download leaked file")
 	}
 }
+
+func TestDocumentMimeType(t *testing.T) {
+	const xlsx = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+	tests := []struct {
+		name, declared, fileName, sniffed, want string
+	}{
+		{"declared type wins over sniffed zip", xlsx, "report.bin", "application/zip", xlsx},
+		{"generic declared type falls back to extension", "application/octet-stream", "report.xlsx", "application/zip", xlsx},
+		{"legacy S3 generic type falls back to extension", "binary/octet-stream", "report.xlsx", "application/zip", xlsx},
+		{"extension lookup ignores case", "", "REPORT.DOCX", "application/zip", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"},
+		{"OLE document resolves from extension", "", "sheet.xls", "application/octet-stream", "application/vnd.ms-excel"},
+		{"standard library extension table", "", "doc.pdf", "application/octet-stream", "application/pdf"},
+		{"unknown extension falls back to sniffed type", "", "doc.unknown", "application/pdf", "application/pdf"},
+		{"parameters are stripped", "application/pdf; charset=binary", "doc.unknown", "application/zip", "application/pdf"},
+		{"all generic stays octet-stream", "", "doc.unknown", "application/octet-stream", "application/octet-stream"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := documentMimeType(tt.declared, tt.fileName, tt.sniffed); got != tt.want {
+				t.Fatalf("documentMimeType(%q, %q, %q) = %q, want %q", tt.declared, tt.fileName, tt.sniffed, got, tt.want)
+			}
+		})
+	}
+}
+
+// Exercise source parsing and downloads, not just the MIME selection helper:
+// media.MIME may contain a sniffed type or the data URL parser's default.
+func TestDocumentMimeSourceProvenance(t *testing.T) {
+	old := globalHTTPClient
+	globalHTTPClient = http.DefaultClient
+	t.Cleanup(func() { globalHTTPClient = old })
+	const pdf = "%PDF-1.7\n"
+	const zip = "PK\x03\x04\x00\x00\x00\x00"
+	const xlsx = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+	tests := []struct {
+		name, header, payload, fileName, want, wantDeclared, wantLegacy string
+		url                                                             bool
+	}{
+		{"URL without Content-Type", "", zip, "report.xlsx", xlsx, "", "application/zip", true},
+		{"URL generic", "application/octet-stream", zip, "report.xlsx", xlsx, "application/octet-stream", "application/octet-stream", true},
+		{"URL S3 generic", "binary/octet-stream", zip, "report.xlsx", xlsx, "binary/octet-stream", "binary/octet-stream", true},
+		{"URL explicit ZIP", "application/zip", zip, "report.xlsx", "application/zip", "application/zip", "application/zip", true},
+		{"URL invalid type", "invalid type", pdf, "report.pdf", "application/pdf", "invalid type", "invalid type", true},
+		{"URL sniff fallback", "", pdf, "report.unknown", "application/pdf", "", "application/pdf", true},
+		{"data URL no type", "", pdf, "report.pdf", "application/pdf", "", "text/plain", false},
+		{"data URL parameters only", ";charset=utf-8", pdf, "report.pdf", "application/pdf", "", "text/plain", false},
+		{"data URL explicit plain text", "text/plain", pdf, "report.pdf", "text/plain", "text/plain", "text/plain", false},
+		{"data URL generic", "application/octet-stream", zip, "report.xlsx", xlsx, "application/octet-stream", "application/octet-stream", false},
+		{"data URL sniff fallback", "", pdf, "report.unknown", "application/pdf", "", "text/plain", false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			source := "data:" + tc.header + ";base64," + base64.StdEncoding.EncodeToString([]byte(tc.payload))
+			if tc.url {
+				endpoint := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					// A nil header disables net/http's automatic content detection.
+					w.Header()["Content-Type"] = nil
+					if tc.header != "" {
+						w.Header().Set("Content-Type", tc.header)
+					}
+					_, _ = io.WriteString(w, tc.payload)
+				}))
+				defer endpoint.Close()
+				source = endpoint.URL
+			}
+			media, err := readOutgoingMedia(context.Background(), source, fetchDocumentMaxBytes)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer media.Close()
+			sniffed, err := media.sniff()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if media.DeclaredMIME != tc.wantDeclared {
+				t.Fatalf("declared MIME=%q want %q", media.DeclaredMIME, tc.wantDeclared)
+			}
+			if media.MIME != tc.wantLegacy {
+				t.Fatalf("legacy MIME=%q want %q", media.MIME, tc.wantLegacy)
+			}
+			if got := documentMimeType(media.DeclaredMIME, tc.fileName, sniffed); got != tc.want {
+				t.Fatalf("resolved MIME=%q want %q", got, tc.want)
+			}
+		})
+	}
+	t.Run("non-base64 data URL", func(t *testing.T) {
+		media, err := readOutgoingMedia(context.Background(), "data:,%25PDF-1.7", fetchDocumentMaxBytes)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer media.Close()
+		sniffed, err := media.sniff()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if media.DeclaredMIME != "" || documentMimeType(media.DeclaredMIME, "report.pdf", sniffed) != "application/pdf" {
+			t.Fatal("implicit type overrides PDF")
+		}
+	})
+}

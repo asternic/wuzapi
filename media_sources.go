@@ -6,12 +6,47 @@ import (
 	"fmt"
 	"image"
 	"io"
+	"mime"
 	"net/http"
+	"path/filepath"
 	"strings"
 
 	"github.com/vincent-petithory/dataurl"
 	"go.mau.fi/whatsmeow"
 )
+
+// Office and OpenDocument files are ZIP or OLE containers, so sniffing reports
+// application/zip or application/octet-stream. Listed here so the lookup does
+// not depend on the host MIME database, which slim images do not ship.
+var documentExtensionMimeTypes = map[string]string{
+	".csv":  "text/csv",
+	".doc":  "application/msword",
+	".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+	".odp":  "application/vnd.oasis.opendocument.presentation",
+	".ods":  "application/vnd.oasis.opendocument.spreadsheet",
+	".odt":  "application/vnd.oasis.opendocument.text",
+	".ppt":  "application/vnd.ms-powerpoint",
+	".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+	".xls":  "application/vnd.ms-excel",
+	".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+}
+
+// documentMimeType returns the declared MIME type unless it is missing or
+// generic, then the type for the file name extension, then the sniffed type.
+func documentMimeType(declared, fileName, sniffed string) string {
+	ext := strings.ToLower(filepath.Ext(fileName))
+	byExtension, ok := documentExtensionMimeTypes[ext]
+	if !ok {
+		byExtension = mime.TypeByExtension(ext)
+	}
+	for _, candidate := range []string{declared, byExtension, sniffed} {
+		mediaType, _, err := mime.ParseMediaType(candidate)
+		if err == nil && mediaType != "application/octet-stream" && mediaType != "binary/octet-stream" {
+			return mediaType
+		}
+	}
+	return "application/octet-stream"
+}
 
 // Decode the small data-URL header with the existing parser, and its payload
 // through a reader. Legacy JSON decoding still owns the original encoded string.
@@ -116,7 +151,7 @@ func readOutgoingMedia(parent context.Context, value string, limit int64) (*medi
 	}
 	defer release()
 	var reader io.Reader
-	var mimeType string
+	var mimeType, declaredMIME string
 	if isHTTPURL(value) {
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, value, nil)
 		if err != nil {
@@ -135,16 +170,24 @@ func readOutgoingMedia(parent context.Context, value string, limit int64) (*medi
 		}
 		reader = io.LimitReader(resp.Body, limit+1)
 		mimeType = resp.Header.Get("Content-Type")
+		declaredMIME = mimeType
 	} else {
 		reader, mimeType, err = dataURLReader(value)
 		if err != nil {
 			return nil, err
+		}
+		// The parser supplies text/plain for data:;base64,... and data:,... .
+		// Keep that legacy MIME for other consumers, but do not treat the
+		// implicit default as a declaration when resolving document types.
+		if strings.IndexAny(strings.TrimPrefix(value, "data:"), ";,") > 0 {
+			declaredMIME = mimeType
 		}
 	}
 	media, file, err := store.create("", mimeType)
 	if err != nil {
 		return nil, err
 	}
+	media.DeclaredMIME = declaredMIME
 	media.Size, err = io.Copy(file, contextReader{ctx, reader})
 	closeErr := file.Close()
 	if err == nil {

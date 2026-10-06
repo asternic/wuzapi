@@ -676,6 +676,7 @@ function updateAdmin() {
         populateInstances(result.data)
       } 
     });
+    loadProxyPool();
   } else {
     // get only active instance status
     status().then((result)=> {
@@ -692,8 +693,9 @@ function handleAdminLogin(token,notifications=false) {
   console.log('Admin login with token:', token);
   setLocalStorageItem('admintoken', token, 6);
   setLocalStorageItem('isAdmin', true, 6);
-  $('.adminlogin').show();
   const currentInstance = getLocalStorageItem("currentInstance");
+  // "Go Back" only makes sense while an instance is open, not on the list.
+  $('.adminlogin').toggle(currentInstance != null);
 
   getUsers().then((result) => {
     if(result.success==true) {
@@ -712,6 +714,7 @@ function handleAdminLogin(token,notifications=false) {
       }
       $('#loading').removeClass('active');
       $('.logingrid').addClass('hidden');
+      loadProxyPool();
       updateAdmin();
     } else {
       removeLocalStorageItem('admintoken');
@@ -1387,7 +1390,7 @@ function populateInstances(instances) {
   const currentInstance = getLocalStorageItem('currentInstance');
 
   if(instances.length==0) {
-    const nodatarow = '<tr><td style="text-align:center;" colspan=5>No instances found</td></tr>'
+    const nodatarow = '<tr><td style="text-align:center;" colspan=6>No instances found</td></tr>'
     tableBody.append(nodatarow);
   }
   instances.forEach((instance, idx) => {
@@ -1398,6 +1401,7 @@ function populateInstances(instances) {
         <td>${instance.name}</td>
         <td><i class="${instance.connected ? 'check green' : 'times red'} icon"></i> <span class="status ${instance.connected}">${instance.connected ? 'Yes' : 'No'}</span></td>
         <td><i class="${instance.loggedIn ? 'check green' : 'times red'} icon"></i> <span class="status ${instance.loggedIn}">${instance.loggedIn ? 'Yes' : 'No'}</span></td>
+        <td>${instanceProxyLabel(instance)}</td>
         <td>
           <button class="ui primary button dashboard-button" onclick="openDashboard('${instance.id}', '${instance.token}')">
             <i class="external alternate icon"></i> Open
@@ -1465,6 +1469,14 @@ function populateInstances(instances) {
                               <div class="header">Proxy URL</div>
                               <div class="content">${instance.proxy_config.proxy_url || 'Not configured'}</div>
                           </div>
+                          ${instance.proxy_pool_id ? `
+                          <div class="item">
+                              <div class="header">Proxy Pool</div>
+                              <div class="content">
+                                  ${instanceProxyLabel(instance)}
+                                  ${getLocalStorageItem('isAdmin') && !instance.connected ? `<button class="ui mini orange button" onclick="releaseProxyPool('${instance.id}')" title="Free this pool slot; a pool proxy is assigned again on the next connect">Release</button>` : ''}
+                              </div>
+                          </div>` : ''}
                           <div class="item">
                               <div class="header">Webhook Proxy</div>
                               <div class="content">${instance.proxy_config.webhook_use_proxy === false ? 'Bypass proxy' : 'Use proxy'}</div>
