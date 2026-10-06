@@ -202,6 +202,8 @@ curl -s -X DELETE -H 'Authorization: {{WUZAPI_ADMIN_TOKEN}}' http://localhost:80
 
 Frees the pool slot held by a disconnected session and clears its proxy. On its next connect the session is assigned a pool proxy again.
 
+Returns `409` while the session is starting, pairing, reconnecting, or shutting down. Disconnect the session and wait for shutdown to complete before releasing its slot. Changing a pool-assigned user's explicit proxy also requires shutdown to finish.
+
 ```
 curl -s -X POST -H 'Authorization: {{WUZAPI_ADMIN_TOKEN}}' http://localhost:8080/admin/users/4e4942c7dee1deef99ab8fd9f7350de5/proxy-pool/release
 ```

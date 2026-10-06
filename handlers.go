@@ -314,7 +314,11 @@ func (s *server) Connect() http.HandlerFunc {
 		// Sessions without a proxy get one from the proxy pool (if configured).
 		// When the pool is full, refuse to connect rather than silently using
 		// the host IP (unless WUZAPI_PROXY_POOL_FALLBACK=direct).
-		proxyURL, err := s.proxyForConnect(txtid)
+		kill, proxyURL, err := s.prepareClientStart(txtid, true)
+		if errors.Is(err, errSessionActive) {
+			s.Respond(w, r, http.StatusConflict, err)
+			return
+		}
 		if errors.Is(err, ErrProxyPoolExhausted) {
 			log.Warn().Str("user_id", txtid).Msg("Connect request rejected because the proxy pool is exhausted")
 			s.Respond(w, r, http.StatusServiceUnavailable, err)
@@ -330,8 +334,6 @@ func (s *server) Connect() http.HandlerFunc {
 		}
 
 		log.Info().Str("jid", jid).Msg("Attempt to connect")
-		kill := make(chan bool, 1)
-		setKillChannel(txtid, kill)
 		go s.startClient(txtid, jid, token, kill)
 
 		if t.Immediate == false {
@@ -369,11 +371,13 @@ func (s *server) Disconnect() http.HandlerFunc {
 		jid := r.Context().Value("userinfo").(Values).Get("Jid")
 		token := r.Context().Value("userinfo").(Values).Get("Token")
 
-		if clientManager.GetWhatsmeowClient(txtid) == nil {
+		_, running := getKillChannel(txtid)
+		client := clientManager.GetWhatsmeowClient(txtid)
+		if client == nil && !running {
 			s.Respond(w, r, http.StatusInternalServerError, errors.New("no session"))
 			return
 		}
-		if clientManager.GetWhatsmeowClient(txtid).IsConnected() == true {
+		if running || (client != nil && client.IsConnected()) {
 			//if clientManager.GetWhatsmeowClient(txtid).IsLoggedIn() == true {
 			log.Info().Str("jid", jid).Msg("Disconnection successfull")
 			// Preserve event subscriptions by default; pass ?clear=true to also
@@ -6175,6 +6179,21 @@ func (s *server) EditUser() http.HandlerFunc {
 
 		// Handle proxy config
 		if user.ProxyConfig != nil {
+			proxyPoolMu.Lock()
+			defer proxyPoolMu.Unlock()
+			if sessionActive(userID) {
+				var poolID sql.NullString
+				if err := s.db.Get(&poolID, "SELECT proxy_pool_id FROM users WHERE id = $1", userID); err != nil {
+					s.respondAdminError(w, http.StatusInternalServerError, "database error")
+					return
+				}
+				// Preserve admin edits to ordinary explicit proxies, but do not
+				// free a pool slot while its session still uses the old proxy.
+				if poolID.Valid && poolID.String != "" {
+					s.respondAdminError(w, http.StatusConflict, errSessionActive.Error())
+					return
+				}
+			}
 			if user.ProxyConfig.Enabled {
 				addField("proxy_url", user.ProxyConfig.ProxyURL, true)
 			} else {
@@ -6652,9 +6671,10 @@ func (s *server) SetProxy() http.HandlerFunc {
 		txtid := r.Context().Value("userinfo").(Values).Get("Id")
 
 		// Check if client exists and is connected
-
-		if clientManager.GetWhatsmeowClient(txtid) != nil && clientManager.GetWhatsmeowClient(txtid).IsConnected() {
-			s.Respond(w, r, http.StatusBadRequest, errors.New("cannot set proxy while connected. Please disconnect first"))
+		proxyPoolMu.Lock()
+		defer proxyPoolMu.Unlock()
+		if sessionActive(txtid) {
+			s.Respond(w, r, http.StatusBadRequest, errSessionActive)
 			return
 		}
 

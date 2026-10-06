@@ -339,7 +339,7 @@ paths:
       tags:
         - Admin
       summary: Release a user's pool proxy
-      description: Frees the pool slot held by a disconnected session and clears its proxy. On its next connect the session is assigned a pool proxy again.
+      description: Frees the pool slot held by a disconnected session and clears its proxy. Returns 409 while the session is starting, pairing, reconnecting, or shutting down; disconnect and wait for shutdown first. On its next connect the session is assigned a pool proxy again.
       security:
         - AdminAuth: []
       parameters:
@@ -360,7 +360,7 @@ paths:
         400:
           description: User has no proxy assigned from the pool
         409:
-          description: Session is connected
+          description: Session is active or its proxy assignment changed concurrently
   /newsletter/list:
     get:
       tags:

@@ -11,6 +11,7 @@ import (
 	"sync"
 
 	"github.com/gorilla/mux"
+	"github.com/jmoiron/sqlx"
 	"github.com/patrickmn/go-cache"
 	"github.com/rs/zerolog/log"
 )
@@ -111,16 +112,30 @@ func (e ProxyPoolEntry) masked() ProxyPoolEntry {
 func (s *server) assignProxyFromPool(userID string) (string, error) {
 	proxyPoolMu.Lock()
 	defer proxyPoolMu.Unlock()
+	return s.assignProxyFromPoolLocked(userID)
+}
 
+// Caller holds proxyPoolMu. PostgreSQL locks always take pool rows before
+// user rows, matching pool URL edits, which update assigned users as well.
+func (s *server) assignProxyFromPoolLocked(userID string) (string, error) {
 	tx, err := s.db.Beginx()
 	if err != nil {
 		return "", err
 	}
 	defer tx.Rollback()
+	if s.db.DriverName() == "postgres" {
+		if _, err = tx.Exec("SELECT id FROM proxy_pool ORDER BY id FOR UPDATE"); err != nil {
+			return "", err
+		}
+	}
 
 	var proxyURL string
 	var poolID sql.NullString
-	err = tx.QueryRow("SELECT COALESCE(proxy_url, ''), proxy_pool_id FROM users WHERE id = $1", userID).Scan(&proxyURL, &poolID)
+	queryUser := "SELECT COALESCE(proxy_url, ''), proxy_pool_id FROM users WHERE id = $1"
+	if s.db.DriverName() == "postgres" {
+		queryUser += " FOR UPDATE"
+	}
+	err = tx.QueryRow(queryUser, userID).Scan(&proxyURL, &poolID)
 	if err != nil {
 		return "", err
 	}
@@ -135,14 +150,6 @@ func (s *server) assignProxyFromPool(userID string) (string, error) {
 			return "", err
 		}
 	} else {
-		if s.db.DriverName() == "postgres" {
-			// Lock the enabled pool rows so concurrent assignments from other
-			// processes are serialized as well.
-			if _, err = tx.Exec("SELECT id FROM proxy_pool WHERE enabled = TRUE FOR UPDATE"); err != nil {
-				return "", err
-			}
-		}
-
 		var enabledCount int
 		if err = tx.Get(&enabledCount, "SELECT COUNT(*) FROM proxy_pool WHERE enabled = TRUE"); err != nil {
 			return "", err
@@ -184,7 +191,13 @@ func (s *server) assignProxyFromPool(userID string) (string, error) {
 // connects without a proxy, and nothing is saved, so the next connect tries
 // the pool again.
 func (s *server) proxyForConnect(userID string) (string, error) {
-	proxyURL, err := s.assignProxyFromPool(userID)
+	proxyPoolMu.Lock()
+	defer proxyPoolMu.Unlock()
+	return s.proxyForConnectLocked(userID)
+}
+
+func (s *server) proxyForConnectLocked(userID string) (string, error) {
+	proxyURL, err := s.assignProxyFromPoolLocked(userID)
 	if errors.Is(err, ErrProxyPoolExhausted) && proxyPoolFallback == ProxyPoolFallbackDirect {
 		log.Warn().Str("user_id", userID).Msg("Proxy pool exhausted; connecting without a proxy because WUZAPI_PROXY_POOL_FALLBACK=direct")
 		return "", nil
@@ -205,10 +218,24 @@ func (s *server) refreshUserProxyCache(userID, proxyURL string) {
 }
 
 func (s *server) getProxyPoolEntry(id string) (ProxyPoolEntry, error) {
+	return getProxyPoolEntry(s.db, id)
+}
+
+func getProxyPoolEntry(db sqlx.Queryer, id string) (ProxyPoolEntry, error) {
 	var entry ProxyPoolEntry
 	query := fmt.Sprintf(proxyPoolSelectSQL, "WHERE p.id = $1", "", "p.id")
-	err := s.db.Get(&entry, query, id)
+	err := sqlx.Get(db, &entry, query, id)
 	return entry, err
+}
+
+// Lock before reading aggregates: a concurrent process may be assigning users
+// or editing this entry. GROUP BY queries themselves cannot use FOR UPDATE.
+func (s *server) lockProxyPoolEntry(tx *sqlx.Tx, id string) error {
+	if s.db.DriverName() != "postgres" {
+		return nil
+	}
+	var lockedID string
+	return tx.Get(&lockedID, "SELECT id FROM proxy_pool WHERE id = $1 FOR UPDATE", id)
 }
 
 func (s *server) respondAdminError(w http.ResponseWriter, status int, message string) {
@@ -334,7 +361,17 @@ func (s *server) EditProxyPoolEntry() http.HandlerFunc {
 		proxyPoolMu.Lock()
 		defer proxyPoolMu.Unlock()
 
-		current, err := s.getProxyPoolEntry(id)
+		tx, err := s.db.Beginx()
+		if err != nil {
+			s.respondAdminError(w, http.StatusInternalServerError, "database error")
+			return
+		}
+		defer tx.Rollback()
+		err = s.lockProxyPoolEntry(tx, id)
+		var current ProxyPoolEntry
+		if err == nil {
+			current, err = getProxyPoolEntry(tx, id)
+		}
 		if err == sql.ErrNoRows {
 			s.respondAdminError(w, http.StatusNotFound, "proxy pool entry not found")
 			return
@@ -355,7 +392,7 @@ func (s *server) EditProxyPoolEntry() http.HandlerFunc {
 				return
 			}
 			var exists int
-			if err := s.db.Get(&exists, "SELECT COUNT(*) FROM proxy_pool WHERE proxy_url = $1 AND id <> $2", updated.ProxyURL, id); err != nil {
+			if err := tx.Get(&exists, "SELECT COUNT(*) FROM proxy_pool WHERE proxy_url = $1 AND id <> $2", updated.ProxyURL, id); err != nil {
 				s.respondAdminError(w, http.StatusInternalServerError, "database error")
 				return
 			}
@@ -378,13 +415,6 @@ func (s *server) EditProxyPoolEntry() http.HandlerFunc {
 		if t.Enabled != nil {
 			updated.Enabled = *t.Enabled
 		}
-
-		tx, err := s.db.Beginx()
-		if err != nil {
-			s.respondAdminError(w, http.StatusInternalServerError, "database error")
-			return
-		}
-		defer tx.Rollback()
 
 		if _, err = tx.Exec(
 			"UPDATE proxy_pool SET label = $1, proxy_url = $2, max_devices = $3, enabled = $4 WHERE id = $5",
@@ -431,7 +461,17 @@ func (s *server) DeleteProxyPoolEntry() http.HandlerFunc {
 		proxyPoolMu.Lock()
 		defer proxyPoolMu.Unlock()
 
-		entry, err := s.getProxyPoolEntry(id)
+		tx, err := s.db.Beginx()
+		if err != nil {
+			s.respondAdminError(w, http.StatusInternalServerError, "database error")
+			return
+		}
+		defer tx.Rollback()
+		err = s.lockProxyPoolEntry(tx, id)
+		var entry ProxyPoolEntry
+		if err == nil {
+			entry, err = getProxyPoolEntry(tx, id)
+		}
 		if err == sql.ErrNoRows {
 			s.respondAdminError(w, http.StatusNotFound, "proxy pool entry not found")
 			return
@@ -445,8 +485,12 @@ func (s *server) DeleteProxyPoolEntry() http.HandlerFunc {
 			return
 		}
 
-		if _, err = s.db.Exec("DELETE FROM proxy_pool WHERE id = $1", id); err != nil {
+		if _, err = tx.Exec("DELETE FROM proxy_pool WHERE id = $1", id); err != nil {
 			log.Error().Err(err).Msg("Failed to delete proxy pool entry")
+			s.respondAdminError(w, http.StatusInternalServerError, "database error")
+			return
+		}
+		if err = tx.Commit(); err != nil {
 			s.respondAdminError(w, http.StatusInternalServerError, "database error")
 			return
 		}
@@ -465,13 +509,12 @@ func (s *server) ReleaseUserProxyPool() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userID := mux.Vars(r)["id"]
 
-		if client := clientManager.GetWhatsmeowClient(userID); client != nil && client.IsConnected() {
-			s.respondAdminError(w, http.StatusConflict, "cannot release proxy while connected. Please disconnect first")
-			return
-		}
-
 		proxyPoolMu.Lock()
 		defer proxyPoolMu.Unlock()
+		if sessionActive(userID) {
+			s.respondAdminError(w, http.StatusConflict, "cannot release proxy while session is active. Please disconnect and wait for shutdown first")
+			return
+		}
 
 		var poolID sql.NullString
 		err := s.db.QueryRow("SELECT proxy_pool_id FROM users WHERE id = $1", userID).Scan(&poolID)
@@ -488,8 +531,15 @@ func (s *server) ReleaseUserProxyPool() http.HandlerFunc {
 			return
 		}
 
-		if _, err = s.db.Exec("UPDATE users SET proxy_url = '', proxy_pool_id = NULL WHERE id = $1", userID); err != nil {
+		// Compare the assignment too: a concurrent explicit proxy update on
+		// another process must never be cleared by this release.
+		result, err := s.db.Exec("UPDATE users SET proxy_url = '', proxy_pool_id = NULL WHERE id = $1 AND proxy_pool_id = $2", userID, poolID.String)
+		if err != nil {
 			s.respondAdminError(w, http.StatusInternalServerError, "database error")
+			return
+		}
+		if affected, err := result.RowsAffected(); err != nil || affected != 1 {
+			s.respondAdminError(w, http.StatusConflict, "proxy assignment changed; retry the request")
 			return
 		}
 		s.refreshUserProxyCache(userID, "")
