@@ -1038,7 +1038,7 @@ curl -X POST -H 'Token: 1234ABCD' -H 'Content-Type: application/json' --data '{"
 
 Sends a Document message. Any mime type can be attached. A FileName must be supplied in the request body. The Document must be passed in base64 embedded format or as an HTTP URL.
 
-The optional MimeType field sets the document type sent to WhatsApp. When omitted, an explicitly declared data URL type or HTTP Content-Type is used. If that type is missing, invalid, `application/octet-stream`, or `binary/octet-stream`, the type is taken from the FileName extension and then from the file contents. A data URL without an explicit type (such as `data:;base64,...`) does not force `text/plain`. An explicit MimeType always takes precedence.
+The optional `MimeType` field is a string that specifies the real MIME type of the document (for example, `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet` for `.xlsx`, `application/vnd.openxmlformats-officedocument.wordprocessingml.document` for `.docx`, or `application/pdf`). If `MimeType` is omitted, wuzapi attempts to detect the type from the file bytes using `http.DetectContentType`. This detector misidentifies `.xlsx` and `.docx` files (which begin with the magic bytes `PK\x03\x04`) as `application/zip`, causing WhatsApp to deliver the file as a `.zip` instead of the original format. It is therefore recommended to always send `MimeType` for Office documents and other non-trivial types.
 
 Endpoint: _/chat/send/document_
 
@@ -1046,7 +1046,7 @@ Method: **POST**
 
 
 ```
-curl -X POST -H 'Token: 1234ABCD' -H 'Content-Type: application/json' --data '{"Phone":"5491155554444","FileName":"hola.txt","Document":"data:application/octet-stream;base64,aG9sYSBxdWUgdGFsCg=="}' http://localhost:8080/chat/send/document
+curl -X POST -H 'Token: 1234ABCD' -H 'Content-Type: application/json' --data '{"Phone":"5491155554444","FileName":"planilha.xlsx","MimeType":"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet","Document":"data:application/octet-stream;base64,..."}' http://localhost:8080/chat/send/document
 ```
 
 ---
