@@ -1046,7 +1046,7 @@ Method: **POST**
 
 
 ```
-curl -X POST -H 'Token: 1234ABCD' -H 'Content-Type: application/json' --data '{"Phone":"5491155554444","FileName":"planilha.xlsx","MimeType":"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet","Document":"data:application/octet-stream;base64,..."}' http://localhost:8080/chat/send/document
+curl -X POST -H 'Token: 1234ABCD' -H 'Content-Type: application/json' --data '{"Phone":"5491155554444","FileName":"hola.txt","Document":"data:application/octet-stream;base64,aG9sYSBxdWUgdGFsCg=="}' http://localhost:8080/chat/send/document
 ```
 
 ---
