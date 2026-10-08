@@ -204,7 +204,10 @@ func sendToUserWebHookWithHmac(webhookurl string, path string, jsonData []byte, 
 			}
 		}
 	} else {
-		log.Warn().Str("userid", userID).Msg("No webhook set for user")
+		// Debug, not Warn: a session with no webhook configured is a supported
+		// setup (RabbitMQ-only, or polling), not a problem to report once per
+		// event.
+		log.Debug().Str("userid", userID).Msg("No webhook set for user")
 	}
 }
 
@@ -319,7 +322,12 @@ func sendEventWithWebHook(mycli *MyClient, postmap map[string]interface{}, path 
 
 func checkIfSubscribedToEvent(subscribedEvents []string, eventType string, userId string) bool {
 	if !Find(subscribedEvents, eventType) && !Find(subscribedEvents, "All") {
-		log.Warn().
+		// Debug, not Warn: subscribing to a subset of the events is the normal
+		// setup, so this fires once per discarded event. On a 150-session
+		// instance these two notices were ~90% of every line left at
+		// LOG_LEVEL=warn, rotating the log file every couple of minutes and
+		// taking the real warnings with them.
+		log.Debug().
 			Str("type", eventType).
 			Strs("subscribedEvents", subscribedEvents).
 			Str("userID", userId).
@@ -1054,7 +1062,7 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 			metaParts = append(metaParts, "ephemeral")
 		}
 
-		log.Info().Str("id", evt.Info.ID).Str("source", evt.Info.SourceString()).Str("parts", strings.Join(metaParts, ", ")).Msg("Message Received")
+		log.Debug().Str("id", evt.Info.ID).Str("source", evt.Info.SourceString()).Str("parts", strings.Join(metaParts, ", ")).Msg("Message Received")
 
 		// If this is a poll vote, decrypt the E2E-encrypted payload so the
 		// webhook can expose which options were selected. Votes arrive as
@@ -1193,13 +1201,13 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 				if protocolMsg.GetKey() != nil {
 					textContent = protocolMsg.GetKey().GetID() // Store the deleted message ID
 				}
-				log.Info().Str("deletedMessageID", textContent).Str("messageID", evt.Info.ID).Msg("Delete message detected")
+				log.Debug().Str("deletedMessageID", textContent).Str("messageID", evt.Info.ID).Msg("Delete message detected")
 				// Check for message edits
 			} else if edit, ok := historyEdit(evt.Message); ok {
 				messageType = "edit"
 				replyToMessageID = edit.target
 				textContent = edit.text
-				log.Info().Str("editedMessageID", replyToMessageID).Str("messageID", evt.Info.ID).Msg("Edit message detected")
+				log.Debug().Str("editedMessageID", replyToMessageID).Str("messageID", evt.Info.ID).Msg("Edit message detected")
 				// Check for reactions
 			} else if reaction := evt.Message.GetReactionMessage(); reaction != nil {
 				messageType = "reaction"
@@ -1320,7 +1328,7 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 		dowebhook = 1
 		//if evt.Type == events.ReceiptTypeRead || evt.Type == events.ReceiptTypeReadSelf {
 		if evt.Type == types.ReceiptTypeRead || evt.Type == types.ReceiptTypeReadSelf {
-			log.Info().Strs("id", evt.MessageIDs).Str("source", evt.SourceString()).Str("timestamp", fmt.Sprintf("%v", evt.Timestamp)).Msg("Message was read")
+			log.Debug().Strs("id", evt.MessageIDs).Str("source", evt.SourceString()).Str("timestamp", fmt.Sprintf("%v", evt.Timestamp)).Msg("Message was read")
 			//if evt.Type == events.ReceiptTypeRead {
 			if evt.Type == types.ReceiptTypeRead {
 				postmap["state"] = "Read"
@@ -1330,7 +1338,7 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 			//} else if evt.Type == events.ReceiptTypeDelivered {
 		} else if evt.Type == types.ReceiptTypeDelivered {
 			postmap["state"] = "Delivered"
-			log.Info().Str("id", evt.MessageIDs[0]).Str("source", evt.SourceString()).Str("timestamp", fmt.Sprintf("%v", evt.Timestamp)).Msg("Message delivered")
+			log.Debug().Str("id", evt.MessageIDs[0]).Str("source", evt.SourceString()).Str("timestamp", fmt.Sprintf("%v", evt.Timestamp)).Msg("Message delivered")
 		} else {
 			// Discard webhooks for inactive or other delivery types
 			return
@@ -1644,7 +1652,7 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 	case *events.ChatPresence:
 		postmap["type"] = "ChatPresence"
 		dowebhook = 1
-		log.Info().Str("state", fmt.Sprintf("%s", evt.State)).Str("media", fmt.Sprintf("%s", evt.Media)).Str("chat", evt.MessageSource.Chat.String()).Str("sender", evt.MessageSource.Sender.String()).Msg("Chat Presence received")
+		log.Debug().Str("state", fmt.Sprintf("%s", evt.State)).Str("media", fmt.Sprintf("%s", evt.Media)).Str("chat", evt.MessageSource.Chat.String()).Str("sender", evt.MessageSource.Sender.String()).Msg("Chat Presence received")
 	case *events.CallOffer:
 		postmap["type"] = "CallOffer"
 		dowebhook = 1
@@ -1764,7 +1772,7 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 	case *events.FBMessage:
 		postmap["type"] = "FBMessage"
 		dowebhook = 1
-		log.Info().Str("info", evt.Info.SourceString()).Msg("Facebook message received")
+		log.Debug().Str("info", evt.Info.SourceString()).Msg("Facebook message received")
 	case *events.PairPasskeyRequest:
 		storePendingPasskey(mycli.userID, &PendingPasskeyState{
 			Request: evt,
