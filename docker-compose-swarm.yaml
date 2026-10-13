@@ -21,6 +21,7 @@ services:
       - SESSION_DEVICE_NAME=${SESSION_DEVICE_NAME:-WuzAPI}
       - WUZAPI_AUTO_PRESENCE=${WUZAPI_AUTO_PRESENCE:-available}
       - WUZAPI_PROXY_POOL_FALLBACK=${WUZAPI_PROXY_POOL_FALLBACK:-block}
+      - WUZAPI_SOCKET_RECOVERY=${WUZAPI_SOCKET_RECOVERY:-true}
       # RabbitMQ configuration Optional
       - RABBITMQ_URL=amqp://wuzapi:wuzapi@rabbitmq:5672/
       - RABBITMQ_QUEUE=whatsapp_events

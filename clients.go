@@ -12,6 +12,7 @@ type ClientManager struct {
 	whatsmeowClients map[string]*whatsmeow.Client
 	httpClients      map[string]*resty.Client
 	myClients        map[string]*MyClient
+	socketRecoveries map[string]*socketRecovery
 	// pollOptions stores the plaintext options sent for each poll, keyed on
 	// userID then on the poll's message ID. This lets the event handler
 	// SHA-256-match incoming vote hashes back to the original option text
@@ -26,6 +27,7 @@ func NewClientManager() *ClientManager {
 		whatsmeowClients: make(map[string]*whatsmeow.Client),
 		httpClients:      make(map[string]*resty.Client),
 		myClients:        make(map[string]*MyClient),
+		socketRecoveries: make(map[string]*socketRecovery),
 		pollOptions:      make(map[string]map[string][]string),
 	}
 }
@@ -33,6 +35,10 @@ func NewClientManager() *ClientManager {
 func (cm *ClientManager) SetWhatsmeowClient(userID string, client *whatsmeow.Client) {
 	cm.Lock()
 	defer cm.Unlock()
+	if recovery := cm.socketRecoveries[userID]; recovery != nil && recovery.client != client {
+		recovery.stop()
+		recovery.cancelSession()
+	}
 	cm.whatsmeowClients[userID] = client
 }
 
@@ -45,6 +51,9 @@ func (cm *ClientManager) GetWhatsmeowClient(userID string) *whatsmeow.Client {
 func (cm *ClientManager) DeleteWhatsmeowClient(userID string) {
 	cm.Lock()
 	defer cm.Unlock()
+	if recovery := cm.socketRecoveries[userID]; recovery != nil {
+		recovery.stop()
+	}
 	delete(cm.whatsmeowClients, userID)
 }
 

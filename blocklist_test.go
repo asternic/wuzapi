@@ -27,22 +27,28 @@ func TestFormatBlocklist(t *testing.T) {
 		}
 	})
 
-	t.Run("stringifies JIDs and passes dhash through", func(t *testing.T) {
+	t.Run("prefers PN and falls back to LID while preserving dhash", func(t *testing.T) {
 		j1, ok1 := parseJID("5491155554445")
-		j2, ok2 := parseJID("5491155553935")
+		j2, ok2 := parseJID("456@lid")
 		if !ok1 || !ok2 {
 			t.Fatalf("parseJID failed: ok1=%v ok2=%v", ok1, ok2)
 		}
-		bl := &types.Blocklist{DHash: "1234567890", JIDs: []types.JID{j1, j2}}
+		bl := &types.Blocklist{
+			DHash: "1234567890",
+			Items: []types.BlocklistItem{
+				{PN: j1, LID: types.NewJID("123", types.HiddenUserServer)},
+				{LID: j2},
+			},
+		}
 
 		got := formatBlocklist(bl)
 		jids := got["Blocklist"].([]string)
-		if len(jids) != len(bl.JIDs) {
-			t.Fatalf("len(Blocklist) = %d; want %d", len(jids), len(bl.JIDs))
+		if len(jids) != len(bl.Items) {
+			t.Fatalf("len(Blocklist) = %d; want %d", len(jids), len(bl.Items))
 		}
-		for i := range bl.JIDs {
-			if jids[i] != bl.JIDs[i].String() {
-				t.Errorf("Blocklist[%d] = %q; want %q", i, jids[i], bl.JIDs[i].String())
+		for i, expected := range []types.JID{j1, j2} {
+			if jids[i] != expected.String() {
+				t.Errorf("Blocklist[%d] = %q; want %q", i, jids[i], expected.String())
 			}
 		}
 		if got["DHash"] != "1234567890" {

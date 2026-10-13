@@ -935,6 +935,13 @@ func (s *server) startClient(userID string, textjid string, token string, kill c
 
 	// The context watches this goroutine's own kill channel. Keep ownership
 	// through temporary disconnections until an explicit shutdown arrives.
+	if *socketRecoveryEnabled && client.Store.ID != nil {
+		recovery := newSocketRecovery(ctx, cancel, client)
+		if clientManager.registerSocketRecovery(userID, recovery) {
+			defer clientManager.removeSocketRecovery(userID, recovery)
+			recovery.run(userID, socketRecoveryGrace)
+		}
+	}
 	<-ctx.Done()
 	log.Info().Str("userid", userID).Msg("Received kill signal")
 }
@@ -1421,6 +1428,10 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 							if chatJID.Server == types.GroupServer || chatJID.Server == types.BroadcastServer {
 								// Group message: use participant JID
 								senderJID = participantJID
+								if senderJID == "" {
+									// HistorySync may put the sender on WebMessageInfo instead of MessageKey.
+									senderJID = msg.Message.GetParticipant()
+								}
 							} else {
 								// Direct message: sender is the chat itself (chat_jid)
 								senderJID = chatJID.String()
@@ -1531,7 +1542,7 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 						} else {
 							if chatJID.Server == types.GroupServer || chatJID.Server == types.BroadcastServer {
 								// Group: use participant JID
-								participant := messageKey.GetParticipant()
+								participant := senderJID
 								if participant != "" {
 									var pErr error
 									senderJIDForInfo, pErr = types.ParseJID(participant)

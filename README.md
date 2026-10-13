@@ -256,6 +256,21 @@ enabled proxies but all of them are at capacity. The default `block` refuses the
 with `503`, so a number never silently connects from the host IP. Set it to `direct` to
 connect without a proxy instead; nothing is saved, so the next connect tries the pool again.
 
+### Closed-socket recovery
+
+WuzAPI automatically attempts to reconnect a session when a message send or chat
+presence request fails with `frame socket is closed`. It waits two seconds for
+whatsmeow's normal reconnect to finish, skips recovery if already connected, and
+allows at most one recovery request per minute per session. Recovery reuses the
+existing session and proxy; it does not retry the failed message or change the
+HTTP error response. Connection attempts and failures are logged with the user ID.
+
+Set `WUZAPI_SOCKET_RECOVERY=false` or pass `-socketrecovery=false` to disable this
+fallback (enabled by default). The environment variable overrides the flag.
+Explicit disconnect, logout, and user deletion stop recovery. No background
+health polling is added; subsequent send failures can trigger another attempt
+after the cooldown if recovery fails.
+
 ### RabbitMQ Integration
 WuzAPI supports sending WhatsApp events to a RabbitMQ queue for global event distribution. When enabled, all WhatsApp events will be published to the specified queue regardless of individual user webhook configurations.
 
