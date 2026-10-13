@@ -947,9 +947,9 @@ func (s *server) GetStatus() http.HandlerFunc {
 			Str("Jid", userInfo.Get("Jid")).
 			Str("Name", userInfo.Get("Name")).
 			Str("Webhook", userInfo.Get("Webhook")).
-			Str("Token", userInfo.Get("Token")).
+			Str("Token", "[REDACTED]").
 			Str("Events", userInfo.Get("Events")).
-			Str("Proxy", userInfo.Get("Proxy")).
+			Str("Proxy", "[REDACTED]").
 			Str("History", userInfo.Get("History")).
 			Str("HasHmac", userInfo.Get("HasHmac")).
 			Msg("User info values")
