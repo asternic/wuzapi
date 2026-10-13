@@ -1421,6 +1421,10 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 							if chatJID.Server == types.GroupServer || chatJID.Server == types.BroadcastServer {
 								// Group message: use participant JID
 								senderJID = participantJID
+								if senderJID == "" {
+									// HistorySync may put the sender on WebMessageInfo instead of MessageKey.
+									senderJID = msg.Message.GetParticipant()
+								}
 							} else {
 								// Direct message: sender is the chat itself (chat_jid)
 								senderJID = chatJID.String()
@@ -1531,7 +1535,7 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 						} else {
 							if chatJID.Server == types.GroupServer || chatJID.Server == types.BroadcastServer {
 								// Group: use participant JID
-								participant := messageKey.GetParticipant()
+								participant := senderJID
 								if participant != "" {
 									var pErr error
 									senderJIDForInfo, pErr = types.ParseJID(participant)
