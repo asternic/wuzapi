@@ -66,6 +66,8 @@ var (
 	mode                = flag.String("mode", "http", "Server mode: http or stdio")
 	dataDir             = flag.String("datadir", "", "Data directory for database and session files (defaults to executable directory)")
 
+	socketRecoveryEnabled = flag.Bool("socketrecovery", true, "Recover sessions after closed socket send errors")
+
 	globalHMACKeyEncrypted []byte
 	automaticPresence      = types.PresenceAvailable
 
@@ -141,6 +143,7 @@ func signalKill(userID string) {
 		log.Debug().Str("userID", userID).Msg("signalKill: no kill channel registered (already cleaned up?)")
 		return
 	}
+	clientManager.stopSocketRecovery(userID, true)
 	select {
 	case ch <- true:
 	default:
@@ -321,6 +324,14 @@ func main() {
 	}
 	automaticPresence = configuredPresence
 	log.Info().Str("presence", string(automaticPresence)).Msg("Automatic session presence configured")
+
+	if v := os.Getenv("WUZAPI_SOCKET_RECOVERY"); v != "" {
+		enabled, err := strconv.ParseBool(v)
+		if err != nil {
+			log.Fatal().Err(err).Msg("Invalid WUZAPI_SOCKET_RECOVERY value")
+		}
+		*socketRecoveryEnabled = enabled
+	}
 
 	if v := os.Getenv("WUZAPI_PROXY_POOL_FALLBACK"); v != "" {
 		*poolFallbackMode = v
