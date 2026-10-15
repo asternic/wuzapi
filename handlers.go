@@ -4863,8 +4863,9 @@ func (s *server) GroupJoin() http.HandlerFunc {
 func (s *server) CreateGroup() http.HandlerFunc {
 
 	type createGroupStruct struct {
-		Name         string   `json:"name"`
-		Participants []string `json:"participants"`
+		Name          string   `json:"name"`
+		Participants  []string `json:"participants"`
+		MemberAddMode string   `json:"memberaddmode"`
 	}
 
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -4905,9 +4906,17 @@ func (s *server) CreateGroup() http.HandlerFunc {
 			}
 		}
 
+		// Optional: when empty, whatsmeow decides the default (all_member_add)
+		memberAddMode, ok := parseGroupMemberAddMode(t.MemberAddMode, true)
+		if !ok {
+			s.Respond(w, r, http.StatusBadRequest, errors.New("invalid MemberAddMode in Payload, must be admin_add or all_member_add"))
+			return
+		}
+
 		req := whatsmeow.ReqCreateGroup{
-			Name:         t.Name,
-			Participants: participantJIDs,
+			Name:          t.Name,
+			Participants:  participantJIDs,
+			MemberAddMode: memberAddMode,
 		}
 
 		groupInfo, err := clientManager.GetWhatsmeowClient(txtid).CreateGroup(r.Context(), req)
@@ -4972,6 +4981,79 @@ func (s *server) SetGroupLocked() http.HandlerFunc {
 		}
 
 		response := map[string]interface{}{"Details": "Group Locked setting updated successfully"}
+		responseJson, err := json.Marshal(response)
+
+		if err != nil {
+			s.Respond(w, r, http.StatusInternalServerError, err)
+		} else {
+			s.Respond(w, r, http.StatusOK, string(responseJson))
+		}
+
+		return
+	}
+}
+
+// parseGroupMemberAddMode validates a member add mode coming from a payload.
+// An empty value is only accepted when allowEmpty is true, and means "not set".
+func parseGroupMemberAddMode(mode string, allowEmpty bool) (types.GroupMemberAddMode, bool) {
+	switch types.GroupMemberAddMode(mode) {
+	case types.GroupMemberAddModeAdmin, types.GroupMemberAddModeAllMember:
+		return types.GroupMemberAddMode(mode), true
+	case "":
+		return "", allowEmpty
+	default:
+		return "", false
+	}
+}
+
+// Set group member add mode (who can add participants)
+func (s *server) SetGroupMemberAddMode() http.HandlerFunc {
+
+	type setGroupMemberAddModeStruct struct {
+		GroupJID string `json:"groupjid"`
+		Mode     string `json:"mode"`
+	}
+
+	return func(w http.ResponseWriter, r *http.Request) {
+
+		txtid := r.Context().Value("userinfo").(Values).Get("Id")
+
+		client := clientManager.GetWhatsmeowClient(txtid)
+		if client == nil {
+			s.Respond(w, r, http.StatusInternalServerError, errors.New("no session"))
+			return
+		}
+
+		decoder := json.NewDecoder(r.Body)
+		var t setGroupMemberAddModeStruct
+		err := decoder.Decode(&t)
+		if err != nil {
+			s.Respond(w, r, http.StatusBadRequest, errors.New("could not decode Payload"))
+			return
+		}
+
+		group, ok := parseJID(t.GroupJID)
+		if !ok {
+			s.Respond(w, r, http.StatusBadRequest, errors.New("could not parse Group JID"))
+			return
+		}
+
+		mode, ok := parseGroupMemberAddMode(t.Mode, false)
+		if !ok {
+			s.Respond(w, r, http.StatusBadRequest, errors.New("invalid Mode in Payload, must be admin_add or all_member_add"))
+			return
+		}
+
+		err = client.SetGroupMemberAddMode(r.Context(), group, mode)
+
+		if err != nil {
+			log.Error().Str("error", fmt.Sprintf("%v", err)).Msg("failed to set group member add mode")
+			msg := fmt.Sprintf("failed to set group member add mode: %v", err)
+			s.Respond(w, r, http.StatusInternalServerError, errors.New(msg))
+			return
+		}
+
+		response := map[string]interface{}{"Details": "Group member add mode updated successfully"}
 		responseJson, err := json.Marshal(response)
 
 		if err != nil {

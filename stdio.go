@@ -444,6 +444,9 @@ func (ss *stdioServer) routeRequest(req *jsonRpcRequest) {
 	case "group.locked":
 		httpMethod = "POST"
 		httpPath = "/group/locked"
+	case "group.memberaddmode":
+		httpMethod = "POST"
+		httpPath = "/group/memberaddmode"
 	case "group.ephemeral":
 		httpMethod = "POST"
 		httpPath = "/group/ephemeral"

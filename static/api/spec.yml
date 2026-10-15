@@ -2191,6 +2191,27 @@ paths:
             application/json:
               schema:
                 example: { "code": 200, "data": { "Details": "Group locked setting updated successfully" }, "success": true }
+  /group/memberaddmode:
+    post:
+      tags:
+        - Group
+      summary: Set group member add mode
+      description: Configures who can add participants to the group, only admins (admin_add) or any participant (all_member_add).
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/definitions/GroupMemberAddMode'
+      responses:
+        200:
+          description: Success
+          content:
+            application/json:
+              schema:
+                example: { "code": 200, "data": { "Details": "Group member add mode updated successfully" }, "success": true }
   /group/ephemeral:
     post:
       tags:
@@ -3590,6 +3611,27 @@ definitions:
           type: string
           description: List of participant phone numbers (without country code prefix symbols)
         example: [ "5491112345678", "5491123456789" ]
+      MemberAddMode:
+        type: string
+        enum: [ "admin_add", "all_member_add" ]
+        description: Optional. Who can add participants to the new group. When omitted, whatsmeow's default applies (all_member_add).
+        example: "admin_add"
+
+  GroupMemberAddMode:
+    type: object
+    required:
+      - GroupJID
+      - Mode
+    properties:
+      GroupJID:
+        type: string
+        description: The JID of the group to configure
+        example: "120363312246943103@g.us"
+      Mode:
+        type: string
+        enum: [ "admin_add", "all_member_add" ]
+        description: admin_add to let only admins add participants, all_member_add to let any participant add them.
+        example: "admin_add"
 
   GroupLocked:
     type: object
