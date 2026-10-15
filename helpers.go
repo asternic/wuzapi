@@ -267,7 +267,7 @@ func getOpenGraphData(ctx context.Context, urlStr string, userID string) openGra
 
 // Update entry in User map
 func updateUserInfo(values interface{}, field string, value string) interface{} {
-	log.Debug().Str("field", field).Str("value", value).Msg("User info updated")
+	log.Debug().Str("field", field).Msg("User info updated")
 	// Copy-on-write: the map inside Values is shared — it lives in
 	// userinfocache and is handed to request goroutines via the request
 	// context. Mutating it in place races with concurrent readers (Values.Get)
@@ -291,11 +291,11 @@ func callHook(myurl string, payload map[string]string, userID string) {
 
 // webhook for regular messages with HMAC
 func callHookWithHmac(myurl string, payload map[string]string, userID string, encryptedHmacKey []byte) {
-	log.Info().Str("url", myurl).Str("userID", userID).Msg("Sending POST to client with retry logic")
+	log.Info().Str("userID", userID).Msg("Sending POST to client with retry logic")
 
 	client := clientManager.GetHTTPClient(userID)
 	if client == nil {
-		log.Warn().Str("url", myurl).Str("userID", userID).Msg("HTTP client is nil for user, skipping webhook")
+		log.Warn().Str("userID", userID).Msg("HTTP client is nil for user, skipping webhook")
 		return
 	}
 
@@ -319,7 +319,6 @@ func callHookWithHmac(myurl string, payload map[string]string, userID string, en
 
 			log.Warn().
 				Int("attempt", attempt+1).
-				Str("url", myurl).
 				Dur("delay", delayDuration).
 				Msg("Retrying webhook request with exponential backoff...")
 
@@ -391,7 +390,7 @@ func callHookWithHmac(myurl string, payload map[string]string, userID string, en
 		lastError = postErr
 
 		if postErr != nil {
-			log.Error().Err(postErr).Int("attempt", attempt+1).Str("url", myurl).Msg("Webhook failed due to network/IO error")
+			log.Error().Str("error_type", fmt.Sprintf("%T", postErr)).Int("attempt", attempt+1).Msg("Webhook failed due to network/IO error")
 			continue
 		}
 
@@ -400,7 +399,6 @@ func callHookWithHmac(myurl string, payload map[string]string, userID string, en
 			log.Error().
 				Int("status", resp.StatusCode()).
 				Int("attempt", attempt+1).
-				Str("url", myurl).
 				Msg("Webhook failed due to non-2xx status code")
 
 			if !*webhookRetryEnabled {
@@ -409,12 +407,12 @@ func callHookWithHmac(myurl string, payload map[string]string, userID string, en
 			continue
 		}
 
-		log.Info().Int("status", resp.StatusCode()).Str("url", myurl).Msg("Webhook call successful")
+		log.Info().Int("status", resp.StatusCode()).Msg("Webhook call successful")
 		return
 	}
 
 	if lastError != nil {
-		log.Error().Str("url", myurl).Msg("Webhook permanently failed after all retries. Sending to error queue...")
+		log.Error().Msg("Webhook permanently failed after all retries. Sending to error queue...")
 
 		errorPayloadMap := make(map[string]interface{})
 		if p, ok := body.(map[string]string); ok {
@@ -447,11 +445,11 @@ func callHookFile(myurl string, payload map[string]string, userID string, file s
 
 // webhook for messages with file attachments and HMAC
 func callHookFileWithHmac(myurl string, payload map[string]string, userID string, file string, encryptedHmacKey []byte) error {
-	log.Info().Str("file", file).Str("url", myurl).Msg("Sending POST with retry logic")
+	log.Info().Str("file", file).Msg("Sending POST with retry logic")
 
 	client := clientManager.GetHTTPClient(userID)
 	if client == nil {
-		log.Warn().Str("url", myurl).Str("userID", userID).Msg("HTTP client is nil for user, skipping file webhook")
+		log.Warn().Str("userID", userID).Msg("HTTP client is nil for user, skipping file webhook")
 		return fmt.Errorf("http client is nil for user %s", userID)
 	}
 
@@ -477,7 +475,6 @@ func callHookFileWithHmac(myurl string, payload map[string]string, userID string
 
 			log.Warn().
 				Int("attempt", attempt+1).
-				Str("url", myurl).
 				Dur("delay", delayDuration).
 				Msg("Retrying file webhook request with exponential backoff...")
 
@@ -515,7 +512,7 @@ func callHookFileWithHmac(myurl string, payload map[string]string, userID string
 		lastError = postErr
 
 		if postErr != nil {
-			log.Error().Err(postErr).Int("attempt", attempt+1).Str("url", myurl).Msg("File webhook failed due to network/IO error")
+			log.Error().Str("error_type", fmt.Sprintf("%T", postErr)).Int("attempt", attempt+1).Msg("File webhook failed due to network/IO error")
 			continue
 		}
 
@@ -524,7 +521,6 @@ func callHookFileWithHmac(myurl string, payload map[string]string, userID string
 			log.Error().
 				Int("status", resp.StatusCode()).
 				Int("attempt", attempt+1).
-				Str("url", myurl).
 				Msg("File webhook failed due to non-2xx status code")
 
 			if !*webhookRetryEnabled {
@@ -533,12 +529,12 @@ func callHookFileWithHmac(myurl string, payload map[string]string, userID string
 			continue
 		}
 
-		log.Info().Int("status", resp.StatusCode()).Str("url", myurl).Msg("File webhook call successful")
+		log.Info().Int("status", resp.StatusCode()).Msg("File webhook call successful")
 		return nil
 	}
 
 	if lastError != nil {
-		log.Error().Str("url", myurl).Msg("File webhook permanently failed after all retries. Sending to error queue...")
+		log.Error().Msg("File webhook permanently failed after all retries. Sending to error queue...")
 
 		errorPayloadMap := make(map[string]interface{})
 		for k, v := range finalPayload {

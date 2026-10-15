@@ -666,7 +666,7 @@ func (s *server) GetQR() http.HandlerFunc {
 			}
 		}
 
-		log.Info().Str("instance", txtid).Str("qrcode", code).Msg("Get QR successful")
+		log.Info().Str("instance", txtid).Msg("Get QR successful")
 		response := map[string]interface{}{
 			"QRCode":         fmt.Sprintf("%s", code),
 			"passkeyPending": false,
@@ -5989,8 +5989,7 @@ func (s *server) AddUser() http.HandlerFunc {
 			}
 		}
 
-		log.Info().Interface("proxyConfig", user.ProxyConfig).Interface("s3Config", user.S3Config).Msg("Received values for proxyConfig and s3Config")
-		log.Debug().Interface("user", user).Msg("Received values for user")
+		log.Debug().Bool("proxy_config_provided", user.ProxyConfig != nil).Bool("s3_config_provided", user.S3Config != nil).Msg("Received user configuration")
 
 		// Set defaults only if nil
 		if user.Events == "" {
@@ -6190,8 +6189,7 @@ func (s *server) EditUser() http.HandlerFunc {
 			}
 		}
 
-		log.Info().Interface("proxyConfig", user.ProxyConfig).Interface("s3Config", user.S3Config).Msg("Received values for proxyConfig and s3Config")
-		log.Debug().Interface("user", user).Msg("Received values for user")
+		log.Debug().Bool("proxy_config_provided", user.ProxyConfig != nil).Bool("s3_config_provided", user.S3Config != nil).Msg("Received user configuration")
 
 		// Check if user exists
 		var count int
@@ -7156,7 +7154,7 @@ func (s *server) GetHistory() http.HandlerFunc {
 		if historyLimit == 0 {
 			// Before returning error, try refreshing the cache in case the DB was updated
 			token := r.Context().Value("userinfo").(Values).Get("Token")
-			log.Info().Str("userId", txtid).Str("token", token).Msg("History is 0, invalidating cache and trying fresh DB lookup")
+			log.Info().Str("userId", txtid).Msg("History is 0, invalidating cache and trying fresh DB lookup")
 			userinfocache.Delete(token)
 
 			// Re-fetch from database
