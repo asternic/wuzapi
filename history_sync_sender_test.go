@@ -26,7 +26,7 @@ func TestHistorySyncSenderPersistence(t *testing.T) {
 			t.Fatal(err)
 		}
 		const user = "history-sender-test"
-		if _, err := db.Exec("INSERT INTO users (id,name,token) VALUES ('history-sender-test','Test','history-sender-token')"); err != nil {
+		if _, err := db.Exec("INSERT INTO users (id,name,token,history) VALUES ('history-sender-test','Test','history-sender-token',100)"); err != nil {
 			t.Fatal(err)
 		}
 		container, err := sqlstore.New(context.Background(), "sqlite", filepath.Join(t.TempDir(), "whatsmeow.db")+"?_pragma=foreign_keys(1)", nil)

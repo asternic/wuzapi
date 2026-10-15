@@ -612,8 +612,10 @@ restores WhatsApp's default sync behavior. Values from 0 through 365 are accepte
 Admin user responses and `GET /session/status` expose the saved value.
 
 Sync days and `history` are separate settings: `history` is the local per-chat
-message retention count, not a number of days. The requested window is sent in
-that user's pairing payload; WhatsApp and the phone determine which messages are
+message retention count, not a number of days. A value of 0 disables local
+persistence for live, outgoing, and HistorySync messages without suppressing
+HistorySync webhooks. Positive limits apply to each chat across those sources.
+The requested window is sent in that user's pairing payload; WhatsApp and the phone determine which messages are
 available. Incoming batches use the existing `HistorySync` processing and webhooks.
 Zero sync days does not suppress WhatsApp's normal history events.
 

@@ -11,6 +11,12 @@ import (
 // duplicate row.
 func TestSaveMessageToHistoryIdempotent(t *testing.T) {
 	s := makeTestServer(t)
+	if _, err := s.db.Exec("CREATE TABLE whatsmeow_message_secrets (message_id TEXT)"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.db.Exec("INSERT INTO users (id,name,token,history) VALUES ('user-1','Test','history-token',100)"); err != nil {
+		t.Fatal(err)
+	}
 
 	const (
 		userID = "user-1"

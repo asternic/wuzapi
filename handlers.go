@@ -6515,8 +6515,9 @@ func (s *server) DeleteUserComplete() http.HandlerFunc {
 			// Continue anyway since we have the ID to delete local files
 		}
 
-		// 3. Remove from DB
-		_, err = s.db.Exec("DELETE FROM users WHERE id = $1", id)
+		// Delete the user and history atomically. History writers lock the same
+		// user row before inserting, so an in-flight batch cannot recreate rows.
+		err = s.deleteUserAndHistory(id)
 		if err != nil {
 			s.respondWithJSON(w, http.StatusInternalServerError, map[string]interface{}{
 				"code":    http.StatusInternalServerError,
@@ -7298,11 +7299,6 @@ func (s *server) saveOutgoingMessageToHistory(userID, chatJID, messageID, messag
 		err := s.saveMessageToHistory(userID, chatJID, "me", messageID, messageType, textContent, mediaLink, "", "")
 		if err != nil {
 			log.Error().Err(err).Msg("Failed to save outgoing message to history")
-		} else {
-			err = s.trimMessageHistory(userID, chatJID, historyLimit)
-			if err != nil {
-				log.Error().Err(err).Msg("Failed to trim message history")
-			}
 		}
 	}
 }

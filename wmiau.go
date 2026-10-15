@@ -1315,11 +1315,6 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 				)
 				if err != nil {
 					log.Error().Err(err).Msg("Failed to save message to history")
-				} else {
-					err = mycli.s.trimMessageHistory(mycli.userID, evt.Info.Chat.String(), historyLimit)
-					if err != nil {
-						log.Error().Err(err).Msg("Failed to trim message history")
-					}
 				}
 			} else {
 				log.Debug().Str("messageType", messageType).Str("messageID", evt.Info.ID).Msg("Skipping empty message from history")
@@ -1369,6 +1364,21 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 		// Save HistorySync messages to message_history table
 		if evt.Data != nil && evt.Data.Conversations != nil {
 			go func() {
+
+				// Local retention does not control HistorySync webhook delivery.
+				// Avoid processing disabled/deleted users; each insert rechecks the
+				// setting transactionally in case it changes during this batch.
+				var limit int
+				err := mycli.db.Get(&limit, mycli.db.Rebind("SELECT COALESCE(history, 0) FROM users WHERE id=?"), mycli.userID)
+				if err != nil {
+					if err != sql.ErrNoRows {
+						log.Error().Err(err).Str("userID", mycli.userID).Msg("Failed to read HistorySync retention setting")
+					}
+					return
+				}
+				if limit <= 0 {
+					return
+				}
 
 				// Get the account owner's JID for messages sent by the instance
 				accountOwnerJID := ""

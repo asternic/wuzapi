@@ -1,6 +1,7 @@
 package main
 
 import (
+	"database/sql"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -136,6 +137,31 @@ type HistoryMessage struct {
 }
 
 func (s *server) saveMessageToHistory(userID, chatJID, senderJID, messageID, messageType, textContent, mediaLink, quotedMessageID, dataJson string) error {
+	// Serialize persistence with user deletion and read the current retention setting.
+	// PostgreSQL locks the user row; SQLite acquires its write lock before reading.
+	tx, err := s.db.Beginx()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if s.db.DriverName() != "postgres" {
+		if _, err = tx.Exec("UPDATE users SET history=history WHERE id=?", userID); err != nil {
+			return err
+		}
+	}
+	queryLimit := "SELECT COALESCE(history, 0) FROM users WHERE id=?"
+	if s.db.DriverName() == "postgres" {
+		queryLimit += " FOR UPDATE"
+	}
+	var limit int
+	if err = tx.Get(&limit, tx.Rebind(queryLimit), userID); err == sql.ErrNoRows {
+		return nil
+	} else if err != nil {
+		return err
+	}
+	if limit <= 0 {
+		return nil
+	}
 	// Idempotent insert: HistorySync batches (and reconnects) routinely redeliver
 	// messages already persisted via the live Message event. The (user_id, message_id)
 	// unique constraint makes those duplicates an expected condition, not an error,
@@ -155,14 +181,17 @@ func (s *server) saveMessageToHistory(userID, chatJID, senderJID, messageID, mes
               WHERE message_history.message_type = 'unknown'
                 AND excluded.message_type = 'edit'
                 AND message_history.chat_jid = excluded.chat_jid`)
-	_, err := s.db.Exec(query, userID, chatJID, senderJID, messageID, time.Now(), messageType, textContent, mediaLink, quotedMessageID, dataJson)
+	_, err = tx.Exec(query, userID, chatJID, senderJID, messageID, time.Now(), messageType, textContent, mediaLink, quotedMessageID, dataJson)
 	if err != nil {
 		return fmt.Errorf("failed to save message to history: %w", err)
 	}
-	return nil
+	if err = s.trimMessageHistory(tx, userID, chatJID, limit); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
-func (s *server) trimMessageHistory(userID, chatJID string, limit int) error {
+func (s *server) trimMessageHistory(tx *sqlx.Tx, userID, chatJID string, limit int) error {
 	var queryHistory, querySecrets string
 
 	if s.db.DriverName() == "postgres" {
@@ -203,13 +232,30 @@ func (s *server) trimMessageHistory(userID, chatJID string, limit int) error {
             )`
 	}
 
-	if _, err := s.db.Exec(querySecrets, userID, chatJID, limit); err != nil {
+	if _, err := tx.Exec(querySecrets, userID, chatJID, limit); err != nil {
 		return fmt.Errorf("failed to trim message secrets: %w", err)
 	}
 
-	if _, err := s.db.Exec(queryHistory, userID, chatJID, limit); err != nil {
+	if _, err := tx.Exec(queryHistory, userID, chatJID, limit); err != nil {
 		return fmt.Errorf("failed to trim message history: %w", err)
 	}
 
 	return nil
+}
+
+// deleteUserAndHistory shares the user lock with saveMessageToHistory. Delete
+// the user first so concurrent writers either finish before cleanup or see no user.
+func (s *server) deleteUserAndHistory(userID string) error {
+	tx, err := s.db.Beginx()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if _, err = tx.Exec(tx.Rebind("DELETE FROM users WHERE id=?"), userID); err != nil {
+		return err
+	}
+	if _, err = tx.Exec(tx.Rebind("DELETE FROM message_history WHERE user_id=?"), userID); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
