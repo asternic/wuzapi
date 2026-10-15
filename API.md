@@ -1589,6 +1589,12 @@ method: **POST**
 curl -s -X POST -H 'Token: 1234ABCD' -H 'Content-Type: application/json' -d '{"name":"My New Group","participants":["5491155553934","5491155553935"]}' http://localhost:8080/group/create 
 ```
 
+Optionally, set who can add participants with `memberaddmode`: `"admin_add"` (only admins) or `"all_member_add"` (any participant). When omitted, whatsmeow's default applies (`all_member_add`).
+
+```
+curl -s -X POST -H 'Token: 1234ABCD' -H 'Content-Type: application/json' -d '{"name":"My New Group","participants":["5491155553934"],"memberaddmode":"admin_add"}' http://localhost:8080/group/create 
+```
+
 Response:
 
 ```json
@@ -1637,6 +1643,32 @@ Response:
   "code": 200,
   "data": {
     "Details": "Group locked setting updated successfully"
+  },
+  "success": true
+}
+```
+
+---
+
+## Set group member add mode
+
+Configures who can add participants to the group: only admins (`admin_add`) or any participant (`all_member_add`)
+
+endpoint: _/group/memberaddmode_
+
+method: **POST**
+
+```
+curl -s -X POST -H 'Token: 1234ABCD' -H 'Content-Type: application/json' -d '{"groupjid":"120362023605733675@g.us","mode":"admin_add"}' http://localhost:8080/group/memberaddmode 
+```
+
+Response:
+
+```json
+{
+  "code": 200,
+  "data": {
+    "Details": "Group member add mode updated successfully"
   },
   "success": true
 }
