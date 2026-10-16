@@ -1006,6 +1006,94 @@ curl -X POST -H 'Token: 1234ABCD' -H 'Content-Type: application/json' --data '{"
 
 ---
 
+## Send Carousel Message
+
+*POST /chat/send/carousel* — stdio: `chat.send.carousel`
+
+Sends one native horizontal carousel to a direct phone-number or LID chat.
+Each card contains an image, body text and buttons. Groups, broadcasts,
+newsletters and bots are not supported by this endpoint.
+
+Send the user token in the `Token` header:
+
+```sh
+curl -X POST http://localhost:8080/chat/send/carousel \
+  -H 'Token: YOUR_USER_TOKEN' -H 'Content-Type: application/json' \
+  --data @carousel.json
+```
+
+Example `carousel.json` (replace the image URLs with your own):
+
+```json
+{
+  "Phone": "15555550100",
+  "Id": "carousel-example-1",
+  "Body": "Choose a destination",
+  "Cards": [
+    {
+      "Body": "Summit",
+      "Image": "https://example.com/summit.jpg",
+      "Buttons": [{"type": "reply", "title": "Choose", "id": "summit"}]
+    },
+    {
+      "Body": "Coast",
+      "Image": "https://example.com/coast.png",
+      "Buttons": [{"type": "cta_url", "title": "Details", "url": "https://example.com/coast"}]
+    }
+  ]
+}
+```
+
+Supported input limits (application limits, not WhatsApp delivery guarantees):
+
+| Field | Supported values |
+| --- | --- |
+| `Phone` | Bare phone number or direct `@s.whatsapp.net` / `@lid` JID; existing cached PN/LID resolution applies |
+| `Id` | Optional; generated when omitted. At most 128 printable ASCII bytes, without whitespace |
+| `Body` | 1–1,024 characters, not only whitespace |
+| `Cards` | 2–10 ordered entries |
+| Card `Body` | 1–160 characters, not only whitespace |
+| Card `Image` | JPEG/PNG data URL or HTTP(S) URL; 16 MiB total decoded/source image bytes per request, at most 4,096 pixels per side and 16 megapixels |
+| Card `Buttons` | 1–3 per card; `title` is 1–20 characters without controls |
+| `reply` button | Default when type is omitted or empty; explicit `id` of 1–200 characters without controls, unique across all cards |
+| `cta_url` button | Absolute HTTP(S) `url`, at most 2,048 bytes, without credentials, controls or whitespace |
+| `cta_call` button | `phone_number`: 6–15 digits with an optional leading `+` |
+
+Use only the action fields for the selected button type. Unsupported fields,
+actions and trailing JSON are rejected; cards and button labels are never
+silently dropped or truncated. The HTTP JSON body is limited to 24 MiB.
+Stdio retains its existing 512-KiB line limit, so prefer image URLs there.
+
+All cards and image contents are validated before uploading any image. If an
+upload fails, no final message is sent, although earlier media uploads may
+already exist. Success creates one outgoing history entry (when history is
+enabled) and one sent-message event containing the full carousel.
+
+Input errors return 400, oversized JSON returns 413, and local IO/upload
+failures return 500 with a card-scoped error. Canceled or expired preparation
+returns 503/504. An upload failure says `message not sent`; only errors after
+dispatch say `delivery unconfirmed`. Never treat those two outcomes as equivalent.
+
+The response uses the ordinary send envelope:
+
+```json
+{"code":200,"data":{"Details":"Sent","Timestamp":1700000000,"Id":"carousel-example-1"},"success":true}
+```
+
+**Delivery and retry limitations:** `Sent` means WhatsApp acknowledged the
+transport, not that a recipient displayed or read the cards. The pinned
+whatsmeow version does not preserve the interactive `AdditionalNodes` when
+answering a recipient's retry receipt, so retransmitted carousels may not
+render. Client rendering and recovery require real-device verification.
+
+Preparation has a 45-second budget, followed by a detached 60-second dispatch
+budget so HTTP cancellation after dispatch does not discard a successful ACK.
+These are not an end-to-end latency guarantee: whatsmeow's internal send lock
+can remain queued beyond the HTTP write deadline. A timeout or error after
+dispatch is ambiguous; the endpoint never automatically replays it. Supply an
+`Id` for correlation and reconcile the outcome before another attempt. Reusing
+an `Id` does not provide idempotency and does not replace an existing history row.
+
 ## Send Audio Message
 
 Sends an Audio message. Audio must be in Opus format and base64 encoded in embedded format.
