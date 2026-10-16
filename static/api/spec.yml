@@ -1825,6 +1825,66 @@ paths:
             application/json:
               schema:
                 example: {"code":200,"data":{"Details":"Sent","Id":"90B2F8B13FAC8A9CF6B06E99C7834DC5","Timestamp":"2022-04-20T12:49:08-03:00"},"success":true}
+  /chat/send/carousel:
+    post:
+      tags:
+        - Chat
+      summary: Sends an image carousel
+      description: >-
+        Sends 2-10 ordered JPEG/PNG cards as one native interactive message to
+        a direct PN/LID chat. All cards are validated before upload. Total image
+        bytes are limited to 16 MiB and the JSON request to 24 MiB. Preparation
+        has a 45-second budget and dispatch a detached 60-second budget; internal
+        send-lock queueing can exceed the HTTP deadline. Acknowledgement does
+        not prove rendering. The pinned whatsmeow version loses interactive
+        AdditionalNodes on recipient retry receipts, so recovery is unverified.
+        Never automatically resend after an ambiguous dispatch error or timeout.
+        Replace sample image URLs with your own. See API.md for complete limits. Stdio method is chat.send.carousel;
+        its existing 512-KiB line limit favors image URLs.
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/definitions/MessageCarousel'
+            example:
+              Phone: "15555550100"
+              Id: "carousel-example-1"
+              Body: "Choose a destination"
+              Cards:
+                - Body: "Summit"
+                  Image: "https://example.com/summit.jpg"
+                  Buttons:
+                    - type: reply
+                      title: "Choose"
+                      id: "summit"
+                - Body: "Coast"
+                  Image: "https://example.com/coast.png"
+                  Buttons:
+                    - type: cta_url
+                      title: "Details"
+                      url: "https://example.com/coast"
+      responses:
+        200:
+          description: Transport acknowledged the message; does not prove display or reading
+          content:
+            application/json:
+              schema:
+                example: {"code":200,"data":{"Details":"Sent","Id":"carousel-example-1","Timestamp":1700000000},"success":true}
+        400:
+          description: Invalid recipient, cards, actions or images
+        401:
+          description: Invalid user token
+        413:
+          description: JSON body exceeds 24 MiB
+        500:
+          description: Session unavailable, preparation/upload failure (not sent), or ambiguous dispatch; see error message
+        503:
+          description: Preparation canceled; message not sent
+        504:
+          description: Preparation deadline exceeded; message not sent
   /chat/send/list:
     post:
       tags:
@@ -3058,6 +3118,80 @@ definitions:
             type: string
             example: "5491155553935@s.whatsapp.net"
 
+  MessageCarousel:
+    type: object
+    additionalProperties: false
+    required: [Phone, Body, Cards]
+    properties:
+      Phone:
+        type: string
+        description: Bare phone number or direct PN/LID JID; no groups, bots or device-specific JIDs
+        example: "15555550100"
+      Id:
+        type: string
+        maxLength: 128
+        description: Optional printable ASCII without whitespace. Generated when omitted. Correlation only; reuse is not idempotency and does not replace history.
+        example: "carousel-example-1"
+      Body:
+        type: string
+        minLength: 1
+        maxLength: 1024
+        example: "Choose a destination"
+      Cards:
+        type: array
+        minItems: 2
+        maxItems: 10
+        items:
+          $ref: '#/definitions/CarouselCard'
+  CarouselCard:
+    type: object
+    additionalProperties: false
+    required: [Body, Image, Buttons]
+    properties:
+      Body:
+        type: string
+        minLength: 1
+        maxLength: 160
+        example: "Summit"
+      Image:
+        type: string
+        description: JPEG/PNG data URL or HTTP(S) URL. Images total at most 16 MiB, 4096px per side and 16 megapixels each.
+        example: "https://example.com/summit.jpg"
+      Buttons:
+        type: array
+        minItems: 1
+        maxItems: 3
+        items:
+          $ref: '#/definitions/CarouselButton'
+  CarouselButton:
+    type: object
+    additionalProperties: false
+    required: [title]
+    properties:
+      type:
+        type: string
+        enum: ["", reply, cta_url, cta_call]
+        default: reply
+        description: Omitted or empty type means reply.
+      title:
+        type: string
+        minLength: 1
+        maxLength: 20
+      id:
+        type: string
+        minLength: 1
+        maxLength: 200
+        description: Required for reply, without controls, unique across all cards. Omit for other actions.
+        example: "summit"
+      url:
+        type: string
+        maxLength: 2048
+        description: Required for cta_url; absolute HTTP(S), no credentials, whitespace or controls. Omit for other actions.
+        example: "https://example.com/summit"
+      phone_number:
+        type: string
+        description: Required for cta_call; optional leading + and 6-15 digits. Omit for other actions.
+        example: "+15555550100"
   MessageButtons:
     type: object
     required:
