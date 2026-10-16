@@ -167,6 +167,7 @@ func (s *server) routes() {
 	s.router.Handle("/group/topic", c.Then(s.SetGroupTopic())).Methods("POST")
 	s.router.Handle("/group/announce", c.Then(s.SetGroupAnnounce())).Methods("POST")
 	s.router.Handle("/group/locked", c.Then(s.SetGroupLocked())).Methods("POST")
+	s.router.Handle("/group/memberaddmode", c.Then(s.SetGroupMemberAddMode())).Methods("POST")
 	s.router.Handle("/group/ephemeral", c.Then(s.SetDisappearingTimer())).Methods("POST")
 	s.router.Handle("/group/join", c.Then(s.GroupJoin())).Methods("POST")
 	s.router.Handle("/group/inviteinfo", c.Then(s.GetGroupInviteInfo())).Methods("POST")

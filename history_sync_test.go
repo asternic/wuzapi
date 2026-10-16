@@ -73,11 +73,9 @@ func historyTestDB(t *testing.T, driver string) *sqlx.DB {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { db.Close() })
-	if driver == "postgres" {
-		// Production creates the whatsmeow store before running application migrations.
-		if _, err := db.Exec("CREATE TABLE whatsmeow_message_secrets (message_id TEXT)"); err != nil {
-			t.Fatal(err)
-		}
+	// Production creates the whatsmeow store before running application migrations.
+	if _, err := db.Exec("CREATE TABLE whatsmeow_message_secrets (message_id TEXT)"); err != nil {
+		t.Fatal(err)
 	}
 	return db
 }

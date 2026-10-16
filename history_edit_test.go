@@ -52,7 +52,7 @@ func TestHistoryEditPersistence(t *testing.T) {
 		if err := initializeSchema(db); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := db.Exec("INSERT INTO users (id,name,token) VALUES ('edit-user','Edit','edit-token')"); err != nil {
+		if _, err := db.Exec("INSERT INTO users (id,name,token,history) VALUES ('edit-user','Edit','edit-token',100)"); err != nil {
 			t.Fatal(err)
 		}
 		s := &server{db: db}
