@@ -2256,3 +2256,21 @@ chat list. The existing `/chat/pin` endpoint pins an individual message.
 
 `Pin` must be explicitly supplied; use `false` to unpin. Direct chats (phone or
 LID JIDs) and group chats are supported. WhatsApp applies its own pin limits.
+
+## Conversation mute and unread state
+
+These endpoints update WhatsApp's synchronized conversation settings. They do
+not filter WuzAPI webhooks or change your application's notifications.
+
+- `POST /chat/mute` (stdio `chat.mute`):
+  `{"Chat":"123@g.us","Mute":true,"DurationSeconds":3600}`.
+  Omit duration or use zero for indefinite mute; `Mute:false` unmutes and
+  requires zero/omitted duration. Negative or overflowing durations are rejected.
+- `POST /chat/unread` (stdio `chat.unread`):
+  `{"Chat":"123@g.us","Unread":true}`. Use false to clear the unread flag.
+  This changes the conversation flag; use `/chat/markread` for message receipts.
+
+Both require a user token and explicit boolean, support individual phone/LID and
+group chats, and return the normal success envelope with `Details: Updated`.
+No local persistence or migration is added. Unknown fields and trailing JSON
+are rejected.

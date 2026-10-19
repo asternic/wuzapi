@@ -341,6 +341,12 @@ func (ss *stdioServer) routeRequest(req *jsonRpcRequest) {
 	case "chat.presence":
 		httpMethod = "POST"
 		httpPath = "/chat/presence"
+	case "chat.mute":
+		httpMethod = "POST"
+		httpPath = "/chat/mute"
+	case "chat.unread":
+		httpMethod = "POST"
+		httpPath = "/chat/unread"
 	case "chat.pinchat":
 		httpMethod = "POST"
 		httpPath = "/chat/pinchat"
@@ -512,7 +518,14 @@ func (ss *stdioServer) executeHTTPHandler(req *jsonRpcRequest, httpMethod, httpP
 	// Create a mock HTTP request
 	var body io.Reader
 	if req.Params != nil && len(req.Params) > 0 {
-		jsonParams, err := json.Marshal(req.Params)
+		// Authentication belongs in headers, not endpoint payloads.
+		payload := make(map[string]interface{}, len(req.Params))
+		for key, value := range req.Params {
+			if (httpPath != "/chat/mute" && httpPath != "/chat/unread" && httpPath != "/labels/edit" && httpPath != "/labels/chat" && httpPath != "/labels/message" && httpPath != "/chat/poll/vote" && httpPath != "/user/business-profile") || (key != "token" && key != "adminToken") {
+				payload[key] = value
+			}
+		}
+		jsonParams, err := json.Marshal(payload)
 		if err != nil {
 			ss.sendError(req.ID, 400, fmt.Sprintf("invalid params: %v", err))
 			return
