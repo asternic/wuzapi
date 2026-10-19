@@ -8,6 +8,25 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+// Guarded by proxyPoolMu, like session start reservations.
+var deletingSessions = make(map[string]bool)
+
+func reserveSessionDeletion(userID string) error {
+	proxyPoolMu.Lock()
+	defer proxyPoolMu.Unlock()
+	if deletingSessions[userID] {
+		return errors.New("user deletion is already in progress")
+	}
+	deletingSessions[userID] = true
+	return nil
+}
+
+func releaseSessionDeletion(userID string) {
+	proxyPoolMu.Lock()
+	delete(deletingSessions, userID)
+	proxyPoolMu.Unlock()
+}
+
 var errSessionActive = errors.New("session is active; disconnect and wait for shutdown first")
 
 // Cancel both initial connection work and retry/QR waits on disconnect. The
@@ -41,9 +60,20 @@ func sessionActive(userID string) bool {
 func (s *server) prepareClientStart(userID string, usePool bool) (chan bool, string, error) {
 	proxyPoolMu.Lock()
 	defer proxyPoolMu.Unlock()
+	if deletingSessions[userID] {
+		return nil, "", errors.New("user deletion is in progress")
+	}
 	if sessionActive(userID) {
 		return nil, "", errSessionActive
 	}
+	var exists bool
+	if err := s.db.QueryRow(s.db.Rebind(`SELECT EXISTS(SELECT 1 FROM users WHERE id=?)`), userID).Scan(&exists); err != nil {
+		return nil, "", err
+	}
+	if !exists {
+		return nil, "", errors.New("user no longer exists")
+	}
+
 	var proxyURL string
 	if usePool {
 		var err error
@@ -105,4 +135,20 @@ func connectSessionWithRetry(ctx context.Context, connect func(context.Context) 
 	}
 
 	return lastErr
+}
+
+// Wait for the owner to finish its deferred cleanup before removing its store.
+func waitForSessionStop(ctx context.Context, userID string) error {
+	ticker := time.NewTicker(20 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		if _, running := getKillChannel(userID); !running {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-ticker.C:
+		}
+	}
 }

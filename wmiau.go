@@ -449,98 +449,11 @@ func jidUserKey(jid string) string {
 	return strings.SplitN(userPart, ":", 2)[0]
 }
 
-// jidLookupCandidates builds JID variants to try with sqlstore.GetDevice before
-// falling back to account-key matching across all stored devices.
-func jidLookupCandidates(textjid string) []types.JID {
-	jid, ok := parseJID(textjid)
-	if !ok {
-		return nil
-	}
-
-	seen := make(map[string]struct{})
-	var candidates []types.JID
-	add := func(candidate types.JID) {
-		if candidate.IsEmpty() {
-			return
-		}
-		key := candidate.String()
-		if _, exists := seen[key]; exists {
-			return
-		}
-		seen[key] = struct{}{}
-		candidates = append(candidates, candidate)
-	}
-
-	add(jid)
-	add(jid.ToNonAD())
-
-	userOnly, _, _ := strings.Cut(jid.User, ":")
-	if userOnly != "" {
-		add(types.NewJID(userOnly, jid.Server))
-		if jid.Server == types.DefaultUserServer || jid.Server == types.HiddenUserServer {
-			add(types.NewJID(userOnly, types.DefaultUserServer))
-		}
-	}
-
-	return candidates
-}
-
 func canonicalStoreJID(deviceStore *store.Device) string {
 	if deviceStore == nil || deviceStore.ID == nil {
 		return ""
 	}
 	return deviceStore.ID.ToNonAD().String()
-}
-
-// resolveDeviceStore loads an existing WhatsApp session from sqlstore. When
-// users.jid does not exactly match whatsmeow_device.jid (common after LID/AD
-// format changes), it falls back to matching by account key so reconnect does
-// not create a fresh device and force QR scan.
-func (s *server) resolveDeviceStore(ctx context.Context, textjid string) (*store.Device, string) {
-	if textjid != "" {
-		for _, candidate := range jidLookupCandidates(textjid) {
-			deviceStore, err := container.GetDevice(ctx, candidate)
-			if err != nil {
-				log.Error().Err(err).Str("jid", candidate.String()).Msg("Failed to get device")
-				continue
-			}
-			if resolved := canonicalStoreJID(deviceStore); resolved != "" {
-				if candidate.String() != textjid {
-					log.Info().
-						Str("user_jid", textjid).
-						Str("store_jid", deviceStore.ID.String()).
-						Str("resolved_jid", resolved).
-						Msg("Resolved device by JID variant")
-				}
-				return deviceStore, resolved
-			}
-		}
-
-		key := jidUserKey(textjid)
-		if key != "" {
-			allDevices, err := container.GetAllDevices(ctx)
-			if err != nil {
-				log.Error().Err(err).Msg("Failed to list devices from store")
-			} else {
-				for _, deviceStore := range allDevices {
-					if resolved := canonicalStoreJID(deviceStore); resolved != "" && jidUserKey(resolved) == key {
-						log.Info().
-							Str("user_jid", textjid).
-							Str("store_jid", deviceStore.ID.String()).
-							Str("resolved_jid", resolved).
-							Msg("Resolved device by account key")
-						return deviceStore, resolved
-					}
-				}
-			}
-		}
-
-		log.Warn().Str("jid", textjid).Msg("No store found for jid. Creating new device")
-	} else {
-		log.Warn().Msg("No jid found. Creating new device")
-	}
-
-	return container.NewDevice(), ""
 }
 
 func (s *server) syncUserJID(userID, token, oldJID, newJID string) {
@@ -629,10 +542,12 @@ func (s *server) startClient(userID string, textjid string, token string, kill c
 	const maxConnectionRetries = 3
 	const connectionRetryBaseWait = 5 * time.Second
 
-	deviceStore, resolvedJID := s.resolveDeviceStore(ctx, textjid)
-	s.syncUserJID(userID, token, textjid, resolvedJID)
-
-	var err error
+	deviceStore, err := s.resolveDeviceStore(ctx, userID)
+	if err != nil {
+		log.Error().Err(err).Str("user_id", userID).Msg("Cannot resolve session device; refusing to select another device")
+		return
+	}
+	s.syncUserJID(userID, token, textjid, canonicalStoreJID(deviceStore))
 
 	clientLog := waLog.Stdout("Client", *waDebug, *colorOutput)
 
@@ -953,8 +868,8 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 		}
 		if mycli.WAClient.Store != nil && mycli.WAClient.Store.ID != nil {
 			connectedJID := mycli.WAClient.Store.ID.ToNonAD().String()
-			query := mycli.db.Rebind(`UPDATE users SET jid=? WHERE id=?`)
-			if _, err := mycli.db.Exec(query, connectedJID, mycli.userID); err != nil {
+			query := mycli.db.Rebind(`UPDATE users SET jid=?, device_jid=? WHERE id=?`)
+			if _, err := mycli.db.Exec(query, connectedJID, mycli.WAClient.Store.ID.String(), mycli.userID); err != nil {
 				log.Warn().Err(err).Str("user_id", mycli.userID).Msg("Failed to persist JID on connect")
 			} else if myuserinfo, found := userinfocache.Get(mycli.token); found {
 				v := updateUserInfo(myuserinfo, "Jid", connectedJID)
@@ -963,12 +878,12 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 		}
 	case *events.PairSuccess:
 		log.Info().Str("userid", mycli.userID).Str("ID", evt.ID.String()).Str("BusinessName", evt.BusinessName).Str("Platform", evt.Platform).Msg("QR Pair Success")
-		jidStr := evt.ID.String()
+		jidStr := evt.ID.ToNonAD().String()
 		if mycli.WAClient.Store != nil && mycli.WAClient.Store.ID != nil {
 			jidStr = mycli.WAClient.Store.ID.ToNonAD().String()
 		}
-		sqlStmt := mycli.db.Rebind(`UPDATE users SET jid=? WHERE id=?`)
-		_, err := mycli.db.Exec(sqlStmt, jidStr, mycli.userID)
+		sqlStmt := mycli.db.Rebind(`UPDATE users SET jid=?, device_jid=? WHERE id=?`)
+		_, err := mycli.db.Exec(sqlStmt, jidStr, evt.ID.String(), mycli.userID)
 		if err != nil {
 			log.Error().Err(err).Msg(sqlStmt)
 			return
@@ -1634,6 +1549,11 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 			log.Error().Err(err).Msg(sqlStmt)
 			return
 		}
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		if err := mycli.s.deleteSessionDevice(cleanupCtx, mycli.userID); err != nil {
+			log.Error().Err(err).Str("user_id", mycli.userID).Msg("Failed to remove logged-out device store")
+		}
+		cleanupCancel()
 	case *events.ChatPresence:
 		postmap["type"] = "ChatPresence"
 		dowebhook = 1

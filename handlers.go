@@ -6492,6 +6492,12 @@ func (s *server) DeleteUserComplete() http.HandlerFunc {
 			return
 		}
 
+		if err := reserveSessionDeletion(id); err != nil {
+			s.respondWithJSON(w, http.StatusConflict, map[string]interface{}{"code": http.StatusConflict, "success": false, "error": err.Error()})
+			return
+		}
+		defer releaseSessionDeletion(id)
+
 		// Get user info before deletion
 		var uname, jid, token string
 		err = s.db.QueryRow("SELECT name, jid, token FROM users WHERE id = $1", id).Scan(&uname, &jid, &token)
@@ -6500,15 +6506,37 @@ func (s *server) DeleteUserComplete() http.HandlerFunc {
 			// Continue anyway since we have the ID
 		}
 
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cleanupCancel()
+
 		// 1. Logout and disconnect instance
 		clientManager.stopSocketRecovery(id, false)
 		if client := clientManager.GetWhatsmeowClient(id); client != nil {
 			if client.IsConnected() {
 				log.Info().Str("id", id).Msg("Logging out user")
-				client.Logout(context.Background())
+				if err := client.Logout(cleanupCtx); err != nil {
+					log.Warn().Err(err).Str("user_id", id).Msg("Remote logout failed; deleting local credentials")
+				}
 			}
 			log.Info().Str("id", id).Msg("Disconnecting from WhatsApp")
 			client.Disconnect()
+		}
+
+		// Stop the session owner before deleting credentials. Keep the user row
+		// if cleanup cannot establish an exact device or the store is unavailable.
+		signalKill(id)
+		if err := waitForSessionStop(cleanupCtx, id); err != nil {
+			s.respondWithJSON(w, http.StatusConflict, map[string]interface{}{"code": http.StatusConflict, "success": false, "error": "session is still stopping; retry full deletion"})
+			return
+		}
+		if err := s.deleteSessionDevice(cleanupCtx, id); err != nil {
+			log.Error().Err(err).Str("user_id", id).Msg("Failed to delete persisted device")
+			status := http.StatusInternalServerError
+			if errors.Is(err, errAmbiguousSessionDevice) {
+				status = http.StatusConflict
+			}
+			s.respondWithJSON(w, status, map[string]interface{}{"code": status, "success": false, "error": "could not safely remove device credentials; user retained"})
+			return
 		}
 
 		// 2. Query S3 config before deleting the user

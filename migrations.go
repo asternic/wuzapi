@@ -96,6 +96,12 @@ var migrations = []Migration{
 		Name:  "add_proxy_pool",
 		UpSQL: addProxyPoolSQL,
 	},
+	{
+		ID:   15,
+		Name: "add_device_jid",
+		UpSQL: `ALTER TABLE users ADD COLUMN IF NOT EXISTS device_jid TEXT NOT NULL DEFAULT '';
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_users_device_jid ON users(device_jid) WHERE device_jid <> '';`,
+	},
 }
 
 const addProxyPoolSQL = `
@@ -551,6 +557,15 @@ func applyMigration(db *sqlx.DB, migration Migration) error {
 	} else if migration.ID == 13 {
 		if db.DriverName() == "sqlite" {
 			err = addColumnIfNotExistsSQLite(tx, "users", "days_to_sync_history", "INTEGER DEFAULT 0")
+		} else {
+			_, err = tx.Exec(migration.UpSQL)
+		}
+	} else if migration.ID == 15 {
+		if db.DriverName() == "sqlite" {
+			err = addColumnIfNotExistsSQLite(tx, "users", "device_jid", "TEXT NOT NULL DEFAULT ''")
+			if err == nil {
+				_, err = tx.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_device_jid ON users(device_jid) WHERE device_jid <> ''`)
+			}
 		} else {
 			_, err = tx.Exec(migration.UpSQL)
 		}
