@@ -2296,3 +2296,26 @@ These are write endpoints; no label catalog, listing, or local label database
 is introduced. Applications must retain IDs and coordinate edits with other
 clients. Success returns `Details: Updated`; failures use the normal error
 envelope. Unknown fields and trailing JSON are rejected.
+
+## Vote in a poll
+
+`POST /chat/poll/vote` (stdio `chat.poll.vote`), authenticated with the session's
+user token:
+
+```json
+{"Chat":"123@g.us","Sender":"456@lid","Id":"POLL_MESSAGE_ID","FromMe":false,"Options":["Yes"]}
+```
+
+Supply the original poll's exact chat, creator (`Sender`), message ID and
+`FromMe` flag from its message metadata. `FromMe` describes the poll creator,
+not the vote sender. Use the original PN/LID JIDs; do not substitute another
+address for the same account. `Options` contains exact, distinct option names;
+an explicit empty array retracts the vote. Missing/null options are rejected.
+
+Whatsmeow must have the original poll's message secret in this session's store.
+If unavailable, vote construction fails and nothing is sent. WuzAPI does not
+fetch missing secrets or validate options against a retained poll catalog;
+the caller must respect the poll's available options and selection limit.
+Success returns `Id` (the new vote message ID), Unix `Timestamp`, and
+`Details: Sent`. Failed sends are not automatically replayed because their
+outcome may be uncertain. No new table is required.
