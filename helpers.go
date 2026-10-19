@@ -146,6 +146,46 @@ var (
 
 )
 
+// mentionRegex matches @phone patterns in message text, e.g. @6281234567890
+var mentionRegex = regexp.MustCompile(`@(\d+)`)
+
+// extractMentionJIDs finds @phone patterns in text and converts them to WhatsApp JIDs.
+func extractMentionJIDs(text string) []string {
+	matches := mentionRegex.FindAllStringSubmatch(text, -1)
+	seen := make(map[string]bool)
+	var jids []string
+	for _, m := range matches {
+		if len(m) > 1 {
+			jid := m[1] + "@s.whatsapp.net"
+			if !seen[jid] {
+				seen[jid] = true
+				jids = append(jids, jid)
+			}
+		}
+	}
+	return jids
+}
+
+// mergeMentionJIDs combines explicitly provided MentionedJID entries with
+// @phone mentions auto-detected from the message text, deduplicated.
+func mergeMentionJIDs(explicit []string, text string) []string {
+	seen := make(map[string]bool)
+	var out []string
+	for _, jid := range explicit {
+		if !seen[jid] {
+			seen[jid] = true
+			out = append(out, jid)
+		}
+	}
+	for _, jid := range extractMentionJIDs(text) {
+		if !seen[jid] {
+			seen[jid] = true
+			out = append(out, jid)
+		}
+	}
+	return out
+}
+
 func Find(slice []string, val string) bool {
 	for _, item := range slice {
 		if item == val {
