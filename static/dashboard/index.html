@@ -906,7 +906,9 @@
     <div class="content">
       <div class="ui message info hidden" id="userInfoContainer"></div>
       <div class="ui form">
-        <div class="field"><label>Phone</label><input id="userinfoinput" type="text" placeholder="Type phone number"></div>
+        <div class="field"><label for="userinfoinput">Phone or account JID</label><input id="userinfoinput" type="text" placeholder="5491112345678 or account@lid"></div>
+        <button type="button" class="ui teal button" id="getBusinessProfile">Get Business Profile</button>
+        <div class="ui message hidden" id="businessProfileContainer" role="status" aria-live="polite" style="overflow-wrap:anywhere"></div>
       </div>
     </div>
     <div class="actions">
@@ -938,6 +940,10 @@
       <div class="ui form">
         <div class="field"><label>Phone</label><input id="messagesendphone" type="text" placeholder="Type phone number"></div>
         <div class="field"><label>Message</label><textarea id="messagesendtext"></textarea></div>
+        <div class="field">
+          <div class="ui checkbox"><input type="checkbox" id="messageMentionAll" disabled><label for="messageMentionAll">Mention all group members</label></div>
+          <p id="mentionAllHelp">Enter a group JID ending in @g.us to enable this. Members are mentioned without adding phone numbers to the message.</p>
+        </div>
       </div>
     </div>
     <div class="actions">
@@ -1439,7 +1445,7 @@
 
   <script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/fomantic-ui@2.9.4/dist/semantic.min.js"></script>
-  <script src="js/app.js?v=proxy-pool-4"></script>
+  <script src="js/app.js?v=conversation-tools-1"></script>
   <script src="js/groups.js"></script>
   <script src="js/proxypool.js?v=proxy-pool-4"></script>
 </body>

@@ -230,6 +230,7 @@ document.addEventListener('DOMContentLoaded', function() {
   });
 
   document.getElementById('userInfo').addEventListener('click', function() {
+    resetBusinessProfile();
     document.getElementById('userInfoContainer').innerHTML='';
     document.getElementById("userInfoContainer").classList.add('hidden');
     $('#modalUserInfo').modal({onApprove: function() {
@@ -247,22 +248,37 @@ document.addEventListener('DOMContentLoaded', function() {
     }}).modal('show');
   });
 
+  document.getElementById('messagesendphone').addEventListener('input', updateMentionAllAvailability);
+  document.getElementById('getBusinessProfile').addEventListener('click', doBusinessProfile);
+  document.getElementById('userinfoinput').addEventListener('input', resetBusinessProfile);
+
   document.getElementById('sendTextMessage').addEventListener('click', function() {
-    document.getElementById('sendMessageContainer').innerHTML='';
-    document.getElementById("sendMessageContainer").classList.add('hidden');
+    const container = document.getElementById('sendMessageContainer');
+    container.textContent = '';
+    container.classList.add('hidden');
+    document.getElementById('messageMentionAll').checked = false;
+    updateMentionAllAvailability();
+    let sending = false;
     $('#modalSendTextMessage').modal({onApprove: function() {
-      sendTextMessage().then((result)=>{
-        document.getElementById("sendMessageContainer").classList.remove('hidden');
-        if(result.success===true) {
-           document.getElementById('sendMessageContainer').innerHTML=`Message sent successfully. Id: ${result.data.Id}`
-        } else {
-           document.getElementById('sendMessageContainer').innerHTML=`Problem sending message: ${result.error}`
-        }
+      if (sending) return false;
+      sending = true;
+      const button = document.querySelector('#modalSendTextMessage .positive');
+      button.classList.add('disabled', 'loading');
+      sendTextMessage().then(result => {
+        container.textContent = result.success === true
+          ? `Message sent successfully. Id: ${result.data.Id}`
+          : `Problem sending message: ${result.error || 'Unknown error'}`;
+      }).catch(error => {
+        container.textContent = `Problem sending message: ${error.message}`;
+      }).finally(() => {
+        sending = false;
+        button.classList.remove('disabled', 'loading');
+        container.classList.remove('hidden');
       });
       return false;
     }}).modal('show');
   });
- 
+
   document.getElementById('deleteMessage').addEventListener('click', function() {
     document.getElementById('deleteMessageContainer').innerHTML='';
     document.getElementById("deleteMessageContainer").classList.add('hidden');
@@ -808,23 +824,29 @@ function goBackToList() {
   $('.adminlogin').hide();
 }
 
-async function sendTextMessage() {
-  const token = getLocalStorageItem('token');
-  const sendPhone = document.getElementById('messagesendphone').value.trim();
-  const sendBody = document.getElementById('messagesendtext').value;
-  const myHeaders = new Headers();
-  const uuid = generateMessageUUID();
-  myHeaders.append('token', token);
-  myHeaders.append('Content-Type', 'application/json');
-  res = await fetch(baseUrl + "/chat/send/text", {
-    method: "POST",
-    headers: myHeaders,
-    body: JSON.stringify({Phone: sendPhone, Body: sendBody, Id: uuid})
-  });
-  data = await res.json();
-  return data;
+function updateMentionAllAvailability() {
+  const phone = document.getElementById('messagesendphone').value.trim();
+  const checkbox = document.getElementById('messageMentionAll');
+  checkbox.disabled = !/^\d+(?:-\d+)?@g\.us$/.test(phone);
+  if (checkbox.disabled) checkbox.checked = false;
 }
- 
+
+async function sendTextMessage() {
+  const phone = document.getElementById('messagesendphone').value.trim();
+  const body = document.getElementById('messagesendtext').value;
+  const mentionAll = document.getElementById('messageMentionAll').checked;
+  if (!phone || !body.trim()) throw new Error('Enter a recipient and message.');
+  if (mentionAll && !/^\d+(?:-\d+)?@g\.us$/.test(phone)) {
+    throw new Error('Mention-all requires a group JID ending in @g.us.');
+  }
+  const response = await fetch(baseUrl + '/chat/send/text', {
+    method: 'POST',
+    headers: {token: getLocalStorageItem('token'), 'Content-Type': 'application/json'},
+    body: JSON.stringify({Phone: phone, Body: body, Id: generateMessageUUID(), MentionAll: mentionAll})
+  });
+  return response.json();
+}
+
 async function deleteMessage() {
   const deletePhone = document.getElementById('messagedeletephone').value.trim();
   const deleteId = document.getElementById('messagedeleteid').value;
@@ -865,7 +887,7 @@ function doUserAvatar() {
   let phone = userAvatarInput.value.trim();
   if (phone) {
     if (!phone.endsWith('@s.whatsapp.net')) {
-      phone = phone.includes('@') ? phone.split('@')[0] + '@s.whatsapp.net' : phone + '@s.whatsapp.net';
+      phone = phone.includes('@') ? phone : phone + '@s.whatsapp.net';
     }
     userAvatar(phone).then((data) => {
       document.getElementById("userAvatarContainer").classList.remove('hidden');
@@ -887,7 +909,7 @@ function doUserInfo() {
   let phone = userInfoInput.value.trim();
   if (phone) {
     if (!phone.endsWith('@s.whatsapp.net')) {
-      phone = phone.includes('@') ? phone.split('@')[0] + '@s.whatsapp.net' : phone + '@s.whatsapp.net';
+      phone = phone.includes('@') ? phone : phone + '@s.whatsapp.net';
     }
     userInfo(phone).then((data) => {
       document.getElementById("userInfoContainer").classList.remove('hidden');
@@ -2216,5 +2238,81 @@ function toggleHmacKeyVisibilityInstance() {
     input.attr('type', 'password');
     showBtn.show();
     hideBtn.hide();
+  }
+}
+
+// Invalidate previous results when the account changes or the modal reopens.
+let businessProfileRequest = 0;
+function resetBusinessProfile() {
+  businessProfileRequest++;
+  const container = document.getElementById('businessProfileContainer');
+  container.textContent = '';
+  container.classList.add('hidden');
+  const button = document.getElementById('getBusinessProfile');
+  button.disabled = false;
+  button.classList.remove('loading');
+}
+
+function appendProfileField(container, label, value) {
+  const row = document.createElement('div');
+  const title = document.createElement('strong');
+  title.textContent = label + ': ';
+  row.appendChild(title);
+  row.appendChild(document.createTextNode(value || 'Not provided'));
+  container.appendChild(row);
+}
+
+function renderBusinessProfile(container, profile) {
+  container.textContent = '';
+  appendProfileField(container, 'Account', profile.JID);
+  appendProfileField(container, 'Address', profile.Address);
+  appendProfileField(container, 'Email', profile.Email);
+  appendProfileField(container, 'Business hours timezone', profile.BusinessHoursTimeZone);
+  for (const [label, value] of [['Categories', profile.Categories], ['Profile details', profile.ProfileOptions], ['Business hours', profile.BusinessHours]]) {
+    const details = document.createElement('details');
+    const summary = document.createElement('summary');
+    summary.textContent = label;
+    const pre = document.createElement('pre');
+    pre.style.whiteSpace = 'pre-wrap';
+    pre.textContent = JSON.stringify(value || (label === 'Profile details' ? {} : []), null, 2);
+    details.appendChild(summary);
+    details.appendChild(pre);
+    container.appendChild(details);
+  }
+}
+
+async function doBusinessProfile() {
+  const phone = document.getElementById('userinfoinput').value.trim();
+  const container = document.getElementById('businessProfileContainer');
+  const button = document.getElementById('getBusinessProfile');
+  const request = ++businessProfileRequest;
+  container.classList.remove('hidden');
+  if (!/^\+?\d+(?:@(s\.whatsapp\.net|lid))?$/.test(phone)) {
+    container.textContent = 'Enter an international phone number or individual PN/LID JID.';
+    return;
+  }
+  button.disabled = true;
+  button.classList.add('loading');
+  container.textContent = 'Looking up business profile…';
+  try {
+    const response = await fetch(baseUrl + '/user/business-profile', {
+      method: 'POST',
+      headers: {token: getLocalStorageItem('token'), 'Content-Type': 'application/json'},
+      body: JSON.stringify({Phone: phone})
+    });
+    const result = await response.json();
+    if (request !== businessProfileRequest) return;
+    if (!response.ok || !result.success || !result.data) {
+      container.textContent = `Business profile unavailable: ${result.error || 'No profile returned'}`;
+      return;
+    }
+    renderBusinessProfile(container, result.data);
+  } catch (error) {
+    if (request === businessProfileRequest) container.textContent = 'Unable to fetch business profile. Please try again.';
+  } finally {
+    if (request === businessProfileRequest) {
+      button.disabled = false;
+      button.classList.remove('loading');
+    }
   }
 }
