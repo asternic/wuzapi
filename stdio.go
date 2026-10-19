@@ -406,6 +406,9 @@ func (ss *stdioServer) routeRequest(req *jsonRpcRequest) {
 	case "user.presence":
 		httpMethod = "POST"
 		httpPath = "/user/presence"
+	case "user.business-profile":
+		httpMethod = "POST"
+		httpPath = "/user/business-profile"
 	case "user.info":
 		httpMethod = "POST"
 		httpPath = "/user/info"
@@ -530,12 +533,19 @@ func (ss *stdioServer) executeHTTPHandler(req *jsonRpcRequest, httpMethod, httpP
 	// Create a mock HTTP request
 	var body io.Reader
 	if req.Params != nil && len(req.Params) > 0 {
-		// Authentication belongs in headers, not endpoint payloads.
+		// Strict endpoints accept authentication only in headers. Keep legacy
+		// payloads intact: admin user creation uses token as a data field.
+		strictPayload := false
+		switch httpPath {
+		case "/chat/mute", "/chat/unread", "/labels/edit", "/labels/chat", "/labels/message", "/chat/poll/vote", "/user/business-profile":
+			strictPayload = true
+		}
 		payload := make(map[string]interface{}, len(req.Params))
 		for key, value := range req.Params {
-			if (httpPath != "/chat/mute" && httpPath != "/chat/unread" && httpPath != "/labels/edit" && httpPath != "/labels/chat" && httpPath != "/labels/message" && httpPath != "/chat/poll/vote" && httpPath != "/user/business-profile") || (key != "token" && key != "adminToken") {
-				payload[key] = value
+			if strictPayload && (key == "token" || key == "adminToken") {
+				continue
 			}
+			payload[key] = value
 		}
 		jsonParams, err := json.Marshal(payload)
 		if err != nil {

@@ -2319,3 +2319,24 @@ the caller must respect the poll's available options and selection limit.
 Success returns `Id` (the new vote message ID), Unix `Timestamp`, and
 `Details: Sent`. Failed sends are not automatically replayed because their
 outcome may be uncertain. No new table is required.
+
+## Business profile lookup
+
+`POST /user/business-profile` (stdio `user.business-profile`) requires a user
+token and a single individual account:
+
+```json
+{"Phone":"5491112345678"}
+```
+
+International numbers without `+`, phone JIDs (`@s.whatsapp.net`), and LID JIDs
+(`@lid`) are accepted. Groups/channels and missing identifiers are rejected.
+The lookup uses the authenticated user's WhatsApp session.
+
+Success returns the Whatsmeow business profile inside the standard `data`
+envelope: `JID`, `Address`, `Email`, `Categories`, `ProfileOptions`,
+`BusinessHoursTimeZone`, and `BusinessHours`. Fields may be empty when WhatsApp
+does not provide them. No local cache or database table is added. A nil result
+returns 404; upstream lookup failures use the standard 500 error envelope,
+including when WhatsApp cannot provide a profile for a non-business account.
+Unknown fields and trailing JSON are rejected.
