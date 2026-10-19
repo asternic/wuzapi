@@ -2230,3 +2230,17 @@ incoming audio/voice notes. Uses the same payload as `/chat/markread`:
 For group messages, set `ChatPhone` to the group JID and supply `SenderPhone`.
 All IDs in one request must belong to that chat and sender. This sends receipt
 metadata; it does not play audio or verify its media type locally.
+
+## Star or unstar a message
+
+`POST /chat/star` (stdio: `chat.star`):
+
+```json
+{"Chat":"120363407915251919@g.us","Sender":"5491112345678@s.whatsapp.net","Id":"MESSAGE_ID","FromMe":false,"Star":true}
+```
+
+`Star` and `FromMe` must be explicitly supplied. Set `Star:false` to unstar.
+`Sender` is required for groups and identifies the original message author;
+for direct chats it defaults to `Chat`. Use the exact message ID and author
+JID (including LID when applicable). This updates WhatsApp's synchronized
+starred-message state.

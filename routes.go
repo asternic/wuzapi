@@ -122,6 +122,7 @@ func (s *server) routes() {
 	s.router.Handle("/chat/send/location", c.Then(s.SendLocation())).Methods("POST")
 	s.router.Handle("/chat/send/contact", c.Then(s.SendContact())).Methods("POST")
 	s.router.Handle("/chat/react", c.Then(s.React())).Methods("POST")
+	s.router.Handle("/chat/star", c.Then(s.StarMessage())).Methods("POST")
 	s.router.Handle("/chat/pin", c.Then(s.PinMessage())).Methods("POST")
 	s.router.Handle("/chat/send/buttons", c.Then(s.SendButtons())).Methods("POST")
 	s.router.Handle("/chat/send/carousel", c.Then(s.SendCarousel())).Methods("POST")
