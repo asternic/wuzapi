@@ -4610,6 +4610,14 @@ func (s *server) PinMessage() http.HandlerFunc {
 
 // Mark messages as read
 func (s *server) MarkRead() http.HandlerFunc {
+	return s.markReceipt(types.ReceiptTypeRead)
+}
+
+func (s *server) MarkPlayed() http.HandlerFunc {
+	return s.markReceipt(types.ReceiptTypePlayed)
+}
+
+func (s *server) markReceipt(receiptType types.ReceiptType) http.HandlerFunc {
 
 	type markReadStruct struct {
 		Id          []string
@@ -4670,13 +4678,17 @@ func (s *server) MarkRead() http.HandlerFunc {
 			return
 		}
 
-		err = clientManager.GetWhatsmeowClient(txtid).MarkRead(context.Background(), t.Id, time.Now(), jidChat, jidSender)
+		if receiptType == types.ReceiptTypePlayed && jidChat.Server == types.GroupServer && jidSender.IsEmpty() {
+			s.Respond(w, r, http.StatusBadRequest, errors.New("SenderPhone is required for group played receipts"))
+			return
+		}
+		err = clientManager.GetWhatsmeowClient(txtid).MarkRead(r.Context(), t.Id, time.Now(), jidChat, jidSender, receiptType)
 		if err != nil {
 			s.Respond(w, r, http.StatusInternalServerError, errors.New("failure marking messages as read"))
 			return
 		}
 
-		response := map[string]interface{}{"Details": "Message(s) marked as read"}
+		response := map[string]interface{}{"Details": "Message(s) marked as " + string(receiptType)}
 		responseJson, err := json.Marshal(response)
 		if err != nil {
 			s.Respond(w, r, http.StatusInternalServerError, err)

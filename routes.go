@@ -150,6 +150,7 @@ func (s *server) routes() {
 	s.router.Handle("/user/privacy", c.Then(s.SetPrivacySetting())).Methods("POST")
 
 	s.router.Handle("/chat/presence", c.Then(s.ChatPresence())).Methods("POST")
+	s.router.Handle("/chat/markplayed", c.Then(s.MarkPlayed())).Methods("POST")
 	s.router.Handle("/chat/markread", c.Then(s.MarkRead())).Methods("POST")
 	s.router.Handle("/chat/downloadimage", c.Then(s.DownloadImage())).Methods("POST")
 	s.router.Handle("/chat/downloadvideo", c.Then(s.DownloadVideo())).Methods("POST")

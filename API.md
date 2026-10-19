@@ -2217,3 +2217,16 @@ Content-Type: application/json
 - The `form` mode ensures compatibility with legacy or older webhook systems.
 - The `json` mode is recommended for modern integrations and easier backend parsing.
 - If you do not set the variable, the system will use `form` mode by default.
+
+## Mark audio as played
+
+`POST /chat/markplayed` (stdio: `chat.markplayed`) sends a played receipt for
+incoming audio/voice notes. Uses the same payload as `/chat/markread`:
+
+```json
+{"Id":["MESSAGE_ID"],"ChatPhone":"5491112345678@s.whatsapp.net"}
+```
+
+For group messages, set `ChatPhone` to the group JID and supply `SenderPhone`.
+All IDs in one request must belong to that chat and sender. This sends receipt
+metadata; it does not play audio or verify its media type locally.
