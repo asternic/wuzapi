@@ -1,58 +1,75 @@
-# Auto-Mention untuk Wuzapi (fork)
+# Automatic mentions
 
-Fitur tambahan di fork ini: **auto-detect `@nomor` di teks pesan** → otomatis jadi mention/tag WhatsApp.
-Terinspirasi dari [aldinokemal/go-whatsapp-web-multidevice](https://github.com/aldinokemal/go-whatsapp-web-multidevice).
+Write a standalone `@phone` token in a message body or supported media caption to
+add a WhatsApp mention automatically. Use the phone number in international
+format without the `+` prefix. No additional mention field is required.
 
-## Cara pakai
+The message text or caption stays unchanged. The detected number is added to the
+message's mention metadata as `phone@s.whatsapp.net`.
 
-Cukup tulis `@nomor` (format internasional tanpa `+`) di teks/caption. Tidak perlu field tambahan.
+## Text messages
 
-```json
-POST /chat/send/text
-{
-  "Phone": "120363407915251919@g.us",
-  "Body": "Halo @6281234567890, tolong dibaca ya"
-}
-```
-
-Beberapa nomor sekaligus juga bisa:
+Send a request to `POST /chat/send/text`:
 
 ```json
 {
   "Phone": "120363407915251919@g.us",
-  "Body": "Halo @6281234567890 dan @6281234567890"
+  "Body": "Hello @6281234567890, please read this."
 }
 ```
 
-## Endpoint yang didukung
+Multiple mentions are supported. Repeated mentions of the same number produce
+only one metadata entry:
 
-| Endpoint | Teks yang dipindai |
+```json
+{
+  "Phone": "120363407915251919@g.us",
+  "Body": "Hello @6281234567890 and @6289876543210."
+}
+```
+
+## Supported fields and captions
+
+| Endpoint | Field scanned for automatic mentions |
 |---|---|
 | `POST /chat/send/text` | `Body` |
+| `POST /chat/send/edit` | `Body` |
 | `POST /chat/send/image` | `Caption` |
 | `POST /chat/send/video` | `Caption` |
-| `POST /chat/send/audio` | `Caption` |
 | `POST /chat/send/document` | `Caption` |
 
-## Kompatibilitas
+For image, video, and document requests, put `@phone` tokens in the `Caption`
+field alongside the endpoint's required media fields.
 
-Cara lama tetap jalan: `ContextInfo.MentionedJID` yang diisi manual digabung
-(dedupe) dengan hasil auto-detect. Jadi tidak ada breaking change.
+Audio messages do not include the request's `Caption` in the outgoing message.
+Consequently, `POST /chat/send/audio` does not scan captions for automatic
+mentions. It continues to accept explicitly supplied `ContextInfo.MentionedJID`
+values.
 
-## Perubahan kode
+## Detection rules
 
-- `helpers.go`: fungsi `extractMentionJIDs(text)` (regex `@(\d+)` → `nomor@s.whatsapp.net`)
-  dan `mergeMentionJIDs(explicit, text)` (gabung + dedupe).
-- `handlers.go`: 6 titik `MentionedJID` (text ×2, image, video, audio, document)
-  sekarang memanggil `mergeMentionJIDs` dengan teks pesan sebagai sumber auto-detect.
+Mentions must be standalone tokens. Spaces, line breaks, parentheses, quotes,
+commas, and sentence-ending punctuation can surround a mention. For example,
+`Hello (@6281234567890)!` and `Hello @6281234567890.` are supported.
 
-## Build
+Email addresses, URLs, and longer tokens such as `@6281234567890abc` or
+`@6281234567890_name` are ignored.
 
-```sh
-go build -o wuzapi .
+## Explicit mentions
+
+For the endpoints with automatic detection, explicitly supplied
+`ContextInfo.MentionedJID` entries are combined with detected mentions and
+deduplicated. Explicit entries are preserved even when they do not appear in the
+message body or caption.
+
+```json
+{
+  "Phone": "120363407915251919@g.us",
+  "Body": "Hello @6281234567890.",
+  "ContextInfo": {
+    "MentionedJID": ["6289876543210@s.whatsapp.net"]
+  }
+}
 ```
 
-## Catatan
-
-Base: [asternic/wuzapi](https://github.com/asternic/wuzapi) commit `a33e10f`
-(Merge PR #387). Lisensi tetap MIT mengikuti upstream.
+This request includes both numbers in the mention metadata.

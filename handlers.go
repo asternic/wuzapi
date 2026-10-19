@@ -1368,11 +1368,12 @@ func (s *server) SendAudio() http.HandlerFunc {
 			}
 		}
 
-		if jids := mergeMentionJIDs(t.ContextInfo.MentionedJID, t.Caption); len(jids) > 0 {
+		// Audio captions are not included in the outgoing message.
+		if t.ContextInfo.MentionedJID != nil {
 			if msg.AudioMessage.ContextInfo == nil {
 				msg.AudioMessage.ContextInfo = &waE2E.ContextInfo{}
 			}
-			msg.AudioMessage.ContextInfo.MentionedJID = jids
+			msg.AudioMessage.ContextInfo.MentionedJID = t.ContextInfo.MentionedJID
 		}
 
 		if t.ContextInfo.IsForwarded != nil && *t.ContextInfo.IsForwarded {

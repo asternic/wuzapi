@@ -23,3 +23,42 @@ func TestMergeMentionJIDs(t *testing.T) {
 		t.Fatalf("got %v, want %v", got, want)
 	}
 }
+
+func TestMentionTokenBoundaries(t *testing.T) {
+	for _, text := range []string{
+		"https://example.com/(@6281234567890)", "www.example.com/(@6281234567890)",
+		"user@6281234567890.com", "https://example.com/@6281234567890",
+		"https://example.com?q=@6281234567890", "@6281234567890abc",
+		"@6281234567890_name", "@6281234567890.example", "@6281234567890/path",
+		"@6281234567890@lid", "@6281234567890é", "name@6281234567890",
+	} {
+		t.Run(text, func(t *testing.T) {
+			if got := extractMentionJIDs(text); len(got) != 0 {
+				t.Fatalf("unexpected mentions: %v", got)
+			}
+		})
+	}
+	for _, text := range []string{
+		"@6281234567890", "Hello (@6281234567890)!", "Hello @6281234567890.",
+		"Hello @6281234567890. Next sentence", "“@6281234567890”", "\n@6281234567890\t",
+	} {
+		t.Run(text, func(t *testing.T) {
+			want := []string{"6281234567890@s.whatsapp.net"}
+			if got := extractMentionJIDs(text); !reflect.DeepEqual(got, want) {
+				t.Fatalf("got %v, want %v", got, want)
+			}
+		})
+	}
+}
+
+func TestMergeMentionJIDsPreservesExplicit(t *testing.T) {
+	explicit := []string{"123@lid", "123@lid", "6281234567890@s.whatsapp.net"}
+	want := []string{"123@lid", "6281234567890@s.whatsapp.net", "6289876543210@s.whatsapp.net"}
+	got := mergeMentionJIDs(explicit, "@6289876543210, @6281234567890 user@123.com")
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+	if explicit[1] != "123@lid" {
+		t.Fatal("modified caller's mentions")
+	}
+}

@@ -24,6 +24,8 @@ import (
 	"runtime/debug"
 	"strings"
 	"sync"
+	"unicode"
+	"unicode/utf8"
 
 	"time"
 
@@ -146,21 +148,56 @@ var (
 
 )
 
-// mentionRegex matches @phone patterns in message text, e.g. @6281234567890
+// mentionRegex locates candidates; boundaries below exclude email addresses,
+// URL paths, and numeric prefixes of longer tokens.
 var mentionRegex = regexp.MustCompile(`@(\d+)`)
 
-// extractMentionJIDs finds @phone patterns in text and converts them to WhatsApp JIDs.
+// extractMentionJIDs finds standalone @phone tokens in visible message text.
 func extractMentionJIDs(text string) []string {
-	matches := mentionRegex.FindAllStringSubmatch(text, -1)
+	matches := mentionRegex.FindAllStringSubmatchIndex(text, -1)
 	seen := make(map[string]bool)
 	var jids []string
 	for _, m := range matches {
-		if len(m) > 1 {
-			jid := m[1] + "@s.whatsapp.net"
-			if !seen[jid] {
-				seen[jid] = true
-				jids = append(jids, jid)
+		// Ignore candidates anywhere inside a URL token, including paths that
+		// put an opening parenthesis immediately before the @ sign.
+		tokenStart := 0
+		if space := strings.LastIndexFunc(text[:m[0]], unicode.IsSpace); space >= 0 {
+			_, size := utf8.DecodeRuneInString(text[space:])
+			tokenStart = space + size
+		}
+		tokenEnd := len(text)
+		if end := strings.IndexFunc(text[m[1]:], unicode.IsSpace); end >= 0 {
+			tokenEnd = m[1] + end
+		}
+		token := strings.ToLower(text[tokenStart:tokenEnd])
+		if strings.Contains(token, "://") || strings.Contains(token, "www.") || strings.Contains(token, "mailto:") {
+			continue
+		}
+		if m[0] > 0 {
+			previous, _ := utf8.DecodeLastRuneInString(text[:m[0]])
+			if !unicode.IsSpace(previous) && !strings.ContainsRune("([{,;!?\"'“‘", previous) {
+				continue
 			}
+		}
+		if m[1] < len(text) {
+			next, size := utf8.DecodeRuneInString(text[m[1]:])
+			if next == '.' {
+				// A sentence-ending period is allowed, but a domain suffix is not.
+				rest := text[m[1]+size:]
+				if rest != "" {
+					after, _ := utf8.DecodeRuneInString(rest)
+					if !unicode.IsSpace(after) && !strings.ContainsRune(")]}\"'”’", after) {
+						continue
+					}
+				}
+			} else if !unicode.IsSpace(next) && !strings.ContainsRune(")]},;!?\"'”’", next) {
+				continue
+			}
+		}
+		jid := text[m[2]:m[3]] + "@s.whatsapp.net"
+		if !seen[jid] {
+			seen[jid] = true
+			jids = append(jids, jid)
 		}
 	}
 	return jids
