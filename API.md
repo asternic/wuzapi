@@ -2244,3 +2244,15 @@ metadata; it does not play audio or verify its media type locally.
 for direct chats it defaults to `Chat`. Use the exact message ID and author
 JID (including LID when applicable). This updates WhatsApp's synchronized
 starred-message state.
+
+## Pin or unpin a chat conversation
+
+`POST /chat/pinchat` (stdio: `chat.pinchat`) pins a conversation in WhatsApp's
+chat list. The existing `/chat/pin` endpoint pins an individual message.
+
+```json
+{"Chat":"5491112345678@s.whatsapp.net","Pin":true}
+```
+
+`Pin` must be explicitly supplied; use `false` to unpin. Direct chats (phone or
+LID JIDs) and group chats are supported. WhatsApp applies its own pin limits.
