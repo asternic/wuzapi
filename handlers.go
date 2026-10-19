@@ -1187,11 +1187,11 @@ func (s *server) SendDocument() http.HandlerFunc {
 				}
 			}
 		}
-		if t.ContextInfo.MentionedJID != nil {
+		if jids := mergeMentionJIDs(t.ContextInfo.MentionedJID, t.Caption); len(jids) > 0 {
 			if msg.DocumentMessage.ContextInfo == nil {
 				msg.DocumentMessage.ContextInfo = &waE2E.ContextInfo{}
 			}
-			msg.DocumentMessage.ContextInfo.MentionedJID = t.ContextInfo.MentionedJID
+			msg.DocumentMessage.ContextInfo.MentionedJID = jids
 		}
 
 		if t.ContextInfo.IsForwarded != nil && *t.ContextInfo.IsForwarded {
@@ -1368,11 +1368,11 @@ func (s *server) SendAudio() http.HandlerFunc {
 			}
 		}
 
-		if t.ContextInfo.MentionedJID != nil {
+		if jids := mergeMentionJIDs(t.ContextInfo.MentionedJID, t.Caption); len(jids) > 0 {
 			if msg.AudioMessage.ContextInfo == nil {
 				msg.AudioMessage.ContextInfo = &waE2E.ContextInfo{}
 			}
-			msg.AudioMessage.ContextInfo.MentionedJID = t.ContextInfo.MentionedJID
+			msg.AudioMessage.ContextInfo.MentionedJID = jids
 		}
 
 		if t.ContextInfo.IsForwarded != nil && *t.ContextInfo.IsForwarded {
@@ -1553,11 +1553,11 @@ func (s *server) SendImage() http.HandlerFunc {
 			}
 		}
 
-		if t.ContextInfo.MentionedJID != nil {
+		if jids := mergeMentionJIDs(t.ContextInfo.MentionedJID, t.Caption); len(jids) > 0 {
 			if msg.ImageMessage.ContextInfo == nil {
 				msg.ImageMessage.ContextInfo = &waE2E.ContextInfo{}
 			}
-			msg.ImageMessage.ContextInfo.MentionedJID = t.ContextInfo.MentionedJID
+			msg.ImageMessage.ContextInfo.MentionedJID = jids
 		}
 
 		if t.ContextInfo.IsForwarded != nil && *t.ContextInfo.IsForwarded {
@@ -1876,11 +1876,11 @@ func (s *server) SendVideo() http.HandlerFunc {
 				}
 			}
 		}
-		if t.ContextInfo.MentionedJID != nil {
+		if jids := mergeMentionJIDs(t.ContextInfo.MentionedJID, t.Caption); len(jids) > 0 {
 			if msg.VideoMessage.ContextInfo == nil {
 				msg.VideoMessage.ContextInfo = &waE2E.ContextInfo{}
 			}
-			msg.VideoMessage.ContextInfo.MentionedJID = t.ContextInfo.MentionedJID
+			msg.VideoMessage.ContextInfo.MentionedJID = jids
 		}
 
 		if t.ContextInfo.IsForwarded != nil && *t.ContextInfo.IsForwarded {
@@ -2851,11 +2851,11 @@ func (s *server) SendMessage() http.HandlerFunc {
 				QuotedMessage: qm,
 			}
 		}
-		if t.ContextInfo.MentionedJID != nil {
+		if jids := mergeMentionJIDs(t.ContextInfo.MentionedJID, t.Body); len(jids) > 0 {
 			if msg.ExtendedTextMessage.ContextInfo == nil {
 				msg.ExtendedTextMessage.ContextInfo = &waE2E.ContextInfo{}
 			}
-			msg.ExtendedTextMessage.ContextInfo.MentionedJID = t.ContextInfo.MentionedJID
+			msg.ExtendedTextMessage.ContextInfo.MentionedJID = jids
 		}
 		if t.ContextInfo.IsForwarded != nil && *t.ContextInfo.IsForwarded {
 			if msg.ExtendedTextMessage.ContextInfo == nil {
@@ -3111,11 +3111,11 @@ func (s *server) SendEditMessage() http.HandlerFunc {
 				QuotedMessage: &waE2E.Message{Conversation: proto.String("")},
 			}
 		}
-		if t.ContextInfo.MentionedJID != nil {
+		if jids := mergeMentionJIDs(t.ContextInfo.MentionedJID, t.Body); len(jids) > 0 {
 			if msg.ExtendedTextMessage.ContextInfo == nil {
 				msg.ExtendedTextMessage.ContextInfo = &waE2E.ContextInfo{}
 			}
-			msg.ExtendedTextMessage.ContextInfo.MentionedJID = t.ContextInfo.MentionedJID
+			msg.ExtendedTextMessage.ContextInfo.MentionedJID = jids
 		}
 
 		resp, err = sendMessageWithRecovery(txtid, clientManager.GetWhatsmeowClient(txtid), context.Background(), recipient, clientManager.GetWhatsmeowClient(txtid).BuildEdit(recipient, msgid, msg))
