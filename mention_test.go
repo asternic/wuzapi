@@ -1,6 +1,9 @@
 package main
 
 import (
+	"context"
+	"errors"
+	"go.mau.fi/whatsmeow/types"
 	"reflect"
 	"testing"
 )
@@ -60,5 +63,42 @@ func TestMergeMentionJIDsPreservesExplicit(t *testing.T) {
 	}
 	if explicit[1] != "123@lid" {
 		t.Fatal("modified caller's mentions")
+	}
+}
+
+func TestEveryoneToken(t *testing.T) {
+	for _, text := range []string{"@everyone", "Hello @everyone!", "(@everyone)"} {
+		if !everyoneToken.MatchString(text) {
+			t.Errorf("missing token in %q", text)
+		}
+	}
+	for _, text := range []string{"user@everyone.com", "https://example.com/@everyone", "@everyone_else"} {
+		if everyoneToken.MatchString(text) {
+			t.Errorf("unexpected token in %q", text)
+		}
+	}
+}
+
+func TestResolveAllMentions(t *testing.T) {
+	group := types.NewJID("123", types.GroupServer)
+	member := types.NewJID("456", types.DefaultUserServer)
+	calls := 0
+	lookup := func(context.Context, types.JID) (*types.GroupInfo, error) {
+		calls++
+		return &types.GroupInfo{Participants: []types.GroupParticipant{{JID: member}, {JID: member}}}, nil
+	}
+	got, err := resolveAllMentions(context.Background(), group, []string{"789@lid"}, "hello", true, lookup)
+	if err != nil || !reflect.DeepEqual(got, []string{"789@lid", member.String()}) {
+		t.Fatalf("got %v, %v", got, err)
+	}
+	if _, err = resolveAllMentions(context.Background(), member, nil, "@everyone", false, lookup); err == nil {
+		t.Fatal("accepted direct chat")
+	}
+	if _, err = resolveAllMentions(context.Background(), group, nil, "ordinary text", false, lookup); err != nil || calls != 1 {
+		t.Fatal("ordinary send performed lookup")
+	}
+	_, err = resolveAllMentions(context.Background(), group, nil, "@everyone", false, func(context.Context, types.JID) (*types.GroupInfo, error) { return nil, errors.New("offline") })
+	if err == nil {
+		t.Fatal("ignored lookup failure")
 	}
 }

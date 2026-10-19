@@ -1078,6 +1078,7 @@ func (s *server) SendDocument() http.HandlerFunc {
 		Id            string
 		MimeType      string
 		ContextInfo   waE2E.ContextInfo
+		MentionAll    bool
 		QuotedMessage *waE2E.Message `json:"QuotedMessage,omitempty"`
 	}
 
@@ -1190,7 +1191,12 @@ func (s *server) SendDocument() http.HandlerFunc {
 				}
 			}
 		}
-		if jids := mergeMentionJIDs(t.ContextInfo.MentionedJID, t.Caption); len(jids) > 0 {
+		mentions, err := resolveAllMentions(r.Context(), recipient, t.ContextInfo.MentionedJID, t.Caption, t.MentionAll, clientManager.GetWhatsmeowClient(txtid).GetGroupInfo)
+		if err != nil {
+			s.Respond(w, r, http.StatusBadRequest, err)
+			return
+		}
+		if jids := mergeMentionJIDs(mentions, t.Caption); len(jids) > 0 {
 			if msg.DocumentMessage.ContextInfo == nil {
 				msg.DocumentMessage.ContextInfo = &waE2E.ContextInfo{}
 			}
@@ -1442,6 +1448,7 @@ func (s *server) SendImage() http.HandlerFunc {
 		Id            string
 		MimeType      string
 		ContextInfo   waE2E.ContextInfo
+		MentionAll    bool
 		QuotedMessage *waE2E.Message `json:"QuotedMessage,omitempty"`
 	}
 
@@ -1557,7 +1564,12 @@ func (s *server) SendImage() http.HandlerFunc {
 			}
 		}
 
-		if jids := mergeMentionJIDs(t.ContextInfo.MentionedJID, t.Caption); len(jids) > 0 {
+		mentions, err := resolveAllMentions(r.Context(), recipient, t.ContextInfo.MentionedJID, t.Caption, t.MentionAll, clientManager.GetWhatsmeowClient(txtid).GetGroupInfo)
+		if err != nil {
+			s.Respond(w, r, http.StatusBadRequest, err)
+			return
+		}
+		if jids := mergeMentionJIDs(mentions, t.Caption); len(jids) > 0 {
 			if msg.ImageMessage.ContextInfo == nil {
 				msg.ImageMessage.ContextInfo = &waE2E.ContextInfo{}
 			}
@@ -1772,6 +1784,7 @@ func (s *server) SendVideo() http.HandlerFunc {
 		JPEGThumbnail []byte
 		MimeType      string
 		ContextInfo   waE2E.ContextInfo
+		MentionAll    bool
 		QuotedMessage *waE2E.Message `json:"QuotedMessage,omitempty"`
 	}
 
@@ -1880,7 +1893,12 @@ func (s *server) SendVideo() http.HandlerFunc {
 				}
 			}
 		}
-		if jids := mergeMentionJIDs(t.ContextInfo.MentionedJID, t.Caption); len(jids) > 0 {
+		mentions, err := resolveAllMentions(r.Context(), recipient, t.ContextInfo.MentionedJID, t.Caption, t.MentionAll, clientManager.GetWhatsmeowClient(txtid).GetGroupInfo)
+		if err != nil {
+			s.Respond(w, r, http.StatusBadRequest, err)
+			return
+		}
+		if jids := mergeMentionJIDs(mentions, t.Caption); len(jids) > 0 {
 			if msg.VideoMessage.ContextInfo == nil {
 				msg.VideoMessage.ContextInfo = &waE2E.ContextInfo{}
 			}
@@ -2758,6 +2776,7 @@ func (s *server) SendMessage() http.HandlerFunc {
 		LinkPreview   bool
 		Id            string
 		ContextInfo   waE2E.ContextInfo
+		MentionAll    bool
 		QuotedText    string         `json:"QuotedText,omitempty"`
 		QuotedMessage *waE2E.Message `json:"QuotedMessage,omitempty"`
 	}
@@ -2855,7 +2874,12 @@ func (s *server) SendMessage() http.HandlerFunc {
 				QuotedMessage: qm,
 			}
 		}
-		if jids := mergeMentionJIDs(t.ContextInfo.MentionedJID, t.Body); len(jids) > 0 {
+		mentions, err := resolveAllMentions(r.Context(), recipient, t.ContextInfo.MentionedJID, t.Body, t.MentionAll, clientManager.GetWhatsmeowClient(txtid).GetGroupInfo)
+		if err != nil {
+			s.Respond(w, r, http.StatusBadRequest, err)
+			return
+		}
+		if jids := mergeMentionJIDs(mentions, t.Body); len(jids) > 0 {
 			if msg.ExtendedTextMessage.ContextInfo == nil {
 				msg.ExtendedTextMessage.ContextInfo = &waE2E.ContextInfo{}
 			}
@@ -3056,6 +3080,7 @@ func (s *server) SendEditMessage() http.HandlerFunc {
 		Body        string
 		Id          string
 		ContextInfo waE2E.ContextInfo
+		MentionAll  bool
 	}
 
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -3115,7 +3140,12 @@ func (s *server) SendEditMessage() http.HandlerFunc {
 				QuotedMessage: &waE2E.Message{Conversation: proto.String("")},
 			}
 		}
-		if jids := mergeMentionJIDs(t.ContextInfo.MentionedJID, t.Body); len(jids) > 0 {
+		mentions, err := resolveAllMentions(r.Context(), recipient, t.ContextInfo.MentionedJID, t.Body, t.MentionAll, clientManager.GetWhatsmeowClient(txtid).GetGroupInfo)
+		if err != nil {
+			s.Respond(w, r, http.StatusBadRequest, err)
+			return
+		}
+		if jids := mergeMentionJIDs(mentions, t.Body); len(jids) > 0 {
 			if msg.ExtendedTextMessage.ContextInfo == nil {
 				msg.ExtendedTextMessage.ContextInfo = &waE2E.ContextInfo{}
 			}

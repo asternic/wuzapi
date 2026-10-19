@@ -73,3 +73,15 @@ message body or caption.
 ```
 
 This request includes both numbers in the mention metadata.
+
+## Mention all group members
+
+Set `"MentionAll": true` to mention all current participants without adding visible
+phone numbers. A standalone `@everyone` in the body or caption also enables this;
+the visible text is preserved. Supported on text, edit, image, video, and document
+endpoints. Direct chats are rejected. Participant lookup failures abort the send.
+Explicit mentions and group participants are combined and deduplicated.
+
+```json
+{"Phone":"120363407915251919@g.us","Body":"Please read this.","MentionAll":true}
+```
