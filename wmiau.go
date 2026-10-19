@@ -651,8 +651,10 @@ func (s *server) startClient(userID string, textjid string, token string, kill c
 		clientManager.DeleteWhatsmeowClient(userID)
 		clientManager.DeleteMyClient(userID)
 		clientManager.DeleteHTTPClient(userID)
-		if _, err := s.db.Exec(`UPDATE users SET qrcode='', connected=0 WHERE id=$1`, userID); err != nil {
-			log.Error().Err(err).Msg("failed to mark user disconnected on shutdown")
+		// Temporary connection failures must not disable startup reconnects.
+		// Explicit disconnects and logouts update connected separately.
+		if err := s.clearSessionQRCode(userID); err != nil {
+			log.Error().Err(err).Msg("failed to clear QR code on session shutdown")
 		}
 	}()
 
@@ -870,43 +872,9 @@ func (s *server) startClient(userID string, textjid string, token string, kill c
 		// Already logged in, just connect
 		log.Info().Msg("Already logged in, just connect")
 
-		// Retry logic with linear backoff
-		var lastErr error
-
-		for attempt := 0; attempt < maxConnectionRetries; attempt++ {
-			if attempt > 0 {
-				waitTime := time.Duration(attempt) * connectionRetryBaseWait
-				log.Warn().
-					Int("attempt", attempt+1).
-					Int("max_retries", maxConnectionRetries).
-					Dur("wait_time", waitTime).
-					Msg("Retrying connection after delay")
-				timer := time.NewTimer(waitTime)
-				select {
-				case <-ctx.Done():
-					timer.Stop()
-					return
-				case <-timer.C:
-				}
-			}
-
-			err = client.ConnectContext(ctx)
-			if ctx.Err() != nil {
-				return
-			}
-			if err == nil {
-				log.Info().
-					Int("attempt", attempt+1).
-					Msg("Successfully connected to WhatsApp")
-				break
-			}
-
-			lastErr = err
-			log.Warn().
-				Err(err).
-				Int("attempt", attempt+1).
-				Int("max_retries", maxConnectionRetries).
-				Msg("Failed to connect to WhatsApp")
+		lastErr := connectSessionWithRetry(ctx, client.ConnectContext, maxConnectionRetries, connectionRetryBaseWait)
+		if ctx.Err() != nil {
+			return
 		}
 
 		if lastErr != nil {

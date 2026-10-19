@@ -710,6 +710,9 @@ func (s *server) Logout() http.HandlerFunc {
 					return
 				} else {
 					log.Info().Str("jid", jid).Msg("Logged out")
+					if err := s.setDisconnectedState(txtid, false); err != nil {
+						log.Error().Err(err).Str("user_id", txtid).Msg("Failed to persist logout state")
+					}
 					clientManager.DeleteWhatsmeowClient(txtid)
 					signalKill(txtid)
 				}
