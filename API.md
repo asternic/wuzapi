@@ -2274,3 +2274,25 @@ Both require a user token and explicit boolean, support individual phone/LID and
 group chats, and return the normal success envelope with `Details: Updated`.
 No local persistence or migration is added. Unknown fields and trailing JSON
 are rejected.
+
+## WhatsApp labels
+
+Authenticated label operations update WhatsApp app state (account/client support
+is determined by WhatsApp, especially for Business accounts):
+
+| POST endpoint | Stdio method | Payload example |
+|---|---|---|
+| `/labels/edit` | `labels.edit` | `{"LabelID":"7","Name":"Customer","Color":3,"Deleted":false}` |
+| `/labels/chat` | `labels.chat` | `{"Chat":"123@g.us","LabelID":"7","Labeled":true}` |
+| `/labels/message` | `labels.message` | `{"Chat":"123@g.us","LabelID":"7","Id":"MESSAGE_ID","Labeled":true}` |
+
+Use `Deleted:true` with `LabelID` to delete a label; use `Labeled:false` to remove
+an association. All booleans must be explicit. Label IDs are canonical unsigned
+32-bit decimal strings. Callers choose an unused ID to create a label and reuse
+an existing ID to edit it; WuzAPI does not allocate IDs. Creation/edit requires
+a nonblank name (at most 100 characters) and palette color 0–19.
+
+These are write endpoints; no label catalog, listing, or local label database
+is introduced. Applications must retain IDs and coordinate edits with other
+clients. Success returns `Details: Updated`; failures use the normal error
+envelope. Unknown fields and trailing JSON are rejected.
