@@ -212,6 +212,155 @@ paths:
             application/json:
               schema:
                 example: {"code":200,"data":{"id":"4e4942c7dee1deef99ab8fd9f7350de5","jid":"","name":"mariano"},"details":"User instance removed completely","success":true}
+  /admin/proxy-pool:
+    get:
+      tags:
+        - Admin
+      summary: List proxy pool
+      description: Lists the proxies in the pool with their current number of assigned sessions. Proxy passwords are masked.
+      security:
+        - AdminAuth: []
+      responses:
+        200:
+          description: Proxy pool entries
+          content:
+            application/json:
+              schema:
+                example: {"code":200,"data":[{"id":"8b1171837e3035ecbe793409fb58baf2","label":"residential-1","proxy_url":"socks5://user:xxxxx@203.0.113.10:1080","max_devices":2,"enabled":true,"assigned_count":1}],"success":true}
+    post:
+      tags:
+        - Admin
+      summary: Add proxy to pool
+      description: |
+        Adds a proxy to the pool. Sessions that connect without a proxy are assigned the least-loaded enabled pool proxy with free capacity, and keep it on later connects.
+        If the pool has enabled proxies but all are full, /session/connect returns 503, or connects without a proxy when WUZAPI_PROXY_POOL_FALLBACK=direct.
+      security:
+        - AdminAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                label:
+                  type: string
+                  example: residential-1
+                proxy_url:
+                  type: string
+                  description: Proxy URL in format "http://host:port" or "socks5://user:pass@host:port"
+                  example: socks5://user:pass@203.0.113.10:1080
+                max_devices:
+                  type: integer
+                  description: Maximum number of sessions assigned to this proxy (default 1)
+                  example: 2
+                enabled:
+                  type: boolean
+                  description: Whether new sessions may be assigned to this proxy (default true)
+                  example: true
+              required:
+                - proxy_url
+      responses:
+        201:
+          description: Proxy added
+          content:
+            application/json:
+              schema:
+                example: {"code":201,"data":{"id":"8b1171837e3035ecbe793409fb58baf2","label":"residential-1","proxy_url":"socks5://user:xxxxx@203.0.113.10:1080","max_devices":2,"enabled":true,"assigned_count":0},"success":true}
+        409:
+          description: proxy_url already exists in the pool
+  /admin/proxy-pool/{id}:
+    put:
+      tags:
+        - Admin
+      summary: Edit proxy in pool
+      description: |
+        Updates a pool entry. All fields are optional. Disabling stops new assignments but keeps existing ones.
+        max_devices cannot be lower than the current assigned_count. Changing proxy_url also updates the sessions assigned to the entry.
+      security:
+        - AdminAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            example: 8b1171837e3035ecbe793409fb58baf2
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                label:
+                  type: string
+                proxy_url:
+                  type: string
+                max_devices:
+                  type: integer
+                enabled:
+                  type: boolean
+            example: {"max_devices":3,"enabled":false}
+      responses:
+        200:
+          description: Proxy updated
+        404:
+          description: Proxy pool entry not found
+        409:
+          description: Duplicate proxy_url, or max_devices lower than the assigned count
+    delete:
+      tags:
+        - Admin
+      summary: Delete proxy from pool
+      description: Deletes a pool entry. Returns 409 while sessions are still assigned to it.
+      security:
+        - AdminAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            example: 8b1171837e3035ecbe793409fb58baf2
+      responses:
+        200:
+          description: Proxy deleted
+          content:
+            application/json:
+              schema:
+                example: {"code":200,"data":{"id":"8b1171837e3035ecbe793409fb58baf2"},"details":"proxy pool entry deleted successfully","success":true}
+        404:
+          description: Proxy pool entry not found
+        409:
+          description: Proxy is still assigned to sessions
+  /admin/users/{id}/proxy-pool/release:
+    post:
+      tags:
+        - Admin
+      summary: Release a user's pool proxy
+      description: Frees the pool slot held by a disconnected session and clears its proxy. Returns 409 while the session is starting, pairing, reconnecting, or shutting down; disconnect and wait for shutdown first. On its next connect the session is assigned a pool proxy again.
+      security:
+        - AdminAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ID of the user
+          schema:
+            type: string
+            example: 4e4942c7dee1deef99ab8fd9f7350de5
+      responses:
+        200:
+          description: Assignment released
+          content:
+            application/json:
+              schema:
+                example: {"code":200,"data":{"id":"4e4942c7dee1deef99ab8fd9f7350de5","proxy_pool_id":"8b1171837e3035ecbe793409fb58baf2"},"details":"proxy pool assignment released","success":true}
+        400:
+          description: User has no proxy assigned from the pool
+        409:
+          description: Session is active or its proxy assignment changed concurrently
   /newsletter/list:
     get:
       tags:
@@ -227,6 +376,107 @@ paths:
             application/json:
               schema:
                 example: {"code": 200, "data": {"Newsletter": [{"id": "120363144038483540@newsletter", "state": {"type": "active" }, "thread_metadata": {"creation_time": "1688746895", "description": {"id": "1689653839450668", "text": "WhatsApp's official channel. Follow for our latest feature launches, updates, exclusive drops and more.", "update_time": "1689653839450668" }, "invite": "0029Va4K0PZ5a245NkngBA2M", "name": {"id": "1688746895480511", "text": "WhatsApp", "update_time": "1688746895480511" }, "picture": {"direct_path": "/v/t61.24694-24/416962407_970228831134395_8869146381947923973_n.jpg?ccb=11-4&oh=01_Q5AaIRyTfP806JEGJDm0XWU5E-D4LcA-Wj3csSwh1jJTVanC&oe=67D550F1&_nc_sid=5e03e0&_nc_cat=110", "id": "1707950960975554", "type": "IMAGE", "url": "" }, "preview": {"direct_path": "/v/t61.24694-24/416962407_970228831134395_8869146381947923973_n.jpg?stp=dst-jpg_s192x192_tt6&ccb=11-4&oh=01_Q5AaIawuPXJUw9grRFJZtAJEc6QNm0XpqJq4X1Ssi9xNI0Qf&oe=67D550F1&_nc_sid=5e03e0&_nc_cat=110", "id": "1707950960975554", "type": "PREVIEW", "url": "" }, "settings": {"reaction_codes": {"value": "ALL" } }, "subscribers_count": "0", "verification": "verified" }, "viewer_metadata": {"mute": "on", "role": "subscriber" } } ] }, "success": true }
+  /newsletter/join:
+    post:
+      tags:
+        - Newsletter
+      summary: Join a newsletter
+      description: Follows a WhatsApp channel. The channel JID must use the `@newsletter` server.
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - NewsletterJID
+              properties:
+                NewsletterJID:
+                  type: string
+                  example: 120363144038483540@newsletter
+                  description: The WhatsApp channel JID.
+      responses:
+        200:
+          description: Newsletter joined
+          content:
+            application/json:
+              schema:
+                example: {"code": 200, "data": {"Details": "Newsletter joined successfully"}, "success": true}
+        400:
+          description: Invalid or missing newsletter JID
+        500:
+          description: No active session or WhatsApp rejected the operation
+  /newsletter/leave:
+    post:
+      tags:
+        - Newsletter
+      summary: Leave a newsletter
+      description: Unfollows a WhatsApp channel. The channel JID must use the `@newsletter` server.
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - NewsletterJID
+              properties:
+                NewsletterJID:
+                  type: string
+                  example: 120363144038483540@newsletter
+                  description: The WhatsApp channel JID.
+      responses:
+        200:
+          description: Newsletter left
+          content:
+            application/json:
+              schema:
+                example: {"code": 200, "data": {"Details": "Newsletter left successfully"}, "success": true}
+        400:
+          description: Invalid or missing newsletter JID
+        500:
+          description: No active session or WhatsApp rejected the operation
+  /newsletter/mute:
+    post:
+      tags:
+        - Newsletter
+      summary: Change newsletter notification settings
+      description: Mutes or unmutes notifications for a WhatsApp channel. The channel JID must use the `@newsletter` server.
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - NewsletterJID
+                - Mute
+              properties:
+                NewsletterJID:
+                  type: string
+                  example: 120363144038483540@newsletter
+                  description: The WhatsApp channel JID.
+                Mute:
+                  type: boolean
+                  example: true
+                  description: Set to true to mute notifications, false to unmute them.
+      responses:
+        200:
+          description: Newsletter notification setting changed
+          content:
+            application/json:
+              schema:
+                example: {"code": 200, "data": {"Details": "Newsletter mute status changed successfully"}, "success": true}
+        400:
+          description: Invalid or missing newsletter JID
+        500:
+          description: No active session or WhatsApp rejected the operation
   /webhook:
     get:
       tags:
@@ -338,7 +588,7 @@ paths:
       tags:
         - Session 
       summary: connects to WhatsApp servers
-      description: "Initiates connection to WhatsApp servers.\n\nIf there is no previous session created, it will generate a QR code that can be retrieved via the [qr](#/Session/get_session_qr) API call.\n\nIf the optional Subscribe is supplied it will limit webhooks to the specified event types: Message,ReadReceipt,Presence,HistorySync,ChatPresence.\n\nIf no Subscribe is supplied it will subscribe to All events.\n\nIf Immediate is set to false, the action will wait for 10 seconds to retrieve actual connection status from whatsapp, otherwise it will return immediatly.\n\nWhen setting Immediate to true you should check for actual connection status after a few seconds via the [status](#/Session/get_session_status) API call as your connection might fail if the session was closed from another device."
+      description: "Initiates connection to WhatsApp servers.\n\nIf there is no previous session created, it will generate a QR code that can be retrieved via the [qr](#/Session/get_session_qr) API call. Alternatively, the device may initiate passkey pairing instead of QR — in that case, a PasskeyRequest webhook will be sent with the challenge data.\n\nIf the optional Subscribe is supplied it will limit webhooks to the specified event types: Message,ReadReceipt,Presence,HistorySync,ChatPresence.\n\nIf no Subscribe is supplied it will subscribe to All events.\n\nIf Immediate is set to false, the action will wait for 10 seconds to retrieve actual connection status from whatsapp, otherwise it will return immediatly.\n\nWhen setting Immediate to true you should check for actual connection status after a few seconds via the [status](#/Session/get_session_status) API call as your connection might fail if the session was closed from another device.\n\nIf the session has no proxy and the admin proxy pool is in use, a pool proxy is assigned before connecting."
       security:
         - ApiKeyAuth: []
       requestBody:
@@ -356,6 +606,8 @@ paths:
             application/json:
               schema:
                 example: { "code": 200, "data": { "details": "Connected!", "events": "Message", "jid": "5491155555555.0:53@s.whatsapp.net", "webhook": "https://some.site/webhook?request=parameter" }, "success": true }
+        503:
+          description: Every enabled proxy in the admin proxy pool is at max_devices capacity (not returned when WUZAPI_PROXY_POOL_FALLBACK=direct)
   /session/disconnect:
     post:
       tags:
@@ -371,6 +623,14 @@ paths:
             application/json:
               schema:
                 example: { "code": 200, "data": { "Details": "Disconnected" }, "success": true }
+      parameters:
+        - name: clear
+          in: query
+          required: false
+          description: If true, also clears the user's event subscriptions on disconnect. Defaults to false, which preserves them.
+          schema:
+            type: boolean
+            example: false
   /session/logout:
     post:
       tags:
@@ -427,7 +687,7 @@ paths:
       tags:
         - Session 
       summary: Gets QR code for scanning
-      description: Gets QR code if the user is connected but not logged in. If the user is already logged in, QRCode will be empty.
+      description: Gets QR code if the user is connected but not logged in and the device is pairing via QR. If the user is already logged in, QRCode will be empty. If the device initiated passkey pairing instead of QR, QRCode will also be empty — in that case the pairing data is delivered via PasskeyRequest webhook.
       security:
         - ApiKeyAuth: []
       responses:
@@ -436,7 +696,70 @@ paths:
           content:
             application/json:
               schema:
-                example: { "code": 200, "data": { "QRCode": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAQAAAAEAAQMAAABmvDolAAAABlBMVEX///8AAABVwtN+AAAEw0lEQVR42uyZPa7zqhaGX0ThLmsCkZlGCktMKaU76FxmSkgUmQZWJkA6CuT3avlLvrNvvRMX9x6KXWQ/UhCsn2cR/Lv+v5YhudQ6njEs1bBjqGYDwlJJpoOAArtUbK4Pi5jN3qPAlCkstcAeBazMUaoj78RpxGW4yWYzWVfmzwFLlLX4O+VkkucN5tFDOxiIAvfoA/X4uVQ4sgUcCBTYCG7AEGGKvbdrBabQ8OOyvg3ovm4ynqfLXJ9rvi+303ie5vm/gvZXgK6BLC7fo5hiG4KwW7b6I/2+DJi1+ybVFQyx6o6bbKPVDCyjTwcBZB9uevBtAEafhiosCFH/4kNA8i1gg02B3KxezGbzEjUCDgIwYppR3SNdgtY3H0M1j8xFzCscvg/8uQvZAB9piidv1RXfZhbHdAwAlzsCNCaJDdMF4WQeeSGACZ8BMNl4FZYJA7j2YalPPhhngetHAaZPcyBg2wyYdAk0fKQ5yPja5PcBzTZW4uxJ2bTGwmxnu/BH4vwSgEsYItcCH+VZJt/AYhmHatbXdX8d2JvaTVzxCVW2aVhqheXSqvnR9b4L6AoUx3zX+jZd5rDB5jbLuv0txd8GRs+liuv+TsKloQWujxxRYf5s8gOA7fMVK9PQuDtMNCx2ibIdCMCy1s0yQU6Od9bqim1BuzoOAgzTHOiKv0d5Mt+XClN8DBxN/wxg2G2DbDYNJExCqE+Ne8poXoLxdUA/w5VrnxBQ9fjlqaJMwWgPAzLjtfKRW4A21ojnStX0dX2d5PeB0fawu2pChcuM4bk+tLmbMn0GMJslb5ptDXySbb5W1+0SyVcJOgRIQxSc7X0RUSvGs2DSeaz4gwCMNi/7XNACZc0KbPBtruv2KQA+DVFladBvt4xywhmh1Xd2fx8wzGTUltqCWrHWgqL7Jg8E0hSiFJfbUJ/Fpx3L1OHsVR8+APgoZMclUKvcft2+zTBrwjHArosim4ZcfW4Y4lVWnYXg2A8C9C5aEFXDoEJzmXFyfZoH/p0Wvw7oXoZbNQ823ase1wk2DQ3u7XK/BkzOqovwpM68Ko+jUyPFu6F8H4DvqsAuaUMZJ6+azjTPdS32KMBkLnpQ3VPnbsZgiktALW91/wDQEV5V7gT4JT6L62GRzeV0EDDC7rVFax2ZW6Aa6V5h/FEAgBlSbLrMVScU1s09+jxwG/9q87cB/Yxw3acBsk2Yw+nPf9Y1p88ARlNPtvPkF3LlPQYp8MtSx/FtpF8H4DNrZd8fOtTOxJSzXdo/c/fXAbN2DLeKs1dxHeEZZVWaju/3h18CcDk3qePZpllglDZ89MCq8nIQoDPAVaPi3iAFFwS1xjjr+HcYwD+hri216vBZzQbbZsE44RhAp+sQxfTpApGCoV1NOfsl4pX+nwC65a1uLnkK9TSuVTOhaQ4cBOzvtDcZXU5Bdl28SrF9HqrZJhwD7O/VsZpi7xSz7pXW6ahQ1/dB/RrYf2QhLBmr1lNINVRZfw9BBwArc4SszGlWWd2fxB9cFvJQYKnUUWAgV22y5v1e/ffHpiOAqMLCiOpymwNGtxvk9s8mfwcU2CiydqvJbdKuSX0K8a/KHQDsMQkyeVbtISFif8mRcfwRtF8F/l3/O+s/AQAA///lM0dZSaTeTQAAAABJRU5ErkJggg==" }, "success": true }
+                example: { "code": 200, "data": { "QRCode": "data:image/png;base64,...", "passkeyPending": true, "publicKey": { "allowCredentials": [], "challenge": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX", "extensions": { "uvm": true }, "rpId": "whatsapp.com", "timeout": 600000, "userVerification": "required" } }, "success": true }
+
+                In addition to QRCode, the response also includes passkey pairing state:
+                - passkeyPending (boolean): true if the device initiated passkey pairing instead of QR
+                - publicKey (object|null): the WebAuthn challenge data when passkeyPending is true
+  /session/passkey-status:
+    get:
+      tags:
+        - Session
+      summary: Get passkey pairing status
+      description: "Checks if there is a pending passkey pairing request for this session.\n\nReturns passkeyPending=true with the publicKey challenge data if the device initiated passkey pairing instead of QR."
+      security:
+        - ApiKeyAuth: []
+      responses:
+        200:
+          description: Response
+          content:
+            application/json:
+              schema:
+                example: { "code": 200, "data": { "passkeyPending": true, "publicKey": { "allowCredentials": [], "challenge": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX", "extensions": { "uvm": true }, "rpId": "whatsapp.com", "timeout": 600000, "userVerification": "required" } }, "success": true }
+  /session/passkey-response:
+    post:
+      tags:
+        - Session
+      summary: Send passkey WebAuthn response
+      description: "Sends the WebAuthn response from the authenticator to complete passkey pairing.\n\nThis endpoint must be called after receiving a webhook with the PasskeyRequest event containing the challenge data."
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/definitions/PasskeyResponse'
+      responses:
+        200:
+          description: Response
+          content:
+            application/json:
+              schema:
+                example: { "code": 200, "data": { "status": "passkey_response_sent" }, "success": true }
+        400:
+          description: No pending passkey request
+        500:
+          description: Failed to send passkey response
+  /session/passkey-confirm:
+    post:
+      tags:
+        - Session
+      summary: Confirm passkey pairing code
+      description: "Confirms that the 8-character pairing code was displayed to the user and matches the code on the phone.\n\nThis endpoint must be called after receiving a webhook with the PasskeyConfirmation event."
+      security:
+        - ApiKeyAuth: []
+      responses:
+        200:
+          description: Response
+          content:
+            application/json:
+              schema:
+                example: { "code": 200, "data": { "status": "passkey_confirmed" }, "success": true }
+        400:
+          description: No pending passkey confirmation
+        500:
+          description: Failed to send passkey confirmation
   /session/proxy:
     post:
       tags:
@@ -460,6 +783,10 @@ paths:
                 enable:
                   type: boolean
                   description: Whether to enable or disable the proxy.
+                webhook_use_proxy:
+                  type: boolean
+                  description: Whether webhook deliveries use the configured proxy. When omitted, the existing per-user value is preserved.
+                  example: true
               required:
                 - proxy_url
                 - enable
@@ -477,6 +804,9 @@ paths:
                   ProxyURL:
                     type: string
                     example: socks5://user:pass@host:port
+                  webhook_use_proxy:
+                    type: boolean
+                    example: true
         "400":
           description: Bad Request
         "500":
@@ -561,6 +891,39 @@ paths:
         500:
           description: S3 connection test failed
   /session/history:
+    post:
+      tags:
+        - Session
+      summary: Configure message retention and pairing history
+      description: Save before starting pairing. No active WhatsApp session is required. Omitted fields retain their current values. Sync days affect the next new pairing, not an ordinary reconnect or a QR already issued. Zero preserves WhatsApp default sync behavior; it does not disable incoming HistorySync events.
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              minProperties: 1
+              properties:
+                history:
+                  type: integer
+                  minimum: 0
+                  description: Local message retention count per chat, independent of sync days.
+                  example: 1000
+                days_to_sync_history:
+                  type: integer
+                  minimum: 0
+                  maximum: 365
+                  description: Requested full history window on next pairing. Availability is determined by WhatsApp and the phone.
+                  example: 30
+      responses:
+        '200':
+          description: Configuration saved
+        '400':
+          description: Missing settings or invalid values
+        '500':
+          description: Database error
     get:
       tags:
         - Session
@@ -841,6 +1204,63 @@ paths:
             application/json:
               schema:
                 example: { "code": 200, "data": { "5491122223333@s.whatsapp.net": { "BusinessName": "", "FirstName": "", "Found": true, "FullName": "", "PushName": "FOP2" }, "549113334444@s.whatsapp.net": { "BusinessName": "", "FirstName": "", "Found": true, "FullName": "", "PushName": "Asternic" } } }
+  /user/block:
+    post:
+      tags:
+        - User
+      summary: Block a WhatsApp user
+      description: Blocks a WhatsApp user and returns the updated blocklist.
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/definitions/BlocklistUpdate'
+      responses:
+        200:
+          description: User blocked
+          content:
+            application/json:
+              schema:
+                example: { "code": 200, "data": { "Details": "User blocked", "JID": "5491155553935@s.whatsapp.net", "Blocklist": [ "5491155553935@s.whatsapp.net" ], "DHash": "1234567890" }, "success": true }
+  /user/unblock:
+    post:
+      tags:
+        - User
+      summary: Unblock a WhatsApp user
+      description: Unblocks a WhatsApp user and returns the updated blocklist.
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/definitions/BlocklistUpdate'
+      responses:
+        200:
+          description: User unblocked
+          content:
+            application/json:
+              schema:
+                example: { "code": 200, "data": { "Details": "User unblocked", "JID": "5491155553935@s.whatsapp.net", "Blocklist": [], "DHash": "1234567891" }, "success": true }
+  /user/blocklist:
+    get:
+      tags:
+        - User
+      summary: Get the current blocklist
+      description: Returns the list of WhatsApp users currently blocked by the session.
+      security:
+        - ApiKeyAuth: []
+      responses:
+        200:
+          description: Current blocklist
+          content:
+            application/json:
+              schema:
+                example: { "code": 200, "data": { "Blocklist": [ "5491155553935@s.whatsapp.net" ], "DHash": "1234567890" }, "success": true }
   /user/lid/{phone}:
     get:
       tags:
@@ -881,12 +1301,61 @@ paths:
           description: Invalid or missing token
         404:
           description: User not found
+  /user/privacy:
+    get:
+      tags:
+        - User
+      summary: Get privacy settings
+      description: Returns the account's current privacy settings (last seen, profile photo, status, read receipts, online, groups, calls).
+      security:
+        - ApiKeyAuth: []
+      responses:
+        200:
+          description: Current privacy settings
+          content:
+            application/json:
+              schema:
+                example: { "code": 200, "data": { "GroupAdd": "contacts", "LastSeen": "all", "Status": "contacts", "Profile": "all", "ReadReceipts": "all", "CallAdd": "all", "Online": "all", "Messages": "all", "Defense": "off", "Stickers": "contacts" }, "success": true }
+    post:
+      tags:
+        - User
+      summary: Set a privacy setting
+      description: |
+        Updates a single privacy setting. Valid Name/Value combinations:
+        <br>`groupadd`, `last`, `status`, `profile`: `all`, `contacts`, `contact_blacklist`, `none`
+        <br>`readreceipts`: `all`, `none`
+        <br>`online`: `all`, `match_last_seen`
+        <br>`calladd`: `all`, `known`
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              example: { "Name": "last", "Value": "contacts" }
+      responses:
+        200:
+          description: Updated privacy settings
+          content:
+            application/json:
+              schema:
+                example: { "code": 200, "data": { "LastSeen": "contacts" }, "success": true }
+        400:
+          description: Invalid privacy setting name or value
   /chat/delete:
     post:
       tags:
         - Chat 
-      summary: Deletes a message sent by user
-      description: Deletes a messages sent by the same user
+      summary: Deletes an own message or another participant's group message
+      description: >-
+        Omit SenderJID (or send an empty string) to delete your own message.
+        To delete another participant's message, use the group JID in Phone and
+        the original author's full PN or LID in SenderJID. The connected WhatsApp
+        account must be a group admin; WhatsApp enforces deletion permissions.
+        Providing your own PN or LID also deletes an own message and does not
+        require group admin privileges. Use the sender identity from the original
+        message event; PN and LID are not automatically interconverted.
       security:
         - ApiKeyAuth: []
       requestBody:
@@ -902,7 +1371,11 @@ paths:
           content:
             application/json:
               schema:
-                example: { "code": 200, "data": { "Details": "Message deleted" }, "success": true }
+                example: { "code": 200, "data": { "Details": "Deleted", "Id": "AABBCC11223344", "Timestamp": 1700000000 }, "success": true }
+        400:
+          description: Missing fields, invalid SenderJID, or another sender outside a group
+        500:
+          description: No session or an error sending the revocation to WhatsApp
   /chat/markread:
     post:
       tags:
@@ -1352,6 +1825,66 @@ paths:
             application/json:
               schema:
                 example: {"code":200,"data":{"Details":"Sent","Id":"90B2F8B13FAC8A9CF6B06E99C7834DC5","Timestamp":"2022-04-20T12:49:08-03:00"},"success":true}
+  /chat/send/carousel:
+    post:
+      tags:
+        - Chat
+      summary: Sends an image carousel
+      description: >-
+        Sends 2-10 ordered JPEG/PNG cards as one native interactive message to
+        a direct PN/LID chat. All cards are validated before upload. Total image
+        bytes are limited to 16 MiB and the JSON request to 24 MiB. Preparation
+        has a 45-second budget and dispatch a detached 60-second budget; internal
+        send-lock queueing can exceed the HTTP deadline. Acknowledgement does
+        not prove rendering. The pinned whatsmeow version loses interactive
+        AdditionalNodes on recipient retry receipts, so recovery is unverified.
+        Never automatically resend after an ambiguous dispatch error or timeout.
+        Replace sample image URLs with your own. See API.md for complete limits. Stdio method is chat.send.carousel;
+        its existing 512-KiB line limit favors image URLs.
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/definitions/MessageCarousel'
+            example:
+              Phone: "15555550100"
+              Id: "carousel-example-1"
+              Body: "Choose a destination"
+              Cards:
+                - Body: "Summit"
+                  Image: "https://example.com/summit.jpg"
+                  Buttons:
+                    - type: reply
+                      title: "Choose"
+                      id: "summit"
+                - Body: "Coast"
+                  Image: "https://example.com/coast.png"
+                  Buttons:
+                    - type: cta_url
+                      title: "Details"
+                      url: "https://example.com/coast"
+      responses:
+        200:
+          description: Transport acknowledged the message; does not prove display or reading
+          content:
+            application/json:
+              schema:
+                example: {"code":200,"data":{"Details":"Sent","Id":"carousel-example-1","Timestamp":1700000000},"success":true}
+        400:
+          description: Invalid recipient, cards, actions or images
+        401:
+          description: Invalid user token
+        413:
+          description: JSON body exceeds 24 MiB
+        500:
+          description: Session unavailable, preparation/upload failure (not sent), or ambiguous dispatch; see error message
+        503:
+          description: Preparation canceled; message not sent
+        504:
+          description: Preparation deadline exceeded; message not sent
   /chat/send/list:
     post:
       tags:
@@ -1531,7 +2064,17 @@ paths:
       tags:
         - Chat
       summary: Get chat message history
-      description: Retrieves message history for a specific chat. Returns messages in reverse chronological order (newest first). Requires message history to be enabled on the server.
+      description: |
+        Retrieves message history for a specific chat, newest first. Requires history to be enabled.
+        History contains events, not a materialized view of the latest message contents.
+        An edit is a separate row with message_type `edit`, its own message_id, the target
+        message ID in quoted_message_id, and replacement text or caption in text_content
+        (which can be empty). The original row is not modified. Consumers must apply edits
+        to their targets, using protocolMessage.timestampMS in datajson for edit ordering
+        when available. Database timestamps represent insertion time, including for HistorySync.
+        A limited result may contain an edit without its original message.
+        Live and HistorySync edits use the same fields. Legacy unknown rows are repaired
+        when the same edit is redelivered; existing rows are not scanned or backfilled.
       security:
         - ApiKeyAuth: []
       parameters:
@@ -1708,6 +2251,27 @@ paths:
             application/json:
               schema:
                 example: { "code": 200, "data": { "Details": "Group locked setting updated successfully" }, "success": true }
+  /group/memberaddmode:
+    post:
+      tags:
+        - Group
+      summary: Set group member add mode
+      description: Configures who can add participants to the group, only admins (admin_add) or any participant (all_member_add).
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/definitions/GroupMemberAddMode'
+      responses:
+        200:
+          description: Success
+          content:
+            application/json:
+              schema:
+                example: { "code": 200, "data": { "Details": "Group member add mode updated successfully" }, "success": true }
   /group/ephemeral:
     post:
       tags:
@@ -1985,6 +2549,70 @@ paths:
             application/json:
               schema:
                 example: { "code": 200, "data": { "Details": "Participants updated successfully" }, "success": true }
+  /group/requestparticipants:
+    get:
+      tags:
+        - Group
+      summary: List pending join requests
+      description: Lists participants who have requested to join the group. Requires join approval mode to be enabled and the session to be an admin of the group.
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - in: query
+          name: groupJID
+          schema:
+            type: string
+          required: true
+          description: The JID of the group
+      responses:
+        200:
+          description: Success
+          content:
+            application/json:
+              schema:
+                example: { "code": 200, "data": [ { "JID": "70072425046185@lid", "RequestedAt": "2026-05-27T00:34:40-03:00" } ], "success": true }
+  /group/updaterequestparticipants:
+    post:
+      tags:
+        - Group
+      summary: Approve or reject pending join requests
+      description: Approves or rejects participants who requested to join the group.
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/definitions/UpdateGroupRequestParticipants'
+      responses:
+        200:
+          description: Success
+          content:
+            application/json:
+              schema:
+                example: { "code": 200, "data": { "Details": "Group request participants updated successfully" }, "success": true }
+  /group/joinapprovalmode:
+    post:
+      tags:
+        - Group
+      summary: Toggle group join approval mode
+      description: Enables or disables the requirement that new members be approved by an admin before joining the group.
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/definitions/SetGroupJoinApprovalMode'
+      responses:
+        200:
+          description: Success
+          content:
+            application/json:
+              schema:
+                example: { "code": 200, "data": { "Details": "Group join approval mode updated successfully" }, "success": true }
 
 definitions:
   ContextInfo:
@@ -2049,6 +2677,10 @@ definitions:
           proxy_url:
             type: string
             example: "https://serverproxy.com:9080"
+          webhook_use_proxy:
+            type: boolean
+            example: true
+            description: "Whether webhook deliveries use the configured proxy"
       s3_config:
         type: object
         properties:
@@ -2079,6 +2711,14 @@ definitions:
           retention_days:
             type: integer
             example: 30
+
+      days_to_sync_history:
+        type: integer
+        minimum: 0
+        maximum: 365
+        default: 0
+        example: 30
+        description: "History window requested in days on the next new pairing. 0 uses WhatsApp defaults. Configure before starting pairing; reconnecting an already linked device does not trigger a new full sync. Independent of local history retention."
 
   CreateUser:
     type: object
@@ -2111,6 +2751,10 @@ definitions:
             type: string
             example: "https://serverproxy.com:9080"
             description: "Proxy URL to use for the user. Format: socks5://user:pass@host:port or http://host:port"
+          webhookUseProxy:
+            type: boolean
+            example: true
+            description: "Route webhook deliveries through the configured proxy. Defaults to the WUZAPI_WEBHOOK_USE_PROXY server setting (true)."
       s3Config:
         type: object
         properties:
@@ -2154,6 +2798,14 @@ definitions:
         example: 0
         description: "Number of messages to store in history per chat for this user. 0 means no history is saved, any positive number enables history storage for that many messages per chat. Default is 0"
         default: 0
+
+      days_to_sync_history:
+        type: integer
+        minimum: 0
+        maximum: 365
+        default: 0
+        example: 30
+        description: "History window requested in days on the next new pairing. 0 uses WhatsApp defaults. Configure before starting pairing; reconnecting an already linked device does not trigger a new full sync. Independent of local history retention."
 
   DeleteUser:
     type: object
@@ -2288,6 +2940,20 @@ definitions:
       type:
         type: string
         example: available
+  BlocklistUpdate:
+    type: object
+    properties:
+      Phone:
+        type: string
+        example: "5491155553935"
+      JID:
+        type: string
+        example: "5491155553935@s.whatsapp.net"
+    oneOf:
+      - required:
+          - Phone
+      - required:
+          - JID
   MessageContact:
     type: object
     required: 
@@ -2383,26 +3049,48 @@ definitions:
     type: object
     required:
       - Phone
-      - ButtonText
       - Desc
-      - TopText
-      - List
     properties:
       Phone:
         type: string
         example: "5521971532700"
       ButtonText:
         type: string
-        example: Click Here
+        example: "Click Here"
       Desc:
         type: string
-        example: This is a list
+        example: "This is a list"
       TopText:
         type: string
-        example: This is a list
+        example: "This is a list"
       FooterText:
         type: string
-        example: This is a footer text
+        example: "This is a footer text"
+      Id:
+        type: string
+        example: "ABCDABCD1234"
+      Sections:
+        type: array
+        items:
+          type: object
+          properties:
+            title:
+              type: string
+              example: "Menu"
+            rows:
+              type: array
+              items:
+                type: object
+                properties:
+                  title:
+                    type: string
+                    example: "menu option 1"
+                  desc:
+                    type: string
+                    example: "long description"
+                  RowId:
+                    type: string
+                    example: "1"
       List:
         type: array
         items:
@@ -2410,39 +3098,160 @@ definitions:
           properties:
             title:
               type: string
-              example: menu button 1
+              example: "menu option 1"
             desc:
               type: string
-              example: long description
+              example: "long description"
             RowId:
               type: string
-              example: 1
+              example: "1"
+      ContextInfo:
+        type: object
+        required:
+          - StanzaID
+          - Participant
+        properties:
+          StanzaID:
+            type: string
+            example: "3EB06F9067F80BAB89FF"
+          Participant:
+            type: string
+            example: "5491155553935@s.whatsapp.net"
 
+  MessageCarousel:
+    type: object
+    additionalProperties: false
+    required: [Phone, Body, Cards]
+    properties:
+      Phone:
+        type: string
+        description: Bare phone number or direct PN/LID JID; no groups, bots or device-specific JIDs
+        example: "15555550100"
+      Id:
+        type: string
+        maxLength: 128
+        description: Optional printable ASCII without whitespace. Generated when omitted. Correlation only; reuse is not idempotency and does not replace history.
+        example: "carousel-example-1"
+      Body:
+        type: string
+        minLength: 1
+        maxLength: 1024
+        example: "Choose a destination"
+      Cards:
+        type: array
+        minItems: 2
+        maxItems: 10
+        items:
+          $ref: '#/definitions/CarouselCard'
+  CarouselCard:
+    type: object
+    additionalProperties: false
+    required: [Body, Image, Buttons]
+    properties:
+      Body:
+        type: string
+        minLength: 1
+        maxLength: 160
+        example: "Summit"
+      Image:
+        type: string
+        description: JPEG/PNG data URL or HTTP(S) URL. Images total at most 16 MiB, 4096px per side and 16 megapixels each.
+        example: "https://example.com/summit.jpg"
+      Buttons:
+        type: array
+        minItems: 1
+        maxItems: 3
+        items:
+          $ref: '#/definitions/CarouselButton'
+  CarouselButton:
+    type: object
+    additionalProperties: false
+    required: [title]
+    properties:
+      type:
+        type: string
+        enum: ["", reply, cta_url, cta_call]
+        default: reply
+        description: Omitted or empty type means reply.
+      title:
+        type: string
+        minLength: 1
+        maxLength: 20
+      id:
+        type: string
+        minLength: 1
+        maxLength: 200
+        description: Required for reply, without controls, unique across all cards. Omit for other actions.
+        example: "summit"
+      url:
+        type: string
+        maxLength: 2048
+        description: Required for cta_url; absolute HTTP(S), no credentials, whitespace or controls. Omit for other actions.
+        example: "https://example.com/summit"
+      phone_number:
+        type: string
+        description: Required for cta_call; optional leading + and 6-15 digits. Omit for other actions.
+        example: "+15555550100"
   MessageButtons:
     type: object
     required:
       - Phone
       - Body
+      - Buttons
     properties:
       Phone:
         type: string
         example: "5521971532700"
       Body:
         type: string
-        example: How you doin
+        example: "How you doin"
+      Title:
+        type: string
+        example: "Main menu"
+      Footer:
+        type: string
+        example: "Choose an option"
+      Image:
+        type: string
+        example: "https://example.com/image.jpg"
       Id:
         type: string
         example: "ABCDABCD1234"
+      Buttons:
+        type: array
+        minItems: 1
+        maxItems: 5
+        items:
+          type: object
+          properties:
+            type:
+              type: string
+              example: "reply" # reply | cta_url | cta_call | copy
+            title:
+              type: string
+              example: "Confirm"
+            id:
+              type: string
+              example: "btn_confirm"
+            url:
+              type: string
+              example: "https://example.com"
+            phone_number:
+              type: string
+              example: "+5511999999999"
+            copy_code:
+              type: string
+              example: "PROMO2024"
       ContextInfo:
         type: object
         required:
-          - StanzaId
+          - StanzaID
           - Participant
         properties:
-          StanzaId: 
+          StanzaID:
             type: string
-            example: "3EB06F9067F80BAB89FF" 
-          Participant: 
+            example: "3EB06F9067F80BAB89FF"
+          Participant:
             type: string
             example: "5491155553935@s.whatsapp.net"
 
@@ -2611,6 +3420,10 @@ definitions:
       FileName:
         type: string
         example: file.txt
+      MimeType:
+        type: string
+        description: Explicit document MIME override. If omitted, uses the declared data URL or HTTP type, then the filename extension, then content detection. Missing, invalid, and generic octet-stream source types fall back; an implicit data URL text/plain default is not a declaration.
+        example: "text/plain"
       Id:
         type: string
         example: "ABCDABCD1234"
@@ -2668,7 +3481,17 @@ definitions:
         example: "1234-abcd-21234"
       Phone:
         type: string
-        example: "5491155553934"
+        description: Destination chat; use the full group JID ending in @g.us for group messages.
+        example: "120363000000000000@g.us"
+      SenderJID:
+        type: string
+        description: >-
+          Optional original message author. Omit or leave empty for own messages.
+          Otherwise provide a numeric user JID ending in @s.whatsapp.net or @lid.
+          Legacy @c.us is normalized to @s.whatsapp.net. Device/agent suffixes are
+          validated and removed. Bare numbers, whitespace, multiple @ signs and
+          group, broadcast or newsletter JIDs are rejected with HTTP 400.
+        example: "5491155553935@s.whatsapp.net"
   Markread:
     type: object
     required:
@@ -2868,6 +3691,44 @@ definitions:
           description: List of participant JIDs (e.g., 5491112345678@s.whatsapp.net or 5491112345678)
         example: [ "5491112345678", "5491123456789@s.whatsapp.net" ]
 
+  UpdateGroupRequestParticipants:
+    type: object
+    required:
+      - GroupJID
+      - Action
+      - Phone
+    properties:
+      GroupJID:
+        type: string
+        description: The JID of the group
+        example: 120363312246943103@g.us
+      Action:
+        type: string
+        description: Action to perform ("approve" to accept join requests, "reject" to decline them)
+        enum: [approve, reject]
+        example: approve
+      Phone:
+        type: array
+        items:
+          type: string
+          description: List of requesting participant JIDs as returned by /group/requestparticipants (e.g. 70072425046185@lid)
+        example: [ "70072425046185@lid" ]
+
+  SetGroupJoinApprovalMode:
+    type: object
+    required:
+      - groupjid
+      - mode
+    properties:
+      groupjid:
+        type: string
+        description: The JID of the group
+        example: 120363312246943103@g.us
+      mode:
+        type: boolean
+        description: true to require admin approval for new members, false to disable it
+        example: true
+
   CreateGroup:
     type: object
     required:
@@ -2884,6 +3745,27 @@ definitions:
           type: string
           description: List of participant phone numbers (without country code prefix symbols)
         example: [ "5491112345678", "5491123456789" ]
+      MemberAddMode:
+        type: string
+        enum: [ "admin_add", "all_member_add" ]
+        description: Optional. Who can add participants to the new group. When omitted, whatsmeow's default applies (all_member_add).
+        example: "admin_add"
+
+  GroupMemberAddMode:
+    type: object
+    required:
+      - GroupJID
+      - Mode
+    properties:
+      GroupJID:
+        type: string
+        description: The JID of the group to configure
+        example: "120363312246943103@g.us"
+      Mode:
+        type: string
+        enum: [ "admin_add", "all_member_add" ]
+        description: admin_add to let only admins add participants, all_member_add to let any participant add them.
+        example: "admin_add"
 
   GroupLocked:
     type: object
@@ -2970,6 +3852,49 @@ definitions:
         type: integer
         description: Number of days to retain files (0 for no expiration)
         example: 30
+
+  PasskeyResponse:
+    type: object
+    required:
+      - response
+    properties:
+      response:
+        type: object
+        description: WebAuthn response object from navigator.credentials.get()
+        properties:
+          id:
+            type: string
+            description: Base64url-encoded credential identifier
+            example: "ABCD1234..."
+          rawId:
+            type: string
+            description: Base64url-encoded raw credential identifier
+            example: "ABCD1234..."
+          type:
+            type: string
+            description: Credential type
+            example: "public-key"
+          response:
+            type: object
+            description: Authenticator response data
+            properties:
+              clientDataJSON:
+                type: string
+                description: Base64url-encoded client data
+                example: "eyJ0eXBlIjoi..."
+              authenticatorData:
+                type: string
+                description: Base64url-encoded authenticator data
+                example: "SZYN5YgO..."
+              signature:
+                type: string
+                description: Base64url-encoded signature
+                example: "MEUCIQD..."
+              userHandle:
+                type: string
+                nullable: true
+                description: Base64url-encoded user handle (can be null)
+                example: null
 
 components:
   securitySchemes:

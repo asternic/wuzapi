@@ -131,6 +131,85 @@ Response:
 
 ---
 
+## Proxy Pool
+
+The proxy pool lets an admin register proxies that are handed out automatically to sessions that have no proxy of their own. Each proxy carries at most `max_devices` sessions.
+
+* When a session calls [/session/connect](#user-content-connect) without a proxy, it is assigned the least-loaded enabled pool proxy that still has capacity. The choice is saved on the user (`proxy_url` and `proxy_pool_id`) and reused on every later connect, so a number keeps its IP.
+* If the pool has enabled proxies but all of them are full, connect fails with `503` instead of connecting through the host IP. Set `WUZAPI_PROXY_POOL_FALLBACK=direct` to connect without a proxy instead (nothing is saved, so the next connect tries the pool again).
+* Users with an explicit proxy (`proxyConfig` on create/edit, or [/session/proxy](#user-content-set-proxy)) are never touched by the pool. Setting or disabling an explicit proxy releases any pool slot the user held.
+* With an empty pool (or only disabled entries), behavior is unchanged.
+* Proxy passwords are masked in pool responses.
+
+### List Proxy Pool
+
+*GET /admin/proxy-pool*
+
+```
+curl -s -H 'Authorization: {{WUZAPI_ADMIN_TOKEN}}' http://localhost:8080/admin/proxy-pool
+```
+
+```json
+{
+  "code": 200,
+  "data": [
+    {
+      "id": "8b1171837e3035ecbe793409fb58baf2",
+      "label": "residential-1",
+      "proxy_url": "socks5://user:xxxxx@203.0.113.10:1080",
+      "max_devices": 2,
+      "enabled": true,
+      "assigned_count": 1
+    }
+  ],
+  "success": true
+}
+```
+
+### Add Proxy to Pool
+
+*POST /admin/proxy-pool*
+
+`proxy_url` must be `http://` or `socks5://`. `max_devices` defaults to 1 and `enabled` to true.
+
+```
+curl -s -X POST -H 'Authorization: {{WUZAPI_ADMIN_TOKEN}}' -H 'Content-Type: application/json' --data '{"label":"residential-1","proxy_url":"socks5://user:pass@203.0.113.10:1080","max_devices":2}' http://localhost:8080/admin/proxy-pool
+```
+
+### Edit Proxy in Pool
+
+*PUT /admin/proxy-pool/{id}*
+
+All fields are optional. Disabling an entry stops new assignments but keeps existing ones. `max_devices` cannot be set below the current `assigned_count`. Changing `proxy_url` also updates every session assigned to the entry; the new address is used on their next connect.
+
+```
+curl -s -X PUT -H 'Authorization: {{WUZAPI_ADMIN_TOKEN}}' -H 'Content-Type: application/json' --data '{"max_devices":3,"enabled":false}' http://localhost:8080/admin/proxy-pool/8b1171837e3035ecbe793409fb58baf2
+```
+
+### Delete Proxy from Pool
+
+*DELETE /admin/proxy-pool/{id}*
+
+Returns `409` while sessions are still assigned to the proxy; release them first.
+
+```
+curl -s -X DELETE -H 'Authorization: {{WUZAPI_ADMIN_TOKEN}}' http://localhost:8080/admin/proxy-pool/8b1171837e3035ecbe793409fb58baf2
+```
+
+### Release a User's Pool Proxy
+
+*POST /admin/users/{id}/proxy-pool/release*
+
+Frees the pool slot held by a disconnected session and clears its proxy. On its next connect the session is assigned a pool proxy again.
+
+Returns `409` while the session is starting, pairing, reconnecting, or shutting down. Disconnect the session and wait for shutdown to complete before releasing its slot. Changing a pool-assigned user's explicit proxy also requires shutdown to finish.
+
+```
+curl -s -X POST -H 'Authorization: {{WUZAPI_ADMIN_TOKEN}}' http://localhost:8080/admin/users/4e4942c7dee1deef99ab8fd9f7350de5/proxy-pool/release
+```
+
+---
+
 ## Webhook
 
 The following _webhook_ endpoints are used to get or set the webhook that will be called whenever a message or event is received. Available event types are:
@@ -342,6 +421,8 @@ Available message types to subscribe to are:
 * HistorySync
 * ChatPresence
 
+If the session has no proxy and the [proxy pool](#user-content-proxy-pool) is in use, a pool proxy is assigned before connecting. If every pool proxy is at capacity, the request fails with `503` (or connects without a proxy when `WUZAPI_PROXY_POOL_FALLBACK=direct`).
+
 If you set Immediate to false, the action will wait 10 seconds to verify a successful login. If Immediate is not set or set to true, it will return immedialty, but you will have to check shortly after the /session/status as your session might be disconnected shortly after started if the session was terminated previously via the phone/device.
 
 Endpoint: _/session/connect_
@@ -374,9 +455,15 @@ Response:
 Disconnects from Whatsapp servers, keeping the session active. This means that if you /session/connect again, it will
 reuse the session and won't require a QR code rescan.
 
+Event subscriptions are **preserved by default**. Pass `clear=true` to also reset them on disconnect.
+
 Endpoint: _/session/disconnect_
 
 Method: **POST**
+
+Query parameters:
+
+* `clear` (optional, boolean): if `true`, clears the user's event subscriptions on disconnect. Defaults to `false` (subscriptions preserved).
 
 
 ```
@@ -637,11 +724,230 @@ Response:
 
 ---
 
+## Get Privacy Settings
+
+Returns the account's current privacy settings.
+
+Endpoint: _/user/privacy_
+
+Method: **GET**
+
+```
+curl -s -X GET -H 'Token: 1234ABCD' http://localhost:8080/user/privacy
+```
+
+Response:
+
+```json
+{
+  "code": 200,
+  "data": {
+    "GroupAdd": "contacts",
+    "LastSeen": "all",
+    "Status": "contacts",
+    "Profile": "all",
+    "ReadReceipts": "all",
+    "CallAdd": "all",
+    "Online": "all",
+    "Messages": "all",
+    "Defense": "off",
+    "Stickers": "contacts"
+  },
+  "success": true
+}
+```
+
+---
+
+## Set Privacy Setting
+
+Updates a single privacy setting.
+
+Endpoint: _/user/privacy_
+
+Method: **POST**
+
+Valid `Name` / `Value` combinations:
+
+| Name | Valid values |
+|------|--------------|
+| `groupadd`, `last`, `status`, `profile` | `all`, `contacts`, `contact_blacklist`, `none` |
+| `readreceipts` | `all`, `none` |
+| `online` | `all`, `match_last_seen` |
+| `calladd` | `all`, `known` |
+
+```
+curl -s -X POST -H 'Token: 1234ABCD' -H 'Content-Type: application/json' --data '{"Name":"last","Value":"contacts"}' http://localhost:8080/user/privacy
+```
+
+Response:
+
+```json
+{
+  "code": 200,
+  "data": {
+    "LastSeen": "contacts"
+  },
+  "success": true
+}
+```
+
+---
+
+## Block User
+
+Blocks a WhatsApp user and returns the updated blocklist.
+
+Endpoint: _/user/block_
+
+Method: **POST**
+
+```
+curl -s -X POST -H 'Token: 1234ABCD' -H 'Content-Type: application/json' --data '{"Phone":"5491155554445"}' http://localhost:8080/user/block
+```
+
+Response:
+
+```json
+{
+  "code": 200,
+  "data": {
+    "Details": "User blocked",
+    "JID": "5491155554445@s.whatsapp.net",
+    "Blocklist": [
+      "5491155554445@s.whatsapp.net"
+    ],
+    "DHash": "1234567890"
+  },
+  "success": true
+}
+```
+
+---
+
+## Unblock User
+
+Unblocks a WhatsApp user and returns the updated blocklist.
+
+Endpoint: _/user/unblock_
+
+Method: **POST**
+
+```
+curl -s -X POST -H 'Token: 1234ABCD' -H 'Content-Type: application/json' --data '{"Phone":"5491155554445"}' http://localhost:8080/user/unblock
+```
+
+Response:
+
+```json
+{
+  "code": 200,
+  "data": {
+    "Details": "User unblocked",
+    "JID": "5491155554445@s.whatsapp.net",
+    "Blocklist": [],
+    "DHash": "1234567891"
+  },
+  "success": true
+}
+```
+
+---
+
+## Get Blocklist
+
+Returns the list of WhatsApp users currently blocked by the session.
+
+Endpoint: _/user/blocklist_
+
+Method: **GET**
+
+```
+curl -s -X GET -H 'Token: 1234ABCD' http://localhost:8080/user/blocklist
+```
+
+Response:
+
+```json
+{
+  "code": 200,
+  "data": {
+    "Blocklist": [
+      "5491155554445@s.whatsapp.net"
+    ],
+    "DHash": "1234567890"
+  },
+  "success": true
+}
+```
+
+---
+
 
 # Chat
 
-The following _chat_ endpoints are used to send messages or mark them as read or indicating composing/not composing presence. The sample response is listed only once, as it is the
-same for all message types.
+Chat endpoints support sending, deleting and editing messages, read receipts, and presence.
+
+## Delete a message
+
+*POST /chat/delete*
+
+`Phone` identifies the chat and `Id` identifies the original message. Omit the
+optional `SenderJID`, or send an empty string, to delete your own message:
+
+```json
+{
+  "Phone": "5491155553934",
+  "Id": "AABBCC11223344"
+}
+```
+
+To delete another participant's message, the connected WhatsApp account must be
+an administrator of the group. Use the full group JID as `Phone` and the original
+author's JID from the message event as `SenderJID`:
+
+```json
+{
+  "Phone": "120363000000000000@g.us",
+  "Id": "AABBCC11223344",
+  "SenderJID": "5491155553935@s.whatsapp.net"
+}
+```
+
+`SenderJID` accepts numeric phone-number JIDs (`@s.whatsapp.net`) and LIDs
+(`@lid`). Legacy `@c.us` is normalized to `@s.whatsapp.net`. Valid device/agent
+suffixes are removed. PN and LID are not automatically interconverted: use the
+identity provided by the original message. Supplying the account's own PN or LID
+also deletes an own message, including in a direct chat, without requiring group
+administrator privileges.
+
+Incomplete JIDs, bare numbers, whitespace, invalid device/agent suffixes, multiple
+`@` signs, and group/broadcast/newsletter sender JIDs return HTTP `400`. Specifying
+another sender outside a group also returns `400`. WhatsApp enforces the actual
+deletion permissions and applicable restrictions; local validation does not grant
+administrator privileges.
+
+A successful request retains the existing response format:
+
+```json
+{
+  "code": 200,
+  "data": {
+    "Details": "Deleted",
+    "Timestamp": 1700000000,
+    "Id": "AABBCC11223344"
+  },
+  "success": true
+}
+```
+
+In stdio mode, the same fields are supported by `chat.delete`, alongside the
+session's `token`:
+
+```json
+{"jsonrpc":"2.0","id":"delete-1","method":"chat.delete","params":{"token":"YOUR_USER_TOKEN","Phone":"120363000000000000@g.us","Id":"AABBCC11223344","SenderJID":"987654321@lid"}}
+```
+
 
 ## Send Text Message
 
@@ -700,6 +1006,94 @@ curl -X POST -H 'Token: 1234ABCD' -H 'Content-Type: application/json' --data '{"
 
 ---
 
+## Send Carousel Message
+
+*POST /chat/send/carousel* — stdio: `chat.send.carousel`
+
+Sends one native horizontal carousel to a direct phone-number or LID chat.
+Each card contains an image, body text and buttons. Groups, broadcasts,
+newsletters and bots are not supported by this endpoint.
+
+Send the user token in the `Token` header:
+
+```sh
+curl -X POST http://localhost:8080/chat/send/carousel \
+  -H 'Token: YOUR_USER_TOKEN' -H 'Content-Type: application/json' \
+  --data @carousel.json
+```
+
+Example `carousel.json` (replace the image URLs with your own):
+
+```json
+{
+  "Phone": "15555550100",
+  "Id": "carousel-example-1",
+  "Body": "Choose a destination",
+  "Cards": [
+    {
+      "Body": "Summit",
+      "Image": "https://example.com/summit.jpg",
+      "Buttons": [{"type": "reply", "title": "Choose", "id": "summit"}]
+    },
+    {
+      "Body": "Coast",
+      "Image": "https://example.com/coast.png",
+      "Buttons": [{"type": "cta_url", "title": "Details", "url": "https://example.com/coast"}]
+    }
+  ]
+}
+```
+
+Supported input limits (application limits, not WhatsApp delivery guarantees):
+
+| Field | Supported values |
+| --- | --- |
+| `Phone` | Bare phone number or direct `@s.whatsapp.net` / `@lid` JID; existing cached PN/LID resolution applies |
+| `Id` | Optional; generated when omitted. At most 128 printable ASCII bytes, without whitespace |
+| `Body` | 1–1,024 characters, not only whitespace |
+| `Cards` | 2–10 ordered entries |
+| Card `Body` | 1–160 characters, not only whitespace |
+| Card `Image` | JPEG/PNG data URL or HTTP(S) URL; 16 MiB total decoded/source image bytes per request, at most 4,096 pixels per side and 16 megapixels |
+| Card `Buttons` | 1–3 per card; `title` is 1–20 characters without controls |
+| `reply` button | Default when type is omitted or empty; explicit `id` of 1–200 characters without controls, unique across all cards |
+| `cta_url` button | Absolute HTTP(S) `url`, at most 2,048 bytes, without credentials, controls or whitespace |
+| `cta_call` button | `phone_number`: 6–15 digits with an optional leading `+` |
+
+Use only the action fields for the selected button type. Unsupported fields,
+actions and trailing JSON are rejected; cards and button labels are never
+silently dropped or truncated. The HTTP JSON body is limited to 24 MiB.
+Stdio retains its existing 512-KiB line limit, so prefer image URLs there.
+
+All cards and image contents are validated before uploading any image. If an
+upload fails, no final message is sent, although earlier media uploads may
+already exist. Success creates one outgoing history entry (when history is
+enabled) and one sent-message event containing the full carousel.
+
+Input errors return 400, oversized JSON returns 413, and local IO/upload
+failures return 500 with a card-scoped error. Canceled or expired preparation
+returns 503/504. An upload failure says `message not sent`; only errors after
+dispatch say `delivery unconfirmed`. Never treat those two outcomes as equivalent.
+
+The response uses the ordinary send envelope:
+
+```json
+{"code":200,"data":{"Details":"Sent","Timestamp":1700000000,"Id":"carousel-example-1"},"success":true}
+```
+
+**Delivery and retry limitations:** `Sent` means WhatsApp acknowledged the
+transport, not that a recipient displayed or read the cards. The pinned
+whatsmeow version does not preserve the interactive `AdditionalNodes` when
+answering a recipient's retry receipt, so retransmitted carousels may not
+render. Client rendering and recovery require real-device verification.
+
+Preparation has a 45-second budget, followed by a detached 60-second dispatch
+budget so HTTP cancellation after dispatch does not discard a successful ACK.
+These are not an end-to-end latency guarantee: whatsmeow's internal send lock
+can remain queued beyond the HTTP write deadline. A timeout or error after
+dispatch is ambiguous; the endpoint never automatically replays it. Supply an
+`Id` for correlation and reconcile the outcome before another attempt. Reusing
+an `Id` does not provide idempotency and does not replace an existing history row.
+
 ## Send Audio Message
 
 Sends an Audio message. Audio must be in Opus format and base64 encoded in embedded format.
@@ -730,7 +1124,9 @@ curl -X POST -H 'Token: 1234ABCD' -H 'Content-Type: application/json' --data '{"
 
 ## Send Document Message
 
-Sends a Document message. Any mime type can be attached. A FileName must be supplied in the request body. The Document must be passed as octet-stream in base64 embedded format.
+Sends a Document message. Any mime type can be attached. A FileName must be supplied in the request body. The Document must be passed in base64 embedded format or as an HTTP URL.
+
+The optional MimeType field sets the document type sent to WhatsApp. When omitted, an explicitly declared data URL type or HTTP Content-Type is used. If that type is missing, invalid, `application/octet-stream`, or `binary/octet-stream`, the type is taken from the FileName extension and then from the file contents. A data URL without an explicit type (such as `data:;base64,...`) does not force `text/plain`. An explicit MimeType always takes precedence.
 
 Endpoint: _/chat/send/document_
 
@@ -842,6 +1238,39 @@ curl -X POST -H 'Token: 1234ABCD' -H 'Content-Type: application/json' --data '{"
 
 ---
 
+## Subscribe to Contact Presence
+
+Subscribes to a contact's presence updates (online/offline and last seen). After
+subscribing, your configured webhook receives `Presence` events for that contact. You
+should be online yourself to receive presence. By default WuzAPI sends an available
+presence on connect. When `WUZAPI_AUTO_PRESENCE=unavailable` is configured to preserve
+primary-phone push notifications, set your global presence to available before
+subscribing. Whether `last_seen` is available depends on the contact's privacy settings.
+
+endpoint: _/user/presence/subscribe_
+
+method: **POST**
+
+```
+curl -X POST -H 'Token: 1234ABCD' -H 'Content-Type: application/json' --data '{"Phone":"5491155554444"}' http://localhost:8080/user/presence/subscribe
+```
+
+The resulting webhook `Presence` event looks like:
+
+```json
+{
+  "type": "Presence",
+  "state": "offline",
+  "from": "5491155554444@s.whatsapp.net",
+  "last_seen": 1750000000
+}
+```
+
+`last_seen` is a Unix timestamp, present only when the contact is offline and shares
+their last seen. When the contact is online, only `type`, `from` and `state` are sent.
+
+---
+
 ## Mark message(s) as read
 
 Indicates that one or more messages were read. Id is an array of messages Ids.
@@ -875,6 +1304,91 @@ method: **POST**
 ```
 curl -X POST -H 'Token: 1234ABCD' -H 'Content-Type: application/json' --data '{"Phone":"5491155554444","Body":"❤️","Id":"me:069EDE53E81CB5A4773587FB96CB3ED3"}' http://localhost:8080/chat/react
 ```
+
+---
+
+## Pin / Unpin a message
+
+Pins or unpins an existing message in an individual chat or group. The same endpoint handles both: send `Pin: true` (the default) to pin and `Pin: false` to unpin.
+
+endpoint: _/chat/pin_
+
+method: **POST**
+
+Required headers:
+
+```
+Token: <USER_TOKEN>
+Content-Type: application/json
+```
+
+### Request body
+
+| Field | Required | Type | Description |
+|---|---|---|---|
+| `Chat` | Yes | string | Target chat JID. For groups, the group JID ending in `@g.us`. |
+| `Sender` | Required for groups | string | JID of the original message sender. Required for group messages because the message key includes the participant. Optional for one-to-one chats. |
+| `Id` | Yes | string | WhatsApp message ID of the message to pin or unpin. |
+| `DurationSeconds` | No | integer | How long the message stays pinned. Defaults to `604800`. Only used when pinning. |
+| `Pin` | No | boolean | `true` pins the message, `false` unpins it. Defaults to `true`. |
+
+### Allowed durations
+
+| Duration | Seconds |
+|---|---|
+| 24 hours | `86400` |
+| 7 days | `604800` (default) |
+| 30 days | `2592000` |
+
+When `Pin` is `false`, `DurationSeconds` is ignored.
+
+### Pin a group message for 7 days
+
+```
+curl -X POST -H 'Token: 1234ABCD' -H 'Content-Type: application/json' --data '{"Chat":"120363012345678901@g.us","Sender":"5491123456789@s.whatsapp.net","Id":"3EB0ABCDEF1234567890","DurationSeconds":604800,"Pin":true}' http://localhost:8080/chat/pin
+```
+
+### Pin a group message for 24 hours
+
+```
+curl -X POST -H 'Token: 1234ABCD' -H 'Content-Type: application/json' --data '{"Chat":"120363012345678901@g.us","Sender":"5491123456789@s.whatsapp.net","Id":"3EB0ABCDEF1234567890","DurationSeconds":86400,"Pin":true}' http://localhost:8080/chat/pin
+```
+
+### Unpin a group message
+
+```
+curl -X POST -H 'Token: 1234ABCD' -H 'Content-Type: application/json' --data '{"Chat":"120363012345678901@g.us","Sender":"5491123456789@s.whatsapp.net","Id":"3EB0ABCDEF1234567890","Pin":false}' http://localhost:8080/chat/pin
+```
+
+### Example responses
+
+Pin success:
+
+```json
+{
+  "Details": "Message pinned",
+  "Chat": "120363012345678901@g.us",
+  "Id": "3EB0ABCDEF1234567890",
+  "DurationSeconds": 604800,
+  "Timestamp": "2026-06-18T12:34:56Z"
+}
+```
+
+Unpin success:
+
+```json
+{
+  "Details": "Message unpinned",
+  "Chat": "120363012345678901@g.us",
+  "Id": "3EB0ABCDEF1234567890",
+  "Timestamp": "2026-06-18T12:34:56Z"
+}
+```
+
+### Notes
+
+- For group messages the `Sender` field is mandatory and must be the JID of the original message sender. If it is wrong or missing, WhatsApp may ignore the pin.
+- The linked account must have permission to pin in the target group (if the group restricts pinning to admins, the account must be an admin). The transport may report success even when WhatsApp silently ignores an unauthorized pin.
 
 ---
 
@@ -1163,6 +1677,12 @@ method: **POST**
 curl -s -X POST -H 'Token: 1234ABCD' -H 'Content-Type: application/json' -d '{"name":"My New Group","participants":["5491155553934","5491155553935"]}' http://localhost:8080/group/create 
 ```
 
+Optionally, set who can add participants with `memberaddmode`: `"admin_add"` (only admins) or `"all_member_add"` (any participant). When omitted, whatsmeow's default applies (`all_member_add`).
+
+```
+curl -s -X POST -H 'Token: 1234ABCD' -H 'Content-Type: application/json' -d '{"name":"My New Group","participants":["5491155553934"],"memberaddmode":"admin_add"}' http://localhost:8080/group/create 
+```
+
 Response:
 
 ```json
@@ -1211,6 +1731,32 @@ Response:
   "code": 200,
   "data": {
     "Details": "Group locked setting updated successfully"
+  },
+  "success": true
+}
+```
+
+---
+
+## Set group member add mode
+
+Configures who can add participants to the group: only admins (`admin_add`) or any participant (`all_member_add`)
+
+endpoint: _/group/memberaddmode_
+
+method: **POST**
+
+```
+curl -s -X POST -H 'Token: 1234ABCD' -H 'Content-Type: application/json' -d '{"groupjid":"120362023605733675@g.us","mode":"admin_add"}' http://localhost:8080/group/memberaddmode 
+```
+
+Response:
+
+```json
+{
+  "code": 200,
+  "data": {
+    "Details": "Group member add mode updated successfully"
   },
   "success": true
 }
@@ -1269,6 +1815,89 @@ Response:
   "code": 200,
   "data": {
     "Details": "Group photo removed successfully"
+  },
+  "success": true
+}
+```
+
+---
+
+## List pending join requests
+
+Lists participants who have requested to join the group. Requires join approval mode to be enabled on the group and the session to be a group admin.
+
+endpoint: _/group/requestparticipants_
+
+method: **GET**
+
+```
+curl -s -X GET -H 'Token: 1234ABCD' 'http://localhost:8080/group/requestparticipants?groupJID=120362023605733675@g.us'
+```
+
+Response:
+
+```json
+{
+  "code": 200,
+  "data": [
+    {
+      "JID": "70072425046185@lid",
+      "RequestedAt": "2026-05-27T00:34:40-03:00"
+    }
+  ],
+  "success": true
+}
+```
+
+---
+
+## Approve or reject join requests
+
+Approves or rejects participants who requested to join the group. Use the `JID` values returned by `/group/requestparticipants` in the `Phone` array.
+
+endpoint: _/group/updaterequestparticipants_
+
+method: **POST**
+
+`Action` must be `"approve"` or `"reject"`.
+
+```
+curl -s -X POST -H 'Token: 1234ABCD' -H 'Content-Type: application/json' -d '{"GroupJID":"120362023605733675@g.us","Phone":["70072425046185@lid"],"Action":"approve"}' http://localhost:8080/group/updaterequestparticipants
+```
+
+Response:
+
+```json
+{
+  "code": 200,
+  "data": {
+    "Details": "Group request participants updated successfully"
+  },
+  "success": true
+}
+```
+
+---
+
+## Set group join approval mode
+
+Enables or disables the requirement that new members be approved by an admin before joining the group.
+
+endpoint: _/group/joinapprovalmode_
+
+method: **POST**
+
+```
+curl -s -X POST -H 'Token: 1234ABCD' -H 'Content-Type: application/json' -d '{"groupjid":"120362023605733675@g.us","mode":true}' http://localhost:8080/group/joinapprovalmode
+```
+
+Response:
+
+```json
+{
+  "code": 200,
+  "data": {
+    "Details": "Group join approval mode updated successfully"
   },
   "success": true
 }

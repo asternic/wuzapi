@@ -1097,6 +1097,34 @@
   "success": true
 }</code></pre>
             </div>
+
+            <div class="endpoint">
+                <h3><span class="method post">POST</span> <span class="path">/newsletter/join</span></h3>
+                <p>Follows a WhatsApp channel. <code>NewsletterJID</code> must end in <code>@newsletter</code>.</p>
+                <h4>Body:</h4>
+                <pre><code class="language-json">{
+  "NewsletterJID": "120363144038483540@newsletter"
+}</code></pre>
+            </div>
+
+            <div class="endpoint">
+                <h3><span class="method post">POST</span> <span class="path">/newsletter/leave</span></h3>
+                <p>Unfollows a WhatsApp channel.</p>
+                <h4>Body:</h4>
+                <pre><code class="language-json">{
+  "NewsletterJID": "120363144038483540@newsletter"
+}</code></pre>
+            </div>
+
+            <div class="endpoint">
+                <h3><span class="method post">POST</span> <span class="path">/newsletter/mute</span></h3>
+                <p>Mutes or unmutes channel notifications. Set <code>Mute</code> to <code>true</code> to mute and <code>false</code> to unmute.</p>
+                <h4>Body:</h4>
+                <pre><code class="language-json">{
+  "NewsletterJID": "120363144038483540@newsletter",
+  "Mute": true
+}</code></pre>
+            </div>
         </section>
 
         <section id="admin">

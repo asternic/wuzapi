@@ -98,10 +98,43 @@
             <th>Name</th>
             <th>Connected</th>
             <th>Logged In</th>
+            <th>Proxy</th>
             <th>Actions</th>
           </tr>
         </thead>
         <tbody id="instances-body"></tbody>
+      </table>
+    </div>
+
+    <!-- Proxy Pool -->
+    <div class="ui stackable grid" id="proxyPoolSection">
+      <div class="row">
+        <div class="left floated left aligned ten wide column">
+          <h2 class="ui header">
+            Proxy Pool
+            <div class="sub header">Instances that connect without their own proxy are assigned the least-loaded proxy below and keep it on every reconnect.</div>
+          </h2>
+        </div>
+        <div class="right floated right aligned six wide column">
+          <button class="ui primary button" id="addProxyPoolButton">
+            <i class="plus icon"></i> Add Proxy
+          </button>
+        </div>
+      </div>
+    </div>
+    <div class="ui mb-4">
+      <div class="ui negative message hidden" id="proxyPoolError"></div>
+      <table class="ui celled table" id="proxy-pool-table">
+        <thead>
+          <tr>
+            <th>Label</th>
+            <th>Proxy URL</th>
+            <th>Devices</th>
+            <th>Status</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="proxy-pool-body"></tbody>
       </table>
     </div>
   </div> 
@@ -130,7 +163,7 @@
       <div class="purple card hidden widget" style="cursor: pointer;" id="proxyConfig">
         <div class="content"><a class="ui purple right ribbon label">Config</a>
           <div class="header">Proxy Settings</div>
-          <div class="description">Configure proxy for WhatsApp connections.</div>
+          <div class="description">Configure proxy for WhatsApp and webhook delivery.</div>
         </div>
       </div>
       <div class="purple card hidden widget" style="cursor: pointer;" id="webhookConfig">
@@ -475,7 +508,12 @@
       <div class="ui form">
         <div class="field" id="messageHistoryField">
           <label>History</label>
-          <input id="history" type="number" placeholder="0">
+          <input id="history" type="number" min="0" step="1" placeholder="0">
+        </div>
+        <div class="field">
+          <label>History requested on next pairing (days)</label>
+          <input id="historySyncDays" type="number" min="0" max="365" step="1" value="0">
+          <small>0 uses WhatsApp defaults. Save before starting a new pairing; an existing QR must be restarted. Availability depends on the phone.</small>
         </div>
       </div>
     </div>
@@ -492,7 +530,7 @@
     <div class="content">
       <div class="ui info message">
         <div class="header">Proxy Settings</div>
-        <p>Configure HTTP/HTTPS or SOCKS5 proxy for WhatsApp connections. Useful for network restrictions or enhanced privacy.</p>
+        <p>Configure HTTP/HTTPS or SOCKS5 proxy for WhatsApp connections. Optionally route webhook deliveries through the same proxy or send them directly to your backend.</p>
       </div>
       <div class="ui form">
         <div class="field">
@@ -506,6 +544,13 @@
           <label>Proxy URL</label>
           <input id="proxyUrl" type="text" placeholder="http://proxy.example.com:8080 or socks5://user:pass@proxy.example.com:1080">
           <small>Include protocol (http://, https://, or socks5://) and port. Authentication can be included in URL format.</small>
+        </div>
+        <div class="field" id="proxyWebhookUseProxyField">
+          <div class="ui toggle checkbox" id="proxyWebhookUseProxyToggle">
+            <input type="checkbox" id="proxyWebhookUseProxy" checked>
+            <label>Use proxy for webhook delivery</label>
+          </div>
+          <small>When enabled, outgoing webhook POSTs use the configured proxy. Disable to reach your application backend directly while WhatsApp traffic still uses the proxy.</small>
         </div>
       </div>
     </div>
@@ -650,6 +695,12 @@
           <small>Number of messages to store in history per chat for this instance. Set to 0 to disable message history.</small>
         </div>
 
+        <div class="field">
+          <label>History requested on pairing (days)</label>
+          <input type="number" name="days_to_sync_history" min="0" max="365" step="1" value="0">
+          <small>0 uses WhatsApp defaults. Separate from the number of messages retained per chat.</small>
+        </div>
+
         <!-- Proxy Configuration -->
         <h4 class="ui dividing header">Proxy Configuration (Optional)</h4>
         <div class="field">
@@ -663,6 +714,13 @@
           <label>Proxy URL</label>
           <input type="text" name="proxy_url" placeholder="http://proxy.example.com:8080 or socks5://user:pass@proxy.example.com:1080">
           <small>Include protocol (http://, https://, or socks5://) and port. Authentication can be included in URL format.</small>
+        </div>
+        <div class="field" id="addInstanceProxyWebhookUseProxyField" style="display: none;">
+          <div class="ui toggle checkbox" id="addInstanceProxyWebhookUseProxyToggle">
+            <input type="checkbox" name="proxy_webhook_use_proxy" checked>
+            <label>Use proxy for webhook delivery</label>
+          </div>
+          <small>Disable to send webhooks directly to your backend while WhatsApp traffic uses the proxy.</small>
         </div>
 
         <!-- S3 Configuration -->
@@ -792,6 +850,52 @@
         Yes
         <i class="checkmark icon"></i>
       </div>
+    </div>
+  </div>
+
+  <!-- Proxy Pool Modals -->
+  <div class="ui small modal" id="modalProxyPoolEntry"><i class="close icon"></i>
+    <div class="header" id="proxyPoolModalTitle">Add Proxy</div>
+    <div class="content">
+      <div class="ui negative message hidden" id="proxyPoolFormError"></div>
+      <form class="ui form" id="proxyPoolForm" onsubmit="return false;">
+        <div class="field">
+          <label>Label</label>
+          <input type="text" id="proxyPoolLabel" placeholder="residential-1">
+        </div>
+        <div class="required field">
+          <label>Proxy URL</label>
+          <input type="text" id="proxyPoolUrl" placeholder="socks5://user:pass@203.0.113.10:1080 or http://203.0.113.10:3128">
+          <small id="proxyPoolUrlHelp">Only http:// and socks5:// proxies are supported.</small>
+        </div>
+        <div class="required field">
+          <label>Max devices</label>
+          <input type="number" id="proxyPoolMaxDevices" min="1" value="1">
+          <small>How many instances may be assigned to this proxy.</small>
+        </div>
+        <div class="field">
+          <div class="ui toggle checkbox" id="proxyPoolEnabledToggle">
+            <input type="checkbox" id="proxyPoolEnabled" checked>
+            <label>Enabled</label>
+          </div>
+          <small>Disabled proxies keep their current instances but receive no new ones.</small>
+        </div>
+      </form>
+    </div>
+    <div class="actions">
+      <div class="ui cancel button secondary">Cancel</div>
+      <div class="ui positive right labeled icon button">Save<i class="checkmark icon"></i></div>
+    </div>
+  </div>
+
+  <div class="ui small modal" id="modalDeleteProxyPoolEntry">
+    <div class="header">Delete Proxy</div>
+    <div class="content">
+      <p>Are you sure you want to remove <b id="deleteProxyPoolLabel"></b> from the pool?</p>
+    </div>
+    <div class="actions">
+      <div class="ui negative button">No</div>
+      <div class="ui positive right labeled icon button">Yes<i class="checkmark icon"></i></div>
     </div>
   </div>
 
@@ -1295,9 +1399,48 @@
     </div>
   </div>
 
+  <!-- Passkey Pairing Modal -->
+  <div class="ui modal" id="modalPasskeyPairing"><i class="close icon"></i>
+    <div class="header">
+      <i class="key icon"></i> Passkey Pairing
+    </div>
+    <div class="content">
+      <div class="ui warning message">
+        <div class="header">
+          <i class="info circle icon"></i> Passkey Authentication Required
+        </div>
+        <p>After scanning the QR code, WhatsApp requested passkey verification. Follow the steps below to complete the connection.</p>
+      </div>
+
+      <h4 class="ui header">Step 1 — Copy and run the code in your browser console</h4>
+      <p>Open <strong>https://web.whatsapp.com</strong>, press <kbd style="padding:2px 6px;border:1px solid #ccc;border-radius:3px;background:#f5f5f5;">F12</kbd>, paste in the console and press <kbd style="padding:2px 6px;border:1px solid #ccc;border-radius:3px;background:#f5f5f5;">Enter</kbd>.</p>
+      <div class="ui segment" style="position:relative;">
+        <pre id="passkeyCodeBlock" style="max-height:200px;overflow:auto;white-space:pre-wrap;word-break:break-all;background:#1e1e1e;color:#d4d4d4;padding:12px;border-radius:4px;font-size:12px;">Loading...</pre>
+        <button class="ui small button" style="position:absolute;top:8px;right:8px;" onclick="copyPasskeyCode()">
+          <i class="copy icon"></i> Copy
+        </button>
+      </div>
+
+      <h4 class="ui header" style="margin-top:20px;">Step 2 — Paste the console result here</h4>
+      <div class="ui form">
+        <div class="field">
+          <textarea id="passkeyResponseInput" rows="4" placeholder='Paste the JSON returned by the console here...'></textarea>
+        </div>
+      </div>
+    </div>
+    <div class="actions">
+      <div class="ui cancel button secondary">Close</div>
+      <div class="ui positive right labeled icon button" id="sendPasskeyBtn" onclick="submitPasskeyResponse()">
+        Send Response
+        <i class="checkmark icon"></i>
+      </div>
+    </div>
+  </div>
+
   <script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/fomantic-ui@2.9.4/dist/semantic.min.js"></script>
-  <script src="js/app.js"></script>
+  <script src="js/app.js?v=proxy-pool-4"></script>
   <script src="js/groups.js"></script>
+  <script src="js/proxypool.js?v=proxy-pool-4"></script>
 </body>
 </html>

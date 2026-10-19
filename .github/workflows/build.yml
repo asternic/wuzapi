@@ -2,7 +2,7 @@ name: Build and Test
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ main, develop, update/** ]
   pull_request:
     branches: [ main, develop ]
   workflow_dispatch:
@@ -11,15 +11,28 @@ jobs:
   build:
     name: Build Go Application
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: wuzapi-test-only
+          POSTGRES_DB: wuzapi_test
+        ports:
+          - 5432/tcp
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     
     steps:
     - name: Checkout code
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
 
     - name: Set up Go
       uses: actions/setup-go@v5
       with:
-        go-version: '1.25.0'
+        go-version: '1.26.0'
         cache: true
 
     - name: Download dependencies
@@ -41,6 +54,11 @@ jobs:
 
     - name: Run go vet
       run: go vet ./...
+
+    - name: Run tests with race detection and PostgreSQL regressions
+      env:
+        WUZAPI_TEST_POSTGRES_DSN: postgres://postgres:wuzapi-test-only@localhost:${{ job.services.postgres.ports[5432] }}/wuzapi_test?sslmode=disable
+      run: go test -race ./...
 
     - name: Build application
       run: go build -v -o wuzapi
