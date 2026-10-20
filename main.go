@@ -371,7 +371,7 @@ func main() {
 		Str("queue", *webhookErrorQueueName).
 		Msg("Webhook Retry Configured")
 
-	// Novo bloco para sobrescrever o osName pelo ENV, se existir
+	// Override the OS name from the environment when configured.
 	if v := os.Getenv("SESSION_DEVICE_NAME"); v != "" {
 		*osName = v
 	}

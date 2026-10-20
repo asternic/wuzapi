@@ -332,6 +332,8 @@ To interact with the API, you must include the `Authorization` header in HTTP re
 * A sample web page to connect and scan QR codes at [/login](/login)
 * A fully featured Dashboard to create, manage and test instances at [/dashboard](dashboard)
 
+Message send endpoints accept full phone-number, LID (`@lid`), and group JIDs where supported, in addition to international phone digits. Preserve the full chat JID when replying. See [message destinations and stdio examples](API.md#message-destinations-phone) for resolution rules and unsupported formats.
+
 ## ADMIN Actions
 
 You can list, add and remove users using the admin endpoints. For that you must use the WUZAPI_ADMIN_TOKEN in the Authorization header

@@ -12,6 +12,27 @@ The API supports two authentication methods:
 
 ---
 
+## Message destinations (`Phone`)
+
+For message send endpoints using `Phone`, the field accepts a destination identifier, not only a telephone number:
+
+- International phone digits, such as `5491155554444`. A single leading `+` and surrounding whitespace remain accepted. Do not include spaces, parentheses, or hyphens inside a bare number.
+- A full phone-number JID, such as `5491155554444@s.whatsapp.net`.
+- A full LID JID, such as `987654321012345@lid`. Use the complete JID received in an event; a LID is not a telephone number and may have no known phone mapping.
+- A full group JID, such as `120363000000000000@g.us`, where the endpoint supports groups. Endpoint-specific restrictions still apply (for example, carousels only accept direct account destinations).
+
+Full JIDs retain their existing routing semantics. Bare numeric identifiers use the session's cached PN/LID mappings; unknown values retain the phone-number fallback. If a bare identifier matches both a PN and a LID, specify `@s.whatsapp.net` or `@lid` explicitly. Keep identifiers as JSON strings to preserve leading zeroes and large values.
+
+The current WuzAPI `Phone` field does not resolve literal usernames (such as `@alice`) or Cloud API BSUIDs (such as `US.13491208655302741918`) into WhatsApp Web destinations. This does not prevent replying to an account with a hidden phone number: use the full chat JID received through the linked WhatsApp session, including `@lid` when provided. Do not manufacture a JID by appending a server suffix to a username or BSUID; this API has no supported conversion for those values. If only a username or a Cloud API BSUID is available, a supported identifier-resolution mechanism or the corresponding Cloud API integration is needed. Malformed destinations are rejected by message destination validation; validation does not verify that an account exists or that a message was delivered.
+
+The same rules apply to `params.Phone` for mapped stdio methods such as `chat.send.text`:
+
+```json
+{"jsonrpc":"2.0","id":"send-1","method":"chat.send.text","params":{"token":"YOUR_USER_TOKEN","Phone":"987654321012345@lid","Body":"Hello"}}
+```
+
+For replies, preserve the full chat JID supplied by the incoming event instead of stripping its suffix or requiring a telephone number. A successful send response is not a delivery receipt; use delivery/read events to track delivery.
+
 ## Admin Endpoints (User Management)
 
 The following admin-only endpoints are used to manage users in the system. All require the Authorization header with the admin token (WUZAPI_ADMIN_TOKEN).
