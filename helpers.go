@@ -24,6 +24,8 @@ import (
 	"runtime/debug"
 	"strings"
 	"sync"
+	"unicode"
+	"unicode/utf8"
 
 	"time"
 
@@ -145,6 +147,81 @@ var (
 	openGraphCache = cache.New(5*time.Minute, 10*time.Minute) // Cache Open Graph data for 5 minutes, cleanup every 10 minutes
 
 )
+
+// mentionRegex locates candidates; boundaries below exclude email addresses,
+// URL paths, and numeric prefixes of longer tokens.
+var mentionRegex = regexp.MustCompile(`@(\d+)`)
+
+// extractMentionJIDs finds standalone @phone tokens in visible message text.
+func extractMentionJIDs(text string) []string {
+	matches := mentionRegex.FindAllStringSubmatchIndex(text, -1)
+	seen := make(map[string]bool)
+	var jids []string
+	for _, m := range matches {
+		// Ignore candidates anywhere inside a URL token, including paths that
+		// put an opening parenthesis immediately before the @ sign.
+		tokenStart := 0
+		if space := strings.LastIndexFunc(text[:m[0]], unicode.IsSpace); space >= 0 {
+			_, size := utf8.DecodeRuneInString(text[space:])
+			tokenStart = space + size
+		}
+		tokenEnd := len(text)
+		if end := strings.IndexFunc(text[m[1]:], unicode.IsSpace); end >= 0 {
+			tokenEnd = m[1] + end
+		}
+		token := strings.ToLower(text[tokenStart:tokenEnd])
+		if strings.Contains(token, "://") || strings.Contains(token, "www.") || strings.Contains(token, "mailto:") {
+			continue
+		}
+		if m[0] > 0 {
+			previous, _ := utf8.DecodeLastRuneInString(text[:m[0]])
+			if !unicode.IsSpace(previous) && !strings.ContainsRune("([{,;!?\"'“‘", previous) {
+				continue
+			}
+		}
+		if m[1] < len(text) {
+			next, size := utf8.DecodeRuneInString(text[m[1]:])
+			if next == '.' {
+				// A sentence-ending period is allowed, but a domain suffix is not.
+				rest := text[m[1]+size:]
+				if rest != "" {
+					after, _ := utf8.DecodeRuneInString(rest)
+					if !unicode.IsSpace(after) && !strings.ContainsRune(")]}\"'”’", after) {
+						continue
+					}
+				}
+			} else if !unicode.IsSpace(next) && !strings.ContainsRune(")]},;!?\"'”’", next) {
+				continue
+			}
+		}
+		jid := text[m[2]:m[3]] + "@s.whatsapp.net"
+		if !seen[jid] {
+			seen[jid] = true
+			jids = append(jids, jid)
+		}
+	}
+	return jids
+}
+
+// mergeMentionJIDs combines explicitly provided MentionedJID entries with
+// @phone mentions auto-detected from the message text, deduplicated.
+func mergeMentionJIDs(explicit []string, text string) []string {
+	seen := make(map[string]bool)
+	var out []string
+	for _, jid := range explicit {
+		if !seen[jid] {
+			seen[jid] = true
+			out = append(out, jid)
+		}
+	}
+	for _, jid := range extractMentionJIDs(text) {
+		if !seen[jid] {
+			seen[jid] = true
+			out = append(out, jid)
+		}
+	}
+	return out
+}
 
 func Find(slice []string, val string) bool {
 	for _, item := range slice {

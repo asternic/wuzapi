@@ -710,6 +710,9 @@ func (s *server) Logout() http.HandlerFunc {
 					return
 				} else {
 					log.Info().Str("jid", jid).Msg("Logged out")
+					if err := s.setDisconnectedState(txtid, false); err != nil {
+						log.Error().Err(err).Str("user_id", txtid).Msg("Failed to persist logout state")
+					}
 					clientManager.DeleteWhatsmeowClient(txtid)
 					signalKill(txtid)
 				}
@@ -1075,6 +1078,7 @@ func (s *server) SendDocument() http.HandlerFunc {
 		Id            string
 		MimeType      string
 		ContextInfo   waE2E.ContextInfo
+		MentionAll    bool
 		QuotedMessage *waE2E.Message `json:"QuotedMessage,omitempty"`
 	}
 
@@ -1187,11 +1191,16 @@ func (s *server) SendDocument() http.HandlerFunc {
 				}
 			}
 		}
-		if t.ContextInfo.MentionedJID != nil {
+		mentions, err := resolveAllMentions(r.Context(), recipient, t.ContextInfo.MentionedJID, t.Caption, t.MentionAll, clientManager.GetWhatsmeowClient(txtid).GetGroupInfo)
+		if err != nil {
+			s.Respond(w, r, http.StatusBadRequest, err)
+			return
+		}
+		if jids := mergeMentionJIDs(mentions, t.Caption); len(jids) > 0 {
 			if msg.DocumentMessage.ContextInfo == nil {
 				msg.DocumentMessage.ContextInfo = &waE2E.ContextInfo{}
 			}
-			msg.DocumentMessage.ContextInfo.MentionedJID = t.ContextInfo.MentionedJID
+			msg.DocumentMessage.ContextInfo.MentionedJID = jids
 		}
 
 		if t.ContextInfo.IsForwarded != nil && *t.ContextInfo.IsForwarded {
@@ -1368,6 +1377,7 @@ func (s *server) SendAudio() http.HandlerFunc {
 			}
 		}
 
+		// Audio captions are not included in the outgoing message.
 		if t.ContextInfo.MentionedJID != nil {
 			if msg.AudioMessage.ContextInfo == nil {
 				msg.AudioMessage.ContextInfo = &waE2E.ContextInfo{}
@@ -1438,6 +1448,7 @@ func (s *server) SendImage() http.HandlerFunc {
 		Id            string
 		MimeType      string
 		ContextInfo   waE2E.ContextInfo
+		MentionAll    bool
 		QuotedMessage *waE2E.Message `json:"QuotedMessage,omitempty"`
 	}
 
@@ -1553,11 +1564,16 @@ func (s *server) SendImage() http.HandlerFunc {
 			}
 		}
 
-		if t.ContextInfo.MentionedJID != nil {
+		mentions, err := resolveAllMentions(r.Context(), recipient, t.ContextInfo.MentionedJID, t.Caption, t.MentionAll, clientManager.GetWhatsmeowClient(txtid).GetGroupInfo)
+		if err != nil {
+			s.Respond(w, r, http.StatusBadRequest, err)
+			return
+		}
+		if jids := mergeMentionJIDs(mentions, t.Caption); len(jids) > 0 {
 			if msg.ImageMessage.ContextInfo == nil {
 				msg.ImageMessage.ContextInfo = &waE2E.ContextInfo{}
 			}
-			msg.ImageMessage.ContextInfo.MentionedJID = t.ContextInfo.MentionedJID
+			msg.ImageMessage.ContextInfo.MentionedJID = jids
 		}
 
 		if t.ContextInfo.IsForwarded != nil && *t.ContextInfo.IsForwarded {
@@ -1768,6 +1784,7 @@ func (s *server) SendVideo() http.HandlerFunc {
 		JPEGThumbnail []byte
 		MimeType      string
 		ContextInfo   waE2E.ContextInfo
+		MentionAll    bool
 		QuotedMessage *waE2E.Message `json:"QuotedMessage,omitempty"`
 	}
 
@@ -1876,11 +1893,16 @@ func (s *server) SendVideo() http.HandlerFunc {
 				}
 			}
 		}
-		if t.ContextInfo.MentionedJID != nil {
+		mentions, err := resolveAllMentions(r.Context(), recipient, t.ContextInfo.MentionedJID, t.Caption, t.MentionAll, clientManager.GetWhatsmeowClient(txtid).GetGroupInfo)
+		if err != nil {
+			s.Respond(w, r, http.StatusBadRequest, err)
+			return
+		}
+		if jids := mergeMentionJIDs(mentions, t.Caption); len(jids) > 0 {
 			if msg.VideoMessage.ContextInfo == nil {
 				msg.VideoMessage.ContextInfo = &waE2E.ContextInfo{}
 			}
-			msg.VideoMessage.ContextInfo.MentionedJID = t.ContextInfo.MentionedJID
+			msg.VideoMessage.ContextInfo.MentionedJID = jids
 		}
 
 		if t.ContextInfo.IsForwarded != nil && *t.ContextInfo.IsForwarded {
@@ -2754,6 +2776,7 @@ func (s *server) SendMessage() http.HandlerFunc {
 		LinkPreview   bool
 		Id            string
 		ContextInfo   waE2E.ContextInfo
+		MentionAll    bool
 		QuotedText    string         `json:"QuotedText,omitempty"`
 		QuotedMessage *waE2E.Message `json:"QuotedMessage,omitempty"`
 	}
@@ -2851,11 +2874,16 @@ func (s *server) SendMessage() http.HandlerFunc {
 				QuotedMessage: qm,
 			}
 		}
-		if t.ContextInfo.MentionedJID != nil {
+		mentions, err := resolveAllMentions(r.Context(), recipient, t.ContextInfo.MentionedJID, t.Body, t.MentionAll, clientManager.GetWhatsmeowClient(txtid).GetGroupInfo)
+		if err != nil {
+			s.Respond(w, r, http.StatusBadRequest, err)
+			return
+		}
+		if jids := mergeMentionJIDs(mentions, t.Body); len(jids) > 0 {
 			if msg.ExtendedTextMessage.ContextInfo == nil {
 				msg.ExtendedTextMessage.ContextInfo = &waE2E.ContextInfo{}
 			}
-			msg.ExtendedTextMessage.ContextInfo.MentionedJID = t.ContextInfo.MentionedJID
+			msg.ExtendedTextMessage.ContextInfo.MentionedJID = jids
 		}
 		if t.ContextInfo.IsForwarded != nil && *t.ContextInfo.IsForwarded {
 			if msg.ExtendedTextMessage.ContextInfo == nil {
@@ -3052,6 +3080,7 @@ func (s *server) SendEditMessage() http.HandlerFunc {
 		Body        string
 		Id          string
 		ContextInfo waE2E.ContextInfo
+		MentionAll  bool
 	}
 
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -3111,11 +3140,16 @@ func (s *server) SendEditMessage() http.HandlerFunc {
 				QuotedMessage: &waE2E.Message{Conversation: proto.String("")},
 			}
 		}
-		if t.ContextInfo.MentionedJID != nil {
+		mentions, err := resolveAllMentions(r.Context(), recipient, t.ContextInfo.MentionedJID, t.Body, t.MentionAll, clientManager.GetWhatsmeowClient(txtid).GetGroupInfo)
+		if err != nil {
+			s.Respond(w, r, http.StatusBadRequest, err)
+			return
+		}
+		if jids := mergeMentionJIDs(mentions, t.Body); len(jids) > 0 {
 			if msg.ExtendedTextMessage.ContextInfo == nil {
 				msg.ExtendedTextMessage.ContextInfo = &waE2E.ContextInfo{}
 			}
-			msg.ExtendedTextMessage.ContextInfo.MentionedJID = t.ContextInfo.MentionedJID
+			msg.ExtendedTextMessage.ContextInfo.MentionedJID = jids
 		}
 
 		resp, err = sendMessageWithRecovery(txtid, clientManager.GetWhatsmeowClient(txtid), context.Background(), recipient, clientManager.GetWhatsmeowClient(txtid).BuildEdit(recipient, msgid, msg))
@@ -4576,6 +4610,14 @@ func (s *server) PinMessage() http.HandlerFunc {
 
 // Mark messages as read
 func (s *server) MarkRead() http.HandlerFunc {
+	return s.markReceipt(types.ReceiptTypeRead)
+}
+
+func (s *server) MarkPlayed() http.HandlerFunc {
+	return s.markReceipt(types.ReceiptTypePlayed)
+}
+
+func (s *server) markReceipt(receiptType types.ReceiptType) http.HandlerFunc {
 
 	type markReadStruct struct {
 		Id          []string
@@ -4636,13 +4678,17 @@ func (s *server) MarkRead() http.HandlerFunc {
 			return
 		}
 
-		err = clientManager.GetWhatsmeowClient(txtid).MarkRead(context.Background(), t.Id, time.Now(), jidChat, jidSender)
+		if receiptType == types.ReceiptTypePlayed && jidChat.Server == types.GroupServer && jidSender.IsEmpty() {
+			s.Respond(w, r, http.StatusBadRequest, errors.New("SenderPhone is required for group played receipts"))
+			return
+		}
+		err = clientManager.GetWhatsmeowClient(txtid).MarkRead(r.Context(), t.Id, time.Now(), jidChat, jidSender, receiptType)
 		if err != nil {
 			s.Respond(w, r, http.StatusInternalServerError, errors.New("failure marking messages as read"))
 			return
 		}
 
-		response := map[string]interface{}{"Details": "Message(s) marked as read"}
+		response := map[string]interface{}{"Details": "Message(s) marked as " + string(receiptType)}
 		responseJson, err := json.Marshal(response)
 		if err != nil {
 			s.Respond(w, r, http.StatusInternalServerError, err)
@@ -6488,6 +6534,12 @@ func (s *server) DeleteUserComplete() http.HandlerFunc {
 			return
 		}
 
+		if err := reserveSessionDeletion(id); err != nil {
+			s.respondWithJSON(w, http.StatusConflict, map[string]interface{}{"code": http.StatusConflict, "success": false, "error": err.Error()})
+			return
+		}
+		defer releaseSessionDeletion(id)
+
 		// Get user info before deletion
 		var uname, jid, token string
 		err = s.db.QueryRow("SELECT name, jid, token FROM users WHERE id = $1", id).Scan(&uname, &jid, &token)
@@ -6496,15 +6548,37 @@ func (s *server) DeleteUserComplete() http.HandlerFunc {
 			// Continue anyway since we have the ID
 		}
 
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cleanupCancel()
+
 		// 1. Logout and disconnect instance
 		clientManager.stopSocketRecovery(id, false)
 		if client := clientManager.GetWhatsmeowClient(id); client != nil {
 			if client.IsConnected() {
 				log.Info().Str("id", id).Msg("Logging out user")
-				client.Logout(context.Background())
+				if err := client.Logout(cleanupCtx); err != nil {
+					log.Warn().Err(err).Str("user_id", id).Msg("Remote logout failed; deleting local credentials")
+				}
 			}
 			log.Info().Str("id", id).Msg("Disconnecting from WhatsApp")
 			client.Disconnect()
+		}
+
+		// Stop the session owner before deleting credentials. Keep the user row
+		// if cleanup cannot establish an exact device or the store is unavailable.
+		signalKill(id)
+		if err := waitForSessionStop(cleanupCtx, id); err != nil {
+			s.respondWithJSON(w, http.StatusConflict, map[string]interface{}{"code": http.StatusConflict, "success": false, "error": "session is still stopping; retry full deletion"})
+			return
+		}
+		if err := s.deleteSessionDevice(cleanupCtx, id); err != nil {
+			log.Error().Err(err).Str("user_id", id).Msg("Failed to delete persisted device")
+			status := http.StatusInternalServerError
+			if errors.Is(err, errAmbiguousSessionDevice) {
+				status = http.StatusConflict
+			}
+			s.respondWithJSON(w, status, map[string]interface{}{"code": status, "success": false, "error": "could not safely remove device credentials; user retained"})
+			return
 		}
 
 		// 2. Query S3 config before deleting the user

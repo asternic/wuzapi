@@ -314,12 +314,18 @@ func (ss *stdioServer) routeRequest(req *jsonRpcRequest) {
 	case "chat.send.contact":
 		httpMethod = "POST"
 		httpPath = "/chat/send/contact"
+	case "chat.poll.vote":
+		httpMethod = "POST"
+		httpPath = "/chat/poll/vote"
 	case "chat.send.poll":
 		httpMethod = "POST"
 		httpPath = "/chat/send/poll"
 	case "chat.send.buttons":
 		httpMethod = "POST"
 		httpPath = "/chat/send/buttons"
+	case "chat.send.carousel":
+		httpMethod = "POST"
+		httpPath = "/chat/send/carousel"
 	case "chat.send.list":
 		httpMethod = "POST"
 		httpPath = "/chat/send/list"
@@ -338,6 +344,30 @@ func (ss *stdioServer) routeRequest(req *jsonRpcRequest) {
 	case "chat.presence":
 		httpMethod = "POST"
 		httpPath = "/chat/presence"
+	case "labels.edit":
+		httpMethod = "POST"
+		httpPath = "/labels/edit"
+	case "labels.chat":
+		httpMethod = "POST"
+		httpPath = "/labels/chat"
+	case "labels.message":
+		httpMethod = "POST"
+		httpPath = "/labels/message"
+	case "chat.mute":
+		httpMethod = "POST"
+		httpPath = "/chat/mute"
+	case "chat.unread":
+		httpMethod = "POST"
+		httpPath = "/chat/unread"
+	case "chat.pinchat":
+		httpMethod = "POST"
+		httpPath = "/chat/pinchat"
+	case "chat.star":
+		httpMethod = "POST"
+		httpPath = "/chat/star"
+	case "chat.markplayed":
+		httpMethod = "POST"
+		httpPath = "/chat/markplayed"
 	case "chat.markread":
 		httpMethod = "POST"
 		httpPath = "/chat/markread"
@@ -376,6 +406,9 @@ func (ss *stdioServer) routeRequest(req *jsonRpcRequest) {
 	case "user.presence":
 		httpMethod = "POST"
 		httpPath = "/user/presence"
+	case "user.business-profile":
+		httpMethod = "POST"
+		httpPath = "/user/business-profile"
 	case "user.info":
 		httpMethod = "POST"
 		httpPath = "/user/info"
@@ -500,7 +533,21 @@ func (ss *stdioServer) executeHTTPHandler(req *jsonRpcRequest, httpMethod, httpP
 	// Create a mock HTTP request
 	var body io.Reader
 	if req.Params != nil && len(req.Params) > 0 {
-		jsonParams, err := json.Marshal(req.Params)
+		// Strict endpoints accept authentication only in headers. Keep legacy
+		// payloads intact: admin user creation uses token as a data field.
+		strictPayload := false
+		switch httpPath {
+		case "/chat/mute", "/chat/unread", "/labels/edit", "/labels/chat", "/labels/message", "/chat/poll/vote", "/user/business-profile":
+			strictPayload = true
+		}
+		payload := make(map[string]interface{}, len(req.Params))
+		for key, value := range req.Params {
+			if strictPayload && (key == "token" || key == "adminToken") {
+				continue
+			}
+			payload[key] = value
+		}
+		jsonParams, err := json.Marshal(payload)
 		if err != nil {
 			ss.sendError(req.ID, 400, fmt.Sprintf("invalid params: %v", err))
 			return

@@ -235,6 +235,7 @@
             <a class="nav-link" href="#webhook">Webhook</a>
             <a class="nav-link" href="#chat">Chat</a>
             <a class="nav-link" href="#user">User</a>
+            <a class="nav-link" href="#labels">Labels</a>
             <a class="nav-link" href="#group">Group</a>
             <a class="nav-link" href="#admin">Admin</a>
             <a class="nav-link" href="#newsletter">Newsletter</a>
@@ -937,8 +938,401 @@
                     <strong>Note:</strong> This endpoint requires message history to be enabled on the server. The history is automatically saved for messages sent and received after enabling this feature.
                 </div>
             </div>
+
+<div class="endpoint">
+            <h3>Group mentions and ghost mentions</h3>
+            <p>Text, edit, image, video and document sends accept <code>MentionAll: true</code>. A standalone <code>@everyone</code> in the body or caption also enables mention-all; the visible text stays unchanged. Direct chats are rejected and participant lookup failures abort sending. Explicit <code>ContextInfo.MentionedJID</code> entries work without visible mentions and are deduplicated with detected/group participants.</p>
+            <pre>
+            <code class="language-json">{"Phone":"123@g.us","Body":"Please read this.","MentionAll":true}</code>
+            </pre>
+            </div>
+<div class="endpoint">
+            <h3>
+            <span class="method post">POST</span> <span class="path">/chat/markplayed</span>
+            </h3>
+            <h4>Mark incoming audio as played</h4>
+            <p>Sends played receipts, without playing or verifying media locally. All IDs must belong to the supplied chat and sender. Legacy Chat/Sender JID objects are also accepted.</p>
+            <p>Authenticate with your user <code>token</code> header. Stdio: <code>chat.markplayed</code>.</p>
+            <table class="api-table">
+            <thead>
+            <tr>
+            <th>Parameter</th>
+            <th>Type</th>
+            <th>Notes</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr>
+            <td>ChatPhone (required)</td>
+            <td>string</td>
+            <td>Individual PN/LID or group JID.</td>
+            </tr>
+            <tr>
+            <td>SenderPhone</td>
+            <td>string</td>
+            <td>Required for groups: original sender PN/LID JID.</td>
+            </tr>
+            <tr>
+            <td>Id (required)</td>
+            <td>array</td>
+            <td>
+            </td>
+            </tr>
+            </tbody>
+            </table>
+            <pre>
+            <code class="language-json">{
+  &quot;ChatPhone&quot;: &quot;123@g.us&quot;,
+  &quot;SenderPhone&quot;: &quot;456@lid&quot;,
+  &quot;Id&quot;: [
+    &quot;MESSAGE_ID&quot;
+  ]
+}</code></pre><p>Returns the standard success/error envelope. Invalid payloads return 400, invalid authentication 401, and session/upstream failures 500. See <a href="/api/#/Chat">Swagger</a> for response schemas.</p></div>
+<div class="endpoint">
+            <h3>
+            <span class="method post">POST</span> <span class="path">/chat/star</span>
+            </h3>
+            <h4>Star or unstar a message</h4>
+            <p>Use the original author and exact message ID. Set Star to false to unstar.</p>
+            <p>Authenticate with your user <code>token</code> header. Stdio: <code>chat.star</code>.</p>
+            <table class="api-table">
+            <thead>
+            <tr>
+            <th>Parameter</th>
+            <th>Type</th>
+            <th>Notes</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr>
+            <td>Chat (required)</td>
+            <td>string</td>
+            <td>Individual PN/LID or group JID.</td>
+            </tr>
+            <tr>
+            <td>Sender</td>
+            <td>string</td>
+            <td>Required for groups; defaults to Chat for direct conversations.</td>
+            </tr>
+            <tr>
+            <td>Id (required)</td>
+            <td>string</td>
+            <td>
+            </td>
+            </tr>
+            <tr>
+            <td>FromMe (required)</td>
+            <td>boolean</td>
+            <td>Must be explicitly supplied.</td>
+            </tr>
+            <tr>
+            <td>Star (required)</td>
+            <td>boolean</td>
+            <td>Must be explicitly supplied.</td>
+            </tr>
+            </tbody>
+            </table>
+            <pre>
+            <code class="language-json">{
+  &quot;Chat&quot;: &quot;123@g.us&quot;,
+  &quot;Sender&quot;: &quot;456@lid&quot;,
+  &quot;Id&quot;: &quot;MESSAGE_ID&quot;,
+  &quot;FromMe&quot;: false,
+  &quot;Star&quot;: true
+}</code></pre><p>Returns the standard success/error envelope. Invalid payloads return 400, invalid authentication 401, and session/upstream failures 500. See <a href="/api/#/Chat">Swagger</a> for response schemas.</p></div>
+<div class="endpoint">
+            <h3>
+            <span class="method post">POST</span> <span class="path">/chat/pinchat</span>
+            </h3>
+            <h4>Pin or unpin a conversation</h4>
+            <p>Pins a conversation in the chat list; /chat/pin pins an individual message. WhatsApp pin limits apply.</p>
+            <p>Authenticate with your user <code>token</code> header. Stdio: <code>chat.pinchat</code>.</p>
+            <table class="api-table">
+            <thead>
+            <tr>
+            <th>Parameter</th>
+            <th>Type</th>
+            <th>Notes</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr>
+            <td>Chat (required)</td>
+            <td>string</td>
+            <td>Individual PN/LID or group JID.</td>
+            </tr>
+            <tr>
+            <td>Pin (required)</td>
+            <td>boolean</td>
+            <td>Must be explicitly supplied.</td>
+            </tr>
+            </tbody>
+            </table>
+            <pre>
+            <code class="language-json">{
+  &quot;Chat&quot;: &quot;123@g.us&quot;,
+  &quot;Pin&quot;: true
+}</code></pre><p>Returns the standard success/error envelope. Invalid payloads return 400, invalid authentication 401, and session/upstream failures 500. See <a href="/api/#/Chat">Swagger</a> for response schemas.</p></div>
+<div class="endpoint">
+            <h3>
+            <span class="method post">POST</span> <span class="path">/chat/mute</span>
+            </h3>
+            <h4>Mute or unmute a conversation</h4>
+            <p>Updates WhatsApp conversation settings; does not suppress WuzAPI webhooks.</p>
+            <p>Authenticate with your user <code>token</code> header. Stdio: <code>chat.mute</code>.</p>
+            <table class="api-table">
+            <thead>
+            <tr>
+            <th>Parameter</th>
+            <th>Type</th>
+            <th>Notes</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr>
+            <td>Chat (required)</td>
+            <td>string</td>
+            <td>Individual PN/LID or group JID.</td>
+            </tr>
+            <tr>
+            <td>Mute (required)</td>
+            <td>boolean</td>
+            <td>Must be explicitly supplied.</td>
+            </tr>
+            <tr>
+            <td>DurationSeconds</td>
+            <td>integer</td>
+            <td>Zero or omitted means indefinitely. Must be zero/omitted when unmuting.</td>
+            </tr>
+            </tbody>
+            </table>
+            <pre>
+            <code class="language-json">{
+  &quot;Chat&quot;: &quot;123@g.us&quot;,
+  &quot;Mute&quot;: true,
+  &quot;DurationSeconds&quot;: 3600
+}</code></pre><p>Returns the standard success/error envelope. Invalid payloads return 400, invalid authentication 401, and session/upstream failures 500. See <a href="/api/#/Chat">Swagger</a> for response schemas.</p></div>
+<div class="endpoint">
+            <h3>
+            <span class="method post">POST</span> <span class="path">/chat/unread</span>
+            </h3>
+            <h4>Set conversation unread flag</h4>
+            <p>False clears the flag. Changes conversation state, not message read receipts; use /chat/markread for receipts.</p>
+            <p>Authenticate with your user <code>token</code> header. Stdio: <code>chat.unread</code>.</p>
+            <table class="api-table">
+            <thead>
+            <tr>
+            <th>Parameter</th>
+            <th>Type</th>
+            <th>Notes</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr>
+            <td>Chat (required)</td>
+            <td>string</td>
+            <td>Individual PN/LID or group JID.</td>
+            </tr>
+            <tr>
+            <td>Unread (required)</td>
+            <td>boolean</td>
+            <td>Must be explicitly supplied.</td>
+            </tr>
+            </tbody>
+            </table>
+            <pre>
+            <code class="language-json">{
+  &quot;Chat&quot;: &quot;123@g.us&quot;,
+  &quot;Unread&quot;: true
+}</code></pre><p>Returns the standard success/error envelope. Invalid payloads return 400, invalid authentication 401, and session/upstream failures 500. See <a href="/api/#/Chat">Swagger</a> for response schemas.</p></div>
+<div class="endpoint">
+            <h3>
+            <span class="method post">POST</span> <span class="path">/chat/poll/vote</span>
+            </h3>
+            <h4>Vote in a poll or retract a vote</h4>
+            <p>FromMe describes the poll creator. Preserve original PN/LID metadata. Requires the original message secret in this session store; missing secrets abort before sending. Caller enforces available options and selection limit. Failed sends are not automatically replayed.</p>
+            <p>Authenticate with your user <code>token</code> header. Stdio: <code>chat.poll.vote</code>.</p>
+            <table class="api-table">
+            <thead>
+            <tr>
+            <th>Parameter</th>
+            <th>Type</th>
+            <th>Notes</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr>
+            <td>Chat (required)</td>
+            <td>string</td>
+            <td>Individual PN/LID or group JID.</td>
+            </tr>
+            <tr>
+            <td>Sender (required)</td>
+            <td>string</td>
+            <td>Original poll creator PN/LID JID, required even for direct chats.</td>
+            </tr>
+            <tr>
+            <td>Id (required)</td>
+            <td>string</td>
+            <td>Original poll message ID.</td>
+            </tr>
+            <tr>
+            <td>FromMe (required)</td>
+            <td>boolean</td>
+            <td>Must be explicitly supplied.</td>
+            </tr>
+            <tr>
+            <td>Options (required)</td>
+            <td>array</td>
+            <td>Exact distinct nonblank option names. Empty array retracts the vote; null is invalid.</td>
+            </tr>
+            </tbody>
+            </table>
+            <pre>
+            <code class="language-json">{
+  &quot;Chat&quot;: &quot;123@g.us&quot;,
+  &quot;Sender&quot;: &quot;456@lid&quot;,
+  &quot;Id&quot;: &quot;POLL_MESSAGE_ID&quot;,
+  &quot;FromMe&quot;: false,
+  &quot;Options&quot;: [
+    &quot;Yes&quot;
+  ]
+}</code></pre><p>Returns the standard success/error envelope. Invalid payloads return 400, invalid authentication 401, and session/upstream failures 500. See <a href="/api/#/Chat">Swagger</a> for response schemas.</p></div>
         </section>
 
+        <section id="labels">
+            <h2>Labels</h2>
+            <p>Write operations only; applications manage label IDs. No catalog or list endpoint is provided.</p>
+            <div class="endpoint">
+            <h3>
+            <span class="method post">POST</span> <span class="path">/labels/edit</span>
+            </h3>
+            <h4>Create, edit or delete a label</h4>
+            <p>Deleted=true deletes. Otherwise Name and Color are required. Caller chooses an unused ID for creation. WhatsApp account/client support applies, especially Business accounts. No local catalog or listing is provided.</p>
+            <p>Authenticate with your user <code>token</code> header. Stdio: <code>labels.edit</code>.</p>
+            <table class="api-table">
+            <thead>
+            <tr>
+            <th>Parameter</th>
+            <th>Type</th>
+            <th>Notes</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr>
+            <td>LabelID (required)</td>
+            <td>string</td>
+            <td>Canonical unsigned 32-bit decimal ID. Caller manages IDs.</td>
+            </tr>
+            <tr>
+            <td>Name</td>
+            <td>string</td>
+            <td>Nonblank; required unless deleting.</td>
+            </tr>
+            <tr>
+            <td>Color</td>
+            <td>integer</td>
+            <td>Required unless deleting.</td>
+            </tr>
+            <tr>
+            <td>Deleted (required)</td>
+            <td>boolean</td>
+            <td>Must be explicitly supplied.</td>
+            </tr>
+            </tbody>
+            </table>
+            <pre>
+            <code class="language-json">{
+  &quot;LabelID&quot;: &quot;7&quot;,
+  &quot;Name&quot;: &quot;Customer&quot;,
+  &quot;Color&quot;: 3,
+  &quot;Deleted&quot;: false
+}</code></pre><p>Returns the standard success/error envelope. Invalid payloads return 400, invalid authentication 401, and session/upstream failures 500. See <a href="/api/#/Labels">Swagger</a> for response schemas.</p></div>
+<div class="endpoint">
+            <h3>
+            <span class="method post">POST</span> <span class="path">/labels/chat</span>
+            </h3>
+            <h4>Assign or remove a chat label</h4>
+            <p>Use Labeled=false to remove. Applications retain label IDs; no local catalog is maintained.</p>
+            <p>Authenticate with your user <code>token</code> header. Stdio: <code>labels.chat</code>.</p>
+            <table class="api-table">
+            <thead>
+            <tr>
+            <th>Parameter</th>
+            <th>Type</th>
+            <th>Notes</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr>
+            <td>Chat (required)</td>
+            <td>string</td>
+            <td>Individual PN/LID or group JID.</td>
+            </tr>
+            <tr>
+            <td>LabelID (required)</td>
+            <td>string</td>
+            <td>Canonical unsigned 32-bit decimal ID. Caller manages IDs.</td>
+            </tr>
+            <tr>
+            <td>Labeled (required)</td>
+            <td>boolean</td>
+            <td>Must be explicitly supplied.</td>
+            </tr>
+            </tbody>
+            </table>
+            <pre>
+            <code class="language-json">{
+  &quot;Chat&quot;: &quot;123@g.us&quot;,
+  &quot;LabelID&quot;: &quot;7&quot;,
+  &quot;Labeled&quot;: true
+}</code></pre><p>Returns the standard success/error envelope. Invalid payloads return 400, invalid authentication 401, and session/upstream failures 500. See <a href="/api/#/Labels">Swagger</a> for response schemas.</p></div>
+<div class="endpoint">
+            <h3>
+            <span class="method post">POST</span> <span class="path">/labels/message</span>
+            </h3>
+            <h4>Assign or remove a message label</h4>
+            <p>Uses the original message ID. Labeled=false removes the association. No local catalog is maintained.</p>
+            <p>Authenticate with your user <code>token</code> header. Stdio: <code>labels.message</code>.</p>
+            <table class="api-table">
+            <thead>
+            <tr>
+            <th>Parameter</th>
+            <th>Type</th>
+            <th>Notes</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr>
+            <td>Chat (required)</td>
+            <td>string</td>
+            <td>Individual PN/LID or group JID.</td>
+            </tr>
+            <tr>
+            <td>LabelID (required)</td>
+            <td>string</td>
+            <td>Canonical unsigned 32-bit decimal ID. Caller manages IDs.</td>
+            </tr>
+            <tr>
+            <td>Id (required)</td>
+            <td>string</td>
+            <td>
+            </td>
+            </tr>
+            <tr>
+            <td>Labeled (required)</td>
+            <td>boolean</td>
+            <td>Must be explicitly supplied.</td>
+            </tr>
+            </tbody>
+            </table>
+            <pre>
+            <code class="language-json">{
+  &quot;Chat&quot;: &quot;123@g.us&quot;,
+  &quot;LabelID&quot;: &quot;7&quot;,
+  &quot;Id&quot;: &quot;MESSAGE_ID&quot;,
+  &quot;Labeled&quot;: true
+}</code></pre><p>Returns the standard success/error envelope. Invalid payloads return 400, invalid authentication 401, and session/upstream failures 500. See <a href="/api/#/Labels">Swagger</a> for response schemas.</p></div></section>
         <section id="user">
             <div class="section-title">
                 <div class="section-icon">
@@ -999,6 +1393,34 @@
   "success": true
 }</code></pre>
             </div>
+
+<div class="endpoint">
+            <h3>
+            <span class="method post">POST</span> <span class="path">/user/business-profile</span>
+            </h3>
+            <h4>Look up a business profile</h4>
+            <p>Uses the authenticated user session. Returned profile fields may be empty. No local cache. A nil result returns 404; upstream errors, including unavailable profiles, return 500.</p>
+            <p>Authenticate with your user <code>token</code> header. Stdio: <code>user.business-profile</code>.</p>
+            <table class="api-table">
+            <thead>
+            <tr>
+            <th>Parameter</th>
+            <th>Type</th>
+            <th>Notes</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr>
+            <td>Phone (required)</td>
+            <td>string</td>
+            <td>International phone without +, PN JID, or LID JID. Groups/channels are rejected.</td>
+            </tr>
+            </tbody>
+            </table>
+            <pre>
+            <code class="language-json">{
+  &quot;Phone&quot;: &quot;5491112345678&quot;
+}</code></pre><p>Returns the standard success/error envelope. Invalid payloads return 400, invalid authentication 401, and session/upstream failures 500. See <a href="/api/#/User">Swagger</a> for response schemas.</p></div>
         </section>
 
         <section id="group">

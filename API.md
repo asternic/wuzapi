@@ -1006,6 +1006,94 @@ curl -X POST -H 'Token: 1234ABCD' -H 'Content-Type: application/json' --data '{"
 
 ---
 
+## Send Carousel Message
+
+*POST /chat/send/carousel* — stdio: `chat.send.carousel`
+
+Sends one native horizontal carousel to a direct phone-number or LID chat.
+Each card contains an image, body text and buttons. Groups, broadcasts,
+newsletters and bots are not supported by this endpoint.
+
+Send the user token in the `Token` header:
+
+```sh
+curl -X POST http://localhost:8080/chat/send/carousel \
+  -H 'Token: YOUR_USER_TOKEN' -H 'Content-Type: application/json' \
+  --data @carousel.json
+```
+
+Example `carousel.json` (replace the image URLs with your own):
+
+```json
+{
+  "Phone": "15555550100",
+  "Id": "carousel-example-1",
+  "Body": "Choose a destination",
+  "Cards": [
+    {
+      "Body": "Summit",
+      "Image": "https://example.com/summit.jpg",
+      "Buttons": [{"type": "reply", "title": "Choose", "id": "summit"}]
+    },
+    {
+      "Body": "Coast",
+      "Image": "https://example.com/coast.png",
+      "Buttons": [{"type": "cta_url", "title": "Details", "url": "https://example.com/coast"}]
+    }
+  ]
+}
+```
+
+Supported input limits (application limits, not WhatsApp delivery guarantees):
+
+| Field | Supported values |
+| --- | --- |
+| `Phone` | Bare phone number or direct `@s.whatsapp.net` / `@lid` JID; existing cached PN/LID resolution applies |
+| `Id` | Optional; generated when omitted. At most 128 printable ASCII bytes, without whitespace |
+| `Body` | 1–1,024 characters, not only whitespace |
+| `Cards` | 2–10 ordered entries |
+| Card `Body` | 1–160 characters, not only whitespace |
+| Card `Image` | JPEG/PNG data URL or HTTP(S) URL; 16 MiB total decoded/source image bytes per request, at most 4,096 pixels per side and 16 megapixels |
+| Card `Buttons` | 1–3 per card; `title` is 1–20 characters without controls |
+| `reply` button | Default when type is omitted or empty; explicit `id` of 1–200 characters without controls, unique across all cards |
+| `cta_url` button | Absolute HTTP(S) `url`, at most 2,048 bytes, without credentials, controls or whitespace |
+| `cta_call` button | `phone_number`: 6–15 digits with an optional leading `+` |
+
+Use only the action fields for the selected button type. Unsupported fields,
+actions and trailing JSON are rejected; cards and button labels are never
+silently dropped or truncated. The HTTP JSON body is limited to 24 MiB.
+Stdio retains its existing 512-KiB line limit, so prefer image URLs there.
+
+All cards and image contents are validated before uploading any image. If an
+upload fails, no final message is sent, although earlier media uploads may
+already exist. Success creates one outgoing history entry (when history is
+enabled) and one sent-message event containing the full carousel.
+
+Input errors return 400, oversized JSON returns 413, and local IO/upload
+failures return 500 with a card-scoped error. Canceled or expired preparation
+returns 503/504. An upload failure says `message not sent`; only errors after
+dispatch say `delivery unconfirmed`. Never treat those two outcomes as equivalent.
+
+The response uses the ordinary send envelope:
+
+```json
+{"code":200,"data":{"Details":"Sent","Timestamp":1700000000,"Id":"carousel-example-1"},"success":true}
+```
+
+**Delivery and retry limitations:** `Sent` means WhatsApp acknowledged the
+transport, not that a recipient displayed or read the cards. The pinned
+whatsmeow version does not preserve the interactive `AdditionalNodes` when
+answering a recipient's retry receipt, so retransmitted carousels may not
+render. Client rendering and recovery require real-device verification.
+
+Preparation has a 45-second budget, followed by a detached 60-second dispatch
+budget so HTTP cancellation after dispatch does not discard a successful ACK.
+These are not an end-to-end latency guarantee: whatsmeow's internal send lock
+can remain queued beyond the HTTP write deadline. A timeout or error after
+dispatch is ambiguous; the endpoint never automatically replays it. Supply an
+`Id` for correlation and reconcile the outcome before another attempt. Reusing
+an `Id` does not provide idempotency and does not replace an existing history row.
+
 ## Send Audio Message
 
 Sends an Audio message. Audio must be in Opus format and base64 encoded in embedded format.
@@ -2129,3 +2217,126 @@ Content-Type: application/json
 - The `form` mode ensures compatibility with legacy or older webhook systems.
 - The `json` mode is recommended for modern integrations and easier backend parsing.
 - If you do not set the variable, the system will use `form` mode by default.
+
+## Mark audio as played
+
+`POST /chat/markplayed` (stdio: `chat.markplayed`) sends a played receipt for
+incoming audio/voice notes. Uses the same payload as `/chat/markread`:
+
+```json
+{"Id":["MESSAGE_ID"],"ChatPhone":"5491112345678@s.whatsapp.net"}
+```
+
+For group messages, set `ChatPhone` to the group JID and supply `SenderPhone`.
+All IDs in one request must belong to that chat and sender. This sends receipt
+metadata; it does not play audio or verify its media type locally.
+
+## Star or unstar a message
+
+`POST /chat/star` (stdio: `chat.star`):
+
+```json
+{"Chat":"120363407915251919@g.us","Sender":"5491112345678@s.whatsapp.net","Id":"MESSAGE_ID","FromMe":false,"Star":true}
+```
+
+`Star` and `FromMe` must be explicitly supplied. Set `Star:false` to unstar.
+`Sender` is required for groups and identifies the original message author;
+for direct chats it defaults to `Chat`. Use the exact message ID and author
+JID (including LID when applicable). This updates WhatsApp's synchronized
+starred-message state.
+
+## Pin or unpin a chat conversation
+
+`POST /chat/pinchat` (stdio: `chat.pinchat`) pins a conversation in WhatsApp's
+chat list. The existing `/chat/pin` endpoint pins an individual message.
+
+```json
+{"Chat":"5491112345678@s.whatsapp.net","Pin":true}
+```
+
+`Pin` must be explicitly supplied; use `false` to unpin. Direct chats (phone or
+LID JIDs) and group chats are supported. WhatsApp applies its own pin limits.
+
+## Conversation mute and unread state
+
+These endpoints update WhatsApp's synchronized conversation settings. They do
+not filter WuzAPI webhooks or change your application's notifications.
+
+- `POST /chat/mute` (stdio `chat.mute`):
+  `{"Chat":"123@g.us","Mute":true,"DurationSeconds":3600}`.
+  Omit duration or use zero for indefinite mute; `Mute:false` unmutes and
+  requires zero/omitted duration. Negative or overflowing durations are rejected.
+- `POST /chat/unread` (stdio `chat.unread`):
+  `{"Chat":"123@g.us","Unread":true}`. Use false to clear the unread flag.
+  This changes the conversation flag; use `/chat/markread` for message receipts.
+
+Both require a user token and explicit boolean, support individual phone/LID and
+group chats, and return the normal success envelope with `Details: Updated`.
+No local persistence or migration is added. Unknown fields and trailing JSON
+are rejected.
+
+## WhatsApp labels
+
+Authenticated label operations update WhatsApp app state (account/client support
+is determined by WhatsApp, especially for Business accounts):
+
+| POST endpoint | Stdio method | Payload example |
+|---|---|---|
+| `/labels/edit` | `labels.edit` | `{"LabelID":"7","Name":"Customer","Color":3,"Deleted":false}` |
+| `/labels/chat` | `labels.chat` | `{"Chat":"123@g.us","LabelID":"7","Labeled":true}` |
+| `/labels/message` | `labels.message` | `{"Chat":"123@g.us","LabelID":"7","Id":"MESSAGE_ID","Labeled":true}` |
+
+Use `Deleted:true` with `LabelID` to delete a label; use `Labeled:false` to remove
+an association. All booleans must be explicit. Label IDs are canonical unsigned
+32-bit decimal strings. Callers choose an unused ID to create a label and reuse
+an existing ID to edit it; WuzAPI does not allocate IDs. Creation/edit requires
+a nonblank name (at most 100 characters) and palette color 0–19.
+
+These are write endpoints; no label catalog, listing, or local label database
+is introduced. Applications must retain IDs and coordinate edits with other
+clients. Success returns `Details: Updated`; failures use the normal error
+envelope. Unknown fields and trailing JSON are rejected.
+
+## Vote in a poll
+
+`POST /chat/poll/vote` (stdio `chat.poll.vote`), authenticated with the session's
+user token:
+
+```json
+{"Chat":"123@g.us","Sender":"456@lid","Id":"POLL_MESSAGE_ID","FromMe":false,"Options":["Yes"]}
+```
+
+Supply the original poll's exact chat, creator (`Sender`), message ID and
+`FromMe` flag from its message metadata. `FromMe` describes the poll creator,
+not the vote sender. Use the original PN/LID JIDs; do not substitute another
+address for the same account. `Options` contains exact, distinct option names;
+an explicit empty array retracts the vote. Missing/null options are rejected.
+
+Whatsmeow must have the original poll's message secret in this session's store.
+If unavailable, vote construction fails and nothing is sent. WuzAPI does not
+fetch missing secrets or validate options against a retained poll catalog;
+the caller must respect the poll's available options and selection limit.
+Success returns `Id` (the new vote message ID), Unix `Timestamp`, and
+`Details: Sent`. Failed sends are not automatically replayed because their
+outcome may be uncertain. No new table is required.
+
+## Business profile lookup
+
+`POST /user/business-profile` (stdio `user.business-profile`) requires a user
+token and a single individual account:
+
+```json
+{"Phone":"5491112345678"}
+```
+
+International numbers without `+`, phone JIDs (`@s.whatsapp.net`), and LID JIDs
+(`@lid`) are accepted. Groups/channels and missing identifiers are rejected.
+The lookup uses the authenticated user's WhatsApp session.
+
+Success returns the Whatsmeow business profile inside the standard `data`
+envelope: `JID`, `Address`, `Email`, `Categories`, `ProfileOptions`,
+`BusinessHoursTimeZone`, and `BusinessHours`. Fields may be empty when WhatsApp
+does not provide them. No local cache or database table is added. A nil result
+returns 404; upstream lookup failures use the standard 500 error envelope,
+including when WhatsApp cannot provide a profile for a non-business account.
+Unknown fields and trailing JSON are rejected.

@@ -15,7 +15,7 @@ Be very careful—do not use this to send SPAM or anything similar. Use at your 
 ## Available endpoints
 
 * **Session:** Connect, disconnect, and log out from WhatsApp. Retrieve connection status and QR codes for scanning.
-* **Messages:** Send text, image, audio, document, template, video, sticker, location, contact, and poll messages.
+* **Messages:** Send text, image, audio, document, template, video, sticker, location, contact, poll, and image carousel messages.
 * **Users:** Check if phone numbers have WhatsApp, get user information and avatars, and retrieve the full contact list.
 * **Chat:** Set presence (typing/paused, recording media), mark messages as read, download images from messages, send reactions.
 * **Groups:** Create, delete and list groups, get info, get invite links, set participants, change group photos and names.

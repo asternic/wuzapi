@@ -1425,7 +1425,7 @@ paths:
       tags:
         - Chat 
       summary: Sends a text message
-      description: Sends a text message. Phone and Body are mandatory. If no Id is supplied, a random one will be generated. ContextInfo is optional and used when repyling to some message. StanzaId is the message id we are replying to and participant who wrote that message. If sending a new message, ContextInfo can be ommited altogether.
+      description: Sends a text message. Phone and Body are mandatory. If no Id is supplied, a random one will be generated. ContextInfo is optional and used when repyling to some message. StanzaId is the message id we are replying to and participant who wrote that message. If sending a new message, ContextInfo can be ommited altogether. MentionAll=true or a standalone @everyone mentions all group members; visible text is preserved. Explicit ContextInfo.MentionedJID supports ghost mentions.
       security:
         - ApiKeyAuth: []
       requestBody:
@@ -1447,7 +1447,7 @@ paths:
       tags:
         - Chat
       summary: Edits a previously sent message
-      description: Edits a message already sent by the same user. Provide the message ID and new content.
+      description: Edits a message already sent by the same user. Provide the message ID and new content. MentionAll=true or a standalone @everyone mentions all group members; visible text is preserved. Explicit ContextInfo.MentionedJID supports ghost mentions.
       security:
         - ApiKeyAuth: []
       requestBody:
@@ -1457,6 +1457,10 @@ paths:
             schema:
               type: object
               properties:
+                MentionAll:
+                  type: boolean
+                  default: false
+                  description: Mention all current group participants without visible phone numbers. A standalone @everyone also enables this; text is preserved. Direct chats are rejected and participant lookup failures abort sending.
                 Id:
                   type: string
                   description: The ID of the message to edit
@@ -1633,7 +1637,7 @@ paths:
       tags:
         - Chat 
       summary: Sends an image/picture message
-      description: Sends an image message (must be base64 encoded in image/png or image/jpeg formats)
+      description: Sends an image message (must be base64 encoded in image/png or image/jpeg formats) MentionAll=true or a standalone @everyone mentions all group members; visible text is preserved. Explicit ContextInfo.MentionedJID supports ghost mentions.
       security:
         - ApiKeyAuth: []
       requestBody:
@@ -1677,7 +1681,7 @@ paths:
       tags:
         - Chat 
       summary: Sends a document message
-      description: Sends any document (must be base64 encoded using application/octet-stream mime)
+      description: Sends any document (must be base64 encoded using application/octet-stream mime) MentionAll=true or a standalone @everyone mentions all group members; visible text is preserved. Explicit ContextInfo.MentionedJID supports ghost mentions.
       security:
         - ApiKeyAuth: []
       requestBody:
@@ -1721,7 +1725,7 @@ paths:
       tags:
         - Chat 
       summary: Sends a video message
-      description: Sends a video message (must be base64 encoded in video/mp4 or video/3gpp format. Only H.264 video codec and AAC audio codec is supported.)
+      description: Sends a video message (must be base64 encoded in video/mp4 or video/3gpp format. Only H.264 video codec and AAC audio codec is supported.) MentionAll=true or a standalone @everyone mentions all group members; visible text is preserved. Explicit ContextInfo.MentionedJID supports ghost mentions.
       security:
         - ApiKeyAuth: []
       requestBody:
@@ -1825,6 +1829,66 @@ paths:
             application/json:
               schema:
                 example: {"code":200,"data":{"Details":"Sent","Id":"90B2F8B13FAC8A9CF6B06E99C7834DC5","Timestamp":"2022-04-20T12:49:08-03:00"},"success":true}
+  /chat/send/carousel:
+    post:
+      tags:
+        - Chat
+      summary: Sends an image carousel
+      description: >-
+        Sends 2-10 ordered JPEG/PNG cards as one native interactive message to
+        a direct PN/LID chat. All cards are validated before upload. Total image
+        bytes are limited to 16 MiB and the JSON request to 24 MiB. Preparation
+        has a 45-second budget and dispatch a detached 60-second budget; internal
+        send-lock queueing can exceed the HTTP deadline. Acknowledgement does
+        not prove rendering. The pinned whatsmeow version loses interactive
+        AdditionalNodes on recipient retry receipts, so recovery is unverified.
+        Never automatically resend after an ambiguous dispatch error or timeout.
+        Replace sample image URLs with your own. See API.md for complete limits. Stdio method is chat.send.carousel;
+        its existing 512-KiB line limit favors image URLs.
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/definitions/MessageCarousel'
+            example:
+              Phone: "15555550100"
+              Id: "carousel-example-1"
+              Body: "Choose a destination"
+              Cards:
+                - Body: "Summit"
+                  Image: "https://example.com/summit.jpg"
+                  Buttons:
+                    - type: reply
+                      title: "Choose"
+                      id: "summit"
+                - Body: "Coast"
+                  Image: "https://example.com/coast.png"
+                  Buttons:
+                    - type: cta_url
+                      title: "Details"
+                      url: "https://example.com/coast"
+      responses:
+        200:
+          description: Transport acknowledged the message; does not prove display or reading
+          content:
+            application/json:
+              schema:
+                example: {"code":200,"data":{"Details":"Sent","Id":"carousel-example-1","Timestamp":1700000000},"success":true}
+        400:
+          description: Invalid recipient, cards, actions or images
+        401:
+          description: Invalid user token
+        413:
+          description: JSON body exceeds 24 MiB
+        500:
+          description: Session unavailable, preparation/upload failure (not sent), or ambiguous dispatch; see error message
+        503:
+          description: Preparation canceled; message not sent
+        504:
+          description: Preparation deadline exceeded; message not sent
   /chat/send/list:
     post:
       tags:
@@ -2554,6 +2618,608 @@ paths:
               schema:
                 example: { "code": 200, "data": { "Details": "Group join approval mode updated successfully" }, "success": true }
 
+  /chat/markplayed:
+    post:
+      tags:
+      - Chat
+      summary: Mark incoming audio as played
+      description: 'Sends played receipts, without playing or verifying media locally.
+        All IDs must belong to the supplied chat and sender. Legacy Chat/Sender JID
+        objects are also accepted. Stdio method: chat.markplayed.'
+      security:
+      - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                ChatPhone: &id001
+                  type: string
+                  description: Individual PN/LID or group JID.
+                  example: 123@g.us
+                SenderPhone:
+                  type: string
+                  description: 'Required for groups: original sender PN/LID JID.'
+                Id:
+                  type: array
+                  minItems: 1
+                  items:
+                    type: string
+              required:
+              - ChatPhone
+              - Id
+            example:
+              ChatPhone: 123@g.us
+              SenderPhone: 456@lid
+              Id:
+              - MESSAGE_ID
+      responses:
+        '200':
+          description: Success in the standard WuzAPI envelope.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      Details:
+                        type: string
+        '400':
+          description: Invalid payload.
+        '401':
+          description: Missing or invalid user token.
+        '500':
+          description: No session or upstream operation failed.
+  /chat/star:
+    post:
+      tags:
+      - Chat
+      summary: Star or unstar a message
+      description: 'Use the original author and exact message ID. Set Star to false
+        to unstar. Stdio method: chat.star.'
+      security:
+      - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                Chat: *id001
+                Sender:
+                  type: string
+                  description: Required for groups; defaults to Chat for direct conversations.
+                Id:
+                  type: string
+                  minLength: 1
+                FromMe: &id002
+                  type: boolean
+                  description: Must be explicitly supplied.
+                Star: *id002
+              required:
+              - Chat
+              - Id
+              - FromMe
+              - Star
+            example:
+              Chat: 123@g.us
+              Sender: 456@lid
+              Id: MESSAGE_ID
+              FromMe: false
+              Star: true
+      responses:
+        '200':
+          description: Success in the standard WuzAPI envelope.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      Details:
+                        type: string
+        '400':
+          description: Invalid payload.
+        '401':
+          description: Missing or invalid user token.
+        '500':
+          description: No session or upstream operation failed.
+  /chat/pinchat:
+    post:
+      tags:
+      - Chat
+      summary: Pin or unpin a conversation
+      description: 'Pins a conversation in the chat list; /chat/pin pins an individual
+        message. WhatsApp pin limits apply. Stdio method: chat.pinchat.'
+      security:
+      - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                Chat: *id001
+                Pin: *id002
+              required:
+              - Chat
+              - Pin
+            example:
+              Chat: 123@g.us
+              Pin: true
+      responses:
+        '200':
+          description: Success in the standard WuzAPI envelope.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      Details:
+                        type: string
+        '400':
+          description: Invalid payload.
+        '401':
+          description: Missing or invalid user token.
+        '500':
+          description: No session or upstream operation failed.
+  /chat/mute:
+    post:
+      tags:
+      - Chat
+      summary: Mute or unmute a conversation
+      description: 'Updates WhatsApp conversation settings; does not suppress WuzAPI
+        webhooks. Stdio method: chat.mute. Unknown fields and trailing JSON are rejected.'
+      security:
+      - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                Chat: *id001
+                Mute: *id002
+                DurationSeconds:
+                  type: integer
+                  format: int64
+                  minimum: 0
+                  maximum: 9223372036
+                  description: Zero or omitted means indefinitely. Must be zero/omitted
+                    when unmuting.
+              required:
+              - Chat
+              - Mute
+              additionalProperties: false
+            example:
+              Chat: 123@g.us
+              Mute: true
+              DurationSeconds: 3600
+      responses:
+        '200':
+          description: Success in the standard WuzAPI envelope.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      Details:
+                        type: string
+        '400':
+          description: Invalid payload.
+        '401':
+          description: Missing or invalid user token.
+        '500':
+          description: No session or upstream operation failed.
+  /chat/unread:
+    post:
+      tags:
+      - Chat
+      summary: Set conversation unread flag
+      description: 'False clears the flag. Changes conversation state, not message read
+        receipts; use /chat/markread for receipts. Stdio method: chat.unread. Unknown
+        fields and trailing JSON are rejected.'
+      security:
+      - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                Chat: *id001
+                Unread: *id002
+              required:
+              - Chat
+              - Unread
+              additionalProperties: false
+            example:
+              Chat: 123@g.us
+              Unread: true
+      responses:
+        '200':
+          description: Success in the standard WuzAPI envelope.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      Details:
+                        type: string
+        '400':
+          description: Invalid payload.
+        '401':
+          description: Missing or invalid user token.
+        '500':
+          description: No session or upstream operation failed.
+  /labels/edit:
+    post:
+      tags:
+      - Labels
+      summary: Create, edit or delete a label
+      description: 'Deleted=true deletes. Otherwise Name and Color are required. Caller
+        chooses an unused ID for creation. WhatsApp account/client support applies,
+        especially Business accounts. No local catalog or listing is provided. Stdio
+        method: labels.edit. Unknown fields and trailing JSON are rejected.'
+      security:
+      - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                LabelID: &id003
+                  type: string
+                  pattern: ^(0|[1-9][0-9]*)$
+                  description: Canonical unsigned 32-bit decimal ID. Caller manages
+                    IDs.
+                  example: '7'
+                Name:
+                  type: string
+                  minLength: 1
+                  maxLength: 100
+                  description: Nonblank; required unless deleting.
+                Color:
+                  type: integer
+                  minimum: 0
+                  maximum: 19
+                  description: Required unless deleting.
+                Deleted: *id002
+              required:
+              - LabelID
+              - Deleted
+              additionalProperties: false
+            example:
+              LabelID: '7'
+              Name: Customer
+              Color: 3
+              Deleted: false
+      responses:
+        '200':
+          description: Success in the standard WuzAPI envelope.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      Details:
+                        type: string
+        '400':
+          description: Invalid payload.
+        '401':
+          description: Missing or invalid user token.
+        '500':
+          description: No session or upstream operation failed.
+  /labels/chat:
+    post:
+      tags:
+      - Labels
+      summary: Assign or remove a chat label
+      description: 'Use Labeled=false to remove. Applications retain label IDs; no local
+        catalog is maintained. Stdio method: labels.chat. Unknown fields and trailing
+        JSON are rejected.'
+      security:
+      - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                Chat: *id001
+                LabelID: *id003
+                Labeled: *id002
+              required:
+              - Chat
+              - LabelID
+              - Labeled
+              additionalProperties: false
+            example:
+              Chat: 123@g.us
+              LabelID: '7'
+              Labeled: true
+      responses:
+        '200':
+          description: Success in the standard WuzAPI envelope.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      Details:
+                        type: string
+        '400':
+          description: Invalid payload.
+        '401':
+          description: Missing or invalid user token.
+        '500':
+          description: No session or upstream operation failed.
+  /labels/message:
+    post:
+      tags:
+      - Labels
+      summary: Assign or remove a message label
+      description: 'Uses the original message ID. Labeled=false removes the association.
+        No local catalog is maintained. Stdio method: labels.message. Unknown fields
+        and trailing JSON are rejected.'
+      security:
+      - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                Chat: *id001
+                LabelID: *id003
+                Id:
+                  type: string
+                  minLength: 1
+                Labeled: *id002
+              required:
+              - Chat
+              - LabelID
+              - Id
+              - Labeled
+              additionalProperties: false
+            example:
+              Chat: 123@g.us
+              LabelID: '7'
+              Id: MESSAGE_ID
+              Labeled: true
+      responses:
+        '200':
+          description: Success in the standard WuzAPI envelope.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      Details:
+                        type: string
+        '400':
+          description: Invalid payload.
+        '401':
+          description: Missing or invalid user token.
+        '500':
+          description: No session or upstream operation failed.
+  /chat/poll/vote:
+    post:
+      tags:
+      - Chat
+      summary: Vote in a poll or retract a vote
+      description: 'FromMe describes the poll creator. Preserve original PN/LID metadata.
+        Requires the original message secret in this session store; missing secrets
+        abort before sending. Caller enforces available options and selection limit.
+        Failed sends are not automatically replayed. Stdio method: chat.poll.vote. Unknown
+        fields and trailing JSON are rejected.'
+      security:
+      - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                Chat: *id001
+                Sender:
+                  type: string
+                  description: Original poll creator PN/LID JID, required even for direct
+                    chats.
+                Id:
+                  type: string
+                  minLength: 1
+                  description: Original poll message ID.
+                FromMe: *id002
+                Options:
+                  type: array
+                  uniqueItems: true
+                  items:
+                    type: string
+                    minLength: 1
+                  description: Exact distinct nonblank option names. Empty array retracts
+                    the vote; null is invalid.
+              required:
+              - Chat
+              - Sender
+              - Id
+              - FromMe
+              - Options
+              additionalProperties: false
+            example:
+              Chat: 123@g.us
+              Sender: 456@lid
+              Id: POLL_MESSAGE_ID
+              FromMe: false
+              Options:
+              - 'Yes'
+      responses:
+        '200':
+          description: Success in the standard WuzAPI envelope.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      Details:
+                        type: string
+                        example: Sent
+                      Id:
+                        type: string
+                      Timestamp:
+                        type: integer
+                        format: int64
+                        description: Unix seconds.
+        '400':
+          description: Invalid payload.
+        '401':
+          description: Missing or invalid user token.
+        '500':
+          description: No session or upstream operation failed.
+  /user/business-profile:
+    post:
+      tags:
+      - User
+      summary: Look up a business profile
+      description: 'Uses the authenticated user session. Returned profile fields may
+        be empty. No local cache. A nil result returns 404; upstream errors, including
+        unavailable profiles, return 500. Stdio method: user.business-profile. Unknown
+        fields and trailing JSON are rejected.'
+      security:
+      - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                Phone:
+                  type: string
+                  description: International phone without +, PN JID, or LID JID. Groups/channels
+                    are rejected.
+                  example: '5491112345678'
+              required:
+              - Phone
+              additionalProperties: false
+            example:
+              Phone: '5491112345678'
+      responses:
+        '200':
+          description: Success in the standard WuzAPI envelope.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      JID:
+                        type: string
+                      Address:
+                        type: string
+                      Email:
+                        type: string
+                      BusinessHoursTimeZone:
+                        type: string
+                      Categories:
+                        type: array
+                        items:
+                          type: object
+                      ProfileOptions:
+                        type: object
+                        additionalProperties:
+                          type: string
+                      BusinessHours:
+                        type: array
+                        items:
+                          type: object
+        '400':
+          description: Invalid payload.
+        '401':
+          description: Missing or invalid user token.
+        '500':
+          description: No session or upstream operation failed.
+        '404':
+          description: Business profile unavailable (nil result).
+
 definitions:
   ContextInfo:
     type: object
@@ -3058,6 +3724,80 @@ definitions:
             type: string
             example: "5491155553935@s.whatsapp.net"
 
+  MessageCarousel:
+    type: object
+    additionalProperties: false
+    required: [Phone, Body, Cards]
+    properties:
+      Phone:
+        type: string
+        description: Bare phone number or direct PN/LID JID; no groups, bots or device-specific JIDs
+        example: "15555550100"
+      Id:
+        type: string
+        maxLength: 128
+        description: Optional printable ASCII without whitespace. Generated when omitted. Correlation only; reuse is not idempotency and does not replace history.
+        example: "carousel-example-1"
+      Body:
+        type: string
+        minLength: 1
+        maxLength: 1024
+        example: "Choose a destination"
+      Cards:
+        type: array
+        minItems: 2
+        maxItems: 10
+        items:
+          $ref: '#/definitions/CarouselCard'
+  CarouselCard:
+    type: object
+    additionalProperties: false
+    required: [Body, Image, Buttons]
+    properties:
+      Body:
+        type: string
+        minLength: 1
+        maxLength: 160
+        example: "Summit"
+      Image:
+        type: string
+        description: JPEG/PNG data URL or HTTP(S) URL. Images total at most 16 MiB, 4096px per side and 16 megapixels each.
+        example: "https://example.com/summit.jpg"
+      Buttons:
+        type: array
+        minItems: 1
+        maxItems: 3
+        items:
+          $ref: '#/definitions/CarouselButton'
+  CarouselButton:
+    type: object
+    additionalProperties: false
+    required: [title]
+    properties:
+      type:
+        type: string
+        enum: ["", reply, cta_url, cta_call]
+        default: reply
+        description: Omitted or empty type means reply.
+      title:
+        type: string
+        minLength: 1
+        maxLength: 20
+      id:
+        type: string
+        minLength: 1
+        maxLength: 200
+        description: Required for reply, without controls, unique across all cards. Omit for other actions.
+        example: "summit"
+      url:
+        type: string
+        maxLength: 2048
+        description: Required for cta_url; absolute HTTP(S), no credentials, whitespace or controls. Omit for other actions.
+        example: "https://example.com/summit"
+      phone_number:
+        type: string
+        description: Required for cta_call; optional leading + and 6-15 digits. Omit for other actions.
+        example: "+15555550100"
   MessageButtons:
     type: object
     required:
@@ -3127,6 +3867,10 @@ definitions:
       - Phone
       - Body
     properties:
+      MentionAll:
+        type: boolean
+        default: false
+        description: Mention all current group participants without visible phone numbers. A standalone @everyone also enables this; text is preserved. Direct chats are rejected and participant lookup failures abort sending.
       Phone:
         type: string
         example: "5491155553935"
@@ -3154,6 +3898,10 @@ definitions:
       - Phone
       - Image
     properties:
+      MentionAll:
+        type: boolean
+        default: false
+        description: Mention all current group participants without visible phone numbers. A standalone @everyone also enables this; text is preserved. Direct chats are rejected and participant lookup failures abort sending.
       Phone:
         type: string
         example: "5491155553935"
@@ -3211,6 +3959,10 @@ definitions:
       - Phone
       - Video 
     properties:
+      MentionAll:
+        type: boolean
+        default: false
+        description: Mention all current group participants without visible phone numbers. A standalone @everyone also enables this; text is preserved. Direct chats are rejected and participant lookup failures abort sending.
       Phone:
         type: string
         example: "5491155553935"
@@ -3277,6 +4029,10 @@ definitions:
       - Document 
       - FileName 
     properties:
+      MentionAll:
+        type: boolean
+        default: false
+        description: Mention all current group participants without visible phone numbers. A standalone @everyone also enables this; text is preserved. Direct chats are rejected and participant lookup failures abort sending.
       Phone:
         type: string
         example: "5491155553935"

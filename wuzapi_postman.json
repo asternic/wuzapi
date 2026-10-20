@@ -982,6 +982,39 @@
           "response": []
         },
           {
+            "name": "Send Carousel",
+            "request": {
+              "method": "POST",
+              "header": [
+                {
+                  "key": "token",
+                  "value": "{{token}}"
+                },
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": {
+                "mode": "raw",
+                "raw": "{\n  \"Phone\": \"15555550100\",\n  \"Body\": \"Choose a destination\",\n  \"Cards\": [\n    {\n      \"Body\": \"Summit\",\n      \"Image\": \"https://example.com/summit.jpg\",\n      \"Buttons\": [\n        {\n          \"type\": \"reply\",\n          \"title\": \"Choose\",\n          \"id\": \"summit\"\n        }\n      ]\n    },\n    {\n      \"Body\": \"Coast\",\n      \"Image\": \"https://example.com/coast.png\",\n      \"Buttons\": [\n        {\n          \"type\": \"cta_url\",\n          \"title\": \"Details\",\n          \"url\": \"https://example.com/coast\"\n        }\n      ]\n    }\n  ]\n}"
+              },
+              "url": {
+                "raw": "{{baseUrl}}/chat/send/carousel",
+                "host": [
+                  "{{baseUrl}}"
+                ],
+                "path": [
+                  "chat",
+                  "send",
+                  "carousel"
+                ]
+              },
+              "description": "Send one native carousel with 2-10 image cards to a direct PN/LID chat. Replace sample image URLs. Reply IDs must be explicit and unique across cards. Transport ACK does not prove display. Pinned whatsmeow loses interactive nodes on recipient retry receipts; see API.md. Never automatically replay uncertain sends."
+            },
+            "response": []
+          },
+          {
             "name": "Send Buttons - Reply Only (max 3)",
             "request": {
               "method": "POST",
