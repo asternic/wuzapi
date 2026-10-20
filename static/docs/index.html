@@ -751,6 +751,16 @@
                 <h2 class="mb-0">Chat</h2>
             </div>
             <p>Endpoints to send messages and manage chat interactions.</p>
+            <div class="endpoint">
+                <h3>Web messaging client</h3>
+                <p>Open <a href="/client/">the Svelte web client</a> for conversations, contacts, groups, paginated history, attachments and voice recording/playback. Sign in with a user token. History must be enabled; incoming messages are polled every 3.5 seconds while visible. Existing webhooks are unchanged. Microphone recording requires HTTPS or localhost and FFmpeg/libopus on the server.</p>
+                <h4><span class="method get">GET</span> /chat/conversations</h4>
+                <p>Lists only the current user's latest stored chat summaries. Optional limit (1–200, default 100) and nonnegative offset. Response data: chats, has_more, next_offset. Stdio: <code>chat.conversations</code>.</p>
+                <h4><span class="method get">GET</span> /chat/messages</h4>
+                <p>Required chat_jid; optional limit (1–100, default 50) and before (next_before from an earlier page). Response data: messages, has_more, next_before. Sorts by timestamp and ID descending. Cursors are scoped to the user and chat; missing/pruned cursors return 404. Both read endpoints return 501 if history is disabled and use no-store responses. Stdio: <code>chat.messages</code>.</p>
+                <h4><span class="method post">POST</span> /chat/send/voice</h4>
+                <p>Multipart fields: Phone, Audio file, optional Id. Converts up to 16 MiB of browser audio to OGG/Opus (up to five minutes, 45-second conversion timeout) and sends a voice note. Returns the normal audio response. Invalid uploads return 400; conversion failures return 422. HTTP-only; stdio clients can use <code>chat.send.audio</code>.</p>
+            </div>
             <div class="alert alert-info">
                 <strong>Message destinations (Phone):</strong> Send phone digits with country code (an optional leading + is accepted), a full phone JID such as <code>5491155554444@s.whatsapp.net</code>, or a full LID JID such as <code>987654321012345@lid</code>. Use a full <code>@g.us</code> JID for groups where supported; endpoint-specific restrictions still apply. Preserve the full chat JID from incoming events when replying; a LID does not require a known phone number. Bare numeric IDs use cached PN/LID mappings and otherwise fall back to a phone JID; use a full JID if ambiguous. Keep identifiers as strings. Bare values cannot contain internal spaces or punctuation other than a single leading +. Usernames and Cloud API BSUIDs are not supported destinations. These rules also apply to <code>params.Phone</code> in mapped stdio send methods. A successful send response does not confirm delivery; track delivery/read events.
             </div>

@@ -319,6 +319,15 @@ To interact with the API, you must include the `Authorization` header in HTTP re
 
 Message send endpoints accept full phone-number, LID (`@lid`), and group JIDs where supported, in addition to international phone digits. Preserve the full chat JID when replying. See [message destinations and stdio examples](API.md#message-destinations-phone) for resolution rules and unsupported formats.
 
+## Web messaging client
+
+Open **`/client/`** on your WuzAPI server for the Svelte web client: chats,
+contacts, groups, paginated history, attachments, voice recording and playback.
+Sign in with a user token and enable history in client settings to receive
+messages through polling. Browser recordings require HTTPS (or localhost) and
+FFmpeg with libopus on the server. Built assets are included; Node.js is only
+needed to rebuild the interface. See [client setup, development and limits](webclient/README.md).
+
 ## ADMIN Actions
 
 You can list, add and remove users using the admin endpoints. For that you must use the WUZAPI_ADMIN_TOKEN in the Authorization header

@@ -13,6 +13,100 @@ servers:
     description: Current host
 
 paths:
+  /chat/conversations:
+    get:
+      tags: [Chat]
+      summary: List the current user's stored conversations
+      description: Tenant-scoped latest-message summaries. Requires enabled history (501 otherwise). No-store response. Also available in stdio as chat.conversations.
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - in: query
+          name: limit
+          schema: {type: integer, minimum: 1, maximum: 200, default: 100}
+        - in: query
+          name: offset
+          schema: {type: integer, minimum: 0, default: 0}
+      responses:
+        '200':
+          description: data contains chats, has_more and next_offset. Each chat has chat_jid, message_id, sender_jid, timestamp, message_type and text_content.
+        '400':
+          description: Invalid pagination
+        '401':
+          description: Invalid user token
+        '501':
+          description: History disabled
+  /chat/messages:
+    get:
+      tags: [Chat]
+      summary: Read a cursor-paginated page of stored messages
+      description: Tenant-scoped history sorted by timestamp and row ID descending. Does not request phone-side history recovery. Also available in stdio as chat.messages. No-store response.
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - in: query
+          name: chat_jid
+          required: true
+          schema: {type: string, example: '777@lid'}
+        - in: query
+          name: limit
+          schema: {type: integer, minimum: 1, maximum: 100, default: 50}
+        - in: query
+          name: before
+          description: next_before from the previous page; must belong to the current user and chat. Omit for newest messages.
+          schema: {type: integer, minimum: 1}
+      responses:
+        '200':
+          description: data contains messages (existing history format), has_more and next_before.
+        '400':
+          description: Invalid pagination or missing chat_jid
+        '401':
+          description: Invalid user token
+        '404':
+          description: Missing or pruned pagination anchor; refresh the chat
+        '501':
+          description: History disabled
+  /chat/send/voice:
+    post:
+      tags: [Chat]
+      summary: Convert and send a browser voice recording
+      description: HTTP-only multipart upload. Requires FFmpeg with libopus. Input is limited to 16 MiB; output is OGG/Opus, mono 48 kHz at 24 kbit/s, capped at five minutes. Conversion times out after 45 seconds. Existing JSON audio and stdio audio methods are unchanged.
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [Phone, Audio]
+              properties:
+                Phone:
+                  type: string
+                  description: Destination phone digits or full WhatsApp JID, including @lid and supported group JIDs.
+                  example: '777@lid'
+                Audio:
+                  type: string
+                  format: binary
+                Seconds:
+                  type: integer
+                  minimum: 0
+                  maximum: 300
+                  description: Optional duration metadata for the recording
+                Id:
+                  type: string
+                  description: Optional message ID
+      responses:
+        '200':
+          description: Normal audio response with Details, Timestamp and Id in data
+        '400':
+          description: Invalid destination or malformed/oversized recording
+        '401':
+          description: Invalid user token
+        '422':
+          description: Audio conversion failed or FFmpeg/libopus unavailable
+        '500':
+          description: Session or send failure
   /health:
     get:
       tags:

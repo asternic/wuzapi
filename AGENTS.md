@@ -49,6 +49,7 @@ The application is a single `package main`, with feature-specific files alongsid
 - `media*.go`, `s3manager.go`: attachment processing, temporary storage, delivery, and S3 integration. See `media-memory.md` before changing media buffering or resource ownership.
 - `helpers.go`, `logging_config.go`, `proxy_pool.go`, `rabbitmq.go`: authentication/utilities, logging configuration, proxy allocation, and event publishing.
 - `static/`: dashboard, API documentation, and browser assets.
+- `webclient/`: Svelte 5/Vite messaging client source; `npm ci`, `npm run check`, `npm test`, and `npm run build` run from this directory. Rebuild and include `static/client/` when changing the client. See `webclient/README.md` for history polling and audio requirements.
 
 Important dependencies include whatsmeow, Gorilla Mux, sqlx, zerolog, modernc SQLite, lib/pq, AWS SDK v2, and amqp091-go.
 
