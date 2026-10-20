@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "b275f9a7-7fd5-4197-b5de-4e3a9c9d2d78",
     "name": "WuzAPI Complete Collection",
-    "description": "REST API for interacting with WhatsApp using the whatsmeow library.",
+    "description": "REST API for interacting with WhatsApp using the whatsmeow library. Message send Phone fields accept international phone digits (optional leading +), full phone JIDs (@s.whatsapp.net), LID JIDs (@lid), and group JIDs (@g.us) where supported. Preserve the full chat JID when replying. Bare numeric IDs use cached PN/LID mappings with a phone-number fallback; use a full JID if ambiguous. Usernames and Cloud API BSUIDs are not supported destinations. See API.md for full destination rules.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
