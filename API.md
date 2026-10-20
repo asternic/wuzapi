@@ -2361,3 +2361,62 @@ does not provide them. No local cache or database table is added. A nil result
 returns 404; upstream lookup failures use the standard 500 error envelope,
 including when WhatsApp cannot provide a profile for a non-business account.
 Unknown fields and trailing JSON are rejected.
+
+## Web client history and voice recordings
+
+The bundled Svelte messaging client is available at `/client/`. See
+[the client guide](webclient/README.md) for setup, polling, media requirements,
+and history availability. All three endpoints below use the normal user-token
+header. Existing history and JSON audio endpoints are unchanged.
+
+### List the current user's conversations
+
+`GET /chat/conversations?limit=100&offset=0`
+
+Returns the latest stored message summary for each chat belonging to the
+current user. `limit` is 1–200 (default 100); `offset` is nonnegative. The response
+`data` contains `chats`, `has_more`, and `next_offset`. Each summary includes
+`chat_jid`, `message_id`, `sender_jid`, `timestamp`, `message_type`, and
+`text_content`. No other user's chat index is included. History must be enabled
+(501 otherwise); empty lists are returned as `[]`. Responses are not cacheable.
+Stdio method: `chat.conversations`, with optional `limit` and `offset` params.
+
+### Read a page of stored messages
+
+`GET /chat/messages?chat_jid=777%40lid&limit=50&before=123`
+
+`chat_jid` is required. `limit` is 1–100 (default 50). Omit `before` for the newest
+page; use the returned `next_before` as `before` to load older messages. The
+response `data` contains `messages` (the existing history message format),
+`has_more`, and `next_before`. Messages sort by timestamp descending, then row ID
+descending, including when timestamps are equal. Pagination anchors must belong
+to the current user and chat. A missing/pruned cursor returns 404; refresh the
+chat to start again. History must be enabled (501 otherwise). Responses use
+`Cache-Control: no-store`.
+
+Stdio method: `chat.messages`, with `chat_jid`, optional `limit`, and optional
+`before`. This endpoint reads local history; it does not ask WhatsApp to recover
+messages. Use the existing `/session/history` request for phone-side recovery.
+
+### Send a browser voice recording
+
+`POST /chat/send/voice` (`multipart/form-data`)
+
+Fields: `Phone` (destination), `Audio` (recording file), optional `Seconds`
+(duration metadata, 0–300), and optional `Id` (message ID). Accepts up to 16 MiB of input; converts audio to mono 48 kHz OGG/Opus at
+24 kbit/s with FFmpeg/libopus, capped at five minutes. Conversion has a 45-second
+timeout. The existing `/chat/send/audio` handler then sends the result with
+`ptt: true`. Success has the normal audio `Details`, `Timestamp`, and `Id` data.
+Malformed/oversized uploads return 400, conversion failures return 422, and
+session/send failures use the existing audio errors. Converted temporary files
+are removed after the request.
+
+```sh
+curl -X POST http://localhost:8080/chat/send/voice \
+  -H 'token: YOUR_USER_TOKEN' \
+  -F 'Phone=777@lid' -F 'Audio=@recording.webm'
+```
+
+This multipart endpoint is HTTP-only. Stdio clients continue to send prepared
+audio through `chat.send.audio`. Microphone capture in the web client requires
+HTTPS or localhost.

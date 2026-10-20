@@ -7,6 +7,119 @@
   },
   "item": [
     {
+      "name": "Web Client",
+      "item": [
+        {
+          "name": "List Conversations",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/chat/conversations?limit=100&offset=0",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "chat",
+                "conversations"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "100"
+                },
+                {
+                  "key": "offset",
+                  "value": "0"
+                }
+              ]
+            },
+            "description": "User-scoped stored history; requires enabled history. See webclient/README.md for pagination."
+          },
+          "response": []
+        },
+        {
+          "name": "Read Message Page",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/chat/messages?chat_jid=777@lid&limit=50",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "chat",
+                "messages"
+              ],
+              "query": [
+                {
+                  "key": "chat_jid",
+                  "value": "777@lid"
+                },
+                {
+                  "key": "limit",
+                  "value": "50"
+                }
+              ]
+            },
+            "description": "User-scoped stored history; requires enabled history. See webclient/README.md for pagination."
+          },
+          "response": []
+        },
+        {
+          "name": "Send Browser Voice Recording",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "Phone",
+                  "value": "777@lid",
+                  "type": "text"
+                },
+                {
+                  "key": "Audio",
+                  "type": "file",
+                  "src": []
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/chat/send/voice",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "chat",
+                "send",
+                "voice"
+              ]
+            },
+            "description": "Requires FFmpeg/libopus. Up to 16 MiB input; converts to OGG/Opus capped at five minutes. Existing JSON audio endpoints are unchanged."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
       "name": "Admin",
       "item": [
         {

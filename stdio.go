@@ -24,7 +24,9 @@ import (
 	"fmt"
 	"io"
 	"net/http/httptest"
+	"net/url"
 	"os"
+	"strings"
 	"sync"
 
 	"github.com/rs/zerolog/log"
@@ -386,6 +388,16 @@ func (ss *stdioServer) routeRequest(req *jsonRpcRequest) {
 	case "chat.download.document":
 		httpMethod = "POST"
 		httpPath = "/chat/downloaddocument"
+	case "chat.conversations", "chat.messages":
+		httpMethod = "GET"
+		httpPath = "/chat/" + strings.TrimPrefix(req.Method, "chat.")
+		query := url.Values{}
+		for _, key := range []string{"chat_jid", "limit", "offset", "before"} {
+			if value, ok := req.Params[key]; ok {
+				query.Set(key, fmt.Sprint(value))
+			}
+		}
+		httpPath += "?" + query.Encode()
 	case "chat.history":
 		httpMethod = "GET"
 		chatJID, ok := req.Params["chat_jid"].(string)
