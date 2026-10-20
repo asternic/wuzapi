@@ -444,6 +444,10 @@ function createGroupListItem(group) {
                             <span><i class="calendar icon"></i>Created ${createdDate}</span>
                         </div>
                         <div class="meta">
+                            <span><i class="hashtag icon"></i><code>${group.JID}</code></span>
+                            <a href="#" onclick="copyGroupId(event, '${group.JID}')"><i class="copy icon"></i>Copy ID</a>
+                        </div>
+                        <div class="meta">
                             ${featureBadges}
                         </div>
                     </div>
@@ -684,6 +688,15 @@ function createParticipantItem(participant) {
             </div>
         </div>
     `;
+}
+
+function copyGroupId(event, jid) {
+    event.preventDefault();
+    navigator.clipboard.writeText(jid).then(() => {
+        $.toast({ class: 'success', message: 'Group ID copied to clipboard!' });
+    }).catch(() => {
+        $.toast({ class: 'error', message: 'Failed to copy group ID' });
+    });
 }
 
 function filterGroups() {
