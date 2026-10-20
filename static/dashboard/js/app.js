@@ -2168,7 +2168,7 @@ async function deleteHmacConfig() {
     
     const response = await res.json();
     
-    // Nova verificação - estrutura direta sem "success"
+    // This endpoint returns Details directly, without a success wrapper.
     if (res.ok && response.Details) {
       showSuccess('HMAC configuration deleted successfully');
       

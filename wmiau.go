@@ -1178,7 +1178,6 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 
 			// Only save if there's meaningful content (including delete messages)
 			if textContent != "" || mediaLink != "" || (messageType != "text" && messageType != "reaction") || messageType == "delete" {
-				// Serializar evt para JSON
 				evtJSON, err := json.Marshal(evt)
 				if err != nil {
 					log.Error().Err(err).Msg("Failed to marshal event to JSON")

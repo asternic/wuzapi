@@ -148,7 +148,7 @@ func (s *server) authalice(next http.Handler) http.Handler {
 		events := ""
 		proxy_url := ""
 		qrcode := ""
-		var hasHmac bool // ← Nova variável para status HMAC
+		var hasHmac bool
 
 		// Get token from headers or uri parameters
 		token := r.Header.Get("token")
@@ -2189,15 +2189,15 @@ func (s *server) SendLocation() http.HandlerFunc {
 func (s *server) SendButtons() http.HandlerFunc {
 
 	type buttonStruct struct {
-		Type        string `json:"type"`         // "reply" (default) | "cta_url" | "cta_call" | "copy"
-		Title       string `json:"title"`        // Texto do botão (max 20 caracteres)
-		Text        string `json:"text"`         // Fallback para Title
-		ButtonText  string `json:"buttonText"`   // Fallback para Title (legacy)
-		ID          string `json:"id"`           // ID do botão
-		ButtonId    string `json:"buttonId"`     // Fallback para ID
-		URL         string `json:"url"`          // Necessário para cta_url
-		PhoneNumber string `json:"phone_number"` // Necessário para cta_call
-		CopyCode    string `json:"copy_code"`    // Necessário para copy
+		Type        string `json:"type"`       // "reply" (default) | "cta_url" | "cta_call" | "copy"
+		Title       string `json:"title"`      // Button label (max 20 characters)
+		Text        string `json:"text"`       // Fallback for Title
+		ButtonText  string `json:"buttonText"` // Fallback for Title (legacy)
+		ID          string `json:"id"`
+		ButtonId    string `json:"buttonId"`     // Fallback for ID
+		URL         string `json:"url"`          // Required for cta_url
+		PhoneNumber string `json:"phone_number"` // Required for cta_call
+		CopyCode    string `json:"copy_code"`    // Required for copy
 	}
 
 	type sendButtonsStruct struct {
@@ -2228,7 +2228,6 @@ func (s *server) SendButtons() http.HandlerFunc {
 			return
 		}
 
-		// --- Fallbacks e Validações Básicas ---
 		body := strings.TrimSpace(t.Body)
 		if body == "" {
 			body = strings.TrimSpace(t.Text)
@@ -2239,7 +2238,7 @@ func (s *server) SendButtons() http.HandlerFunc {
 			return
 		}
 
-		// --- Parse de Botões para NativeFlow (Interactive) ---
+		// Convert buttons to the interactive native flow format.
 		nativeBtns := make([]*waE2E.InteractiveMessage_NativeFlowMessage_NativeFlowButton, 0, len(t.Buttons))
 
 		for _, btn := range t.Buttons {
@@ -2254,7 +2253,7 @@ func (s *server) SendButtons() http.HandlerFunc {
 				continue
 			}
 
-			// WhatsApp limita o título a 20 caracteres nos botões
+			// WhatsApp limits button labels to 20 characters.
 			if runes := []rune(title); len(runes) > 20 {
 				title = string(runes[:20])
 			}
@@ -2289,7 +2288,7 @@ func (s *server) SendButtons() http.HandlerFunc {
 				name = "cta_copy"
 				pm = map[string]string{"display_text": title, "copy_code": btn.CopyCode}
 			default:
-				continue // Tipo desconhecido, ignora o botão
+				continue
 			}
 
 			paramsJSON, _ := json.Marshal(pm)
@@ -2304,7 +2303,6 @@ func (s *server) SendButtons() http.HandlerFunc {
 			return
 		}
 
-		// --- Destinatário e Mensagem ID ---
 		recipient, err := validateMessageFields(r.Context(), clientManager.GetWhatsmeowClient(txtid), t.Phone, t.ContextInfo.StanzaID, t.ContextInfo.Participant)
 		if err != nil {
 			s.Respond(w, r, http.StatusBadRequest, err)
@@ -2332,7 +2330,7 @@ func (s *server) SendButtons() http.HandlerFunc {
 			}
 		}
 
-		// --- ContextInfo (Citações/Responder) ---
+		// Preserve reply context, mentions, and forwarding information.
 		var ctxInfo waE2E.ContextInfo
 		if t.ContextInfo.StanzaID != nil {
 			qm := t.QuotedMessage
@@ -2352,7 +2350,6 @@ func (s *server) SendButtons() http.HandlerFunc {
 			ctxInfo.IsForwarded = t.ContextInfo.IsForwarded
 		}
 
-		// --- Construção da InteractiveMessage ---
 		interactiveMsg := &waE2E.InteractiveMessage{
 			Header:      &waE2E.InteractiveMessage_Header{},
 			Body:        &waE2E.InteractiveMessage_Body{Text: proto.String(body)},
@@ -2369,7 +2366,7 @@ func (s *server) SendButtons() http.HandlerFunc {
 			interactiveMsg.Footer = &waE2E.InteractiveMessage_Footer{Text: proto.String(t.Footer)}
 		}
 
-		// Prioridade para Imagem no Header, senão usa Título (Texto)
+		// Prefer the header image over the text title.
 		if imgMsg != nil {
 			interactiveMsg.Header.HasMediaAttachment = proto.Bool(true)
 			interactiveMsg.Header.Media = &waE2E.InteractiveMessage_Header_ImageMessage{ImageMessage: imgMsg}
@@ -2379,7 +2376,7 @@ func (s *server) SendButtons() http.HandlerFunc {
 
 		finalMsg := &waE2E.Message{InteractiveMessage: interactiveMsg}
 
-		// --- Nó BIZ (Fundamental para renderizar os botões) ---
+		// WhatsApp requires these business nodes to render interactive buttons.
 		extraNodes := []waBinary.Node{{
 			Tag: "biz",
 			Content: []waBinary.Node{{
@@ -2392,7 +2389,6 @@ func (s *server) SendButtons() http.HandlerFunc {
 			}},
 		}}
 
-		// --- Envio Final ---
 		resp, err := sendMessageWithRecovery(txtid, client, context.Background(), recipient, finalMsg,
 			whatsmeow.SendRequestExtra{
 				ID:              msgid,
@@ -2405,7 +2401,6 @@ func (s *server) SendButtons() http.HandlerFunc {
 			return
 		}
 
-		// --- Histórico e Eventos ---
 		historyStr := r.Context().Value("userinfo").(Values).Get("History")
 		historyLimit, _ := strconv.Atoi(historyStr)
 		s.saveOutgoingMessageToHistory(txtid, recipient.String(), msgid, "buttons", body, "", historyLimit)
@@ -2413,7 +2408,6 @@ func (s *server) SendButtons() http.HandlerFunc {
 		token := r.Context().Value("userinfo").(Values).Get("Token")
 		s.publishSentMessageEvent(token, txtid, txtid, recipient, msgid, finalMsg, resp.Timestamp)
 
-		// --- Resposta HTTP ---
 		responseJSON, _ := json.Marshal(map[string]interface{}{
 			"Details":   "Sent",
 			"Timestamp": resp.Timestamp.Unix(),
@@ -7476,7 +7470,7 @@ func (s *server) GetHmacConfig() http.HandlerFunc {
 func (s *server) DeleteHmacConfig() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		txtid := r.Context().Value("userinfo").(Values).Get("Id")
-		token := r.Context().Value("userinfo").(Values).Get("Token") // ← Pegar o token
+		token := r.Context().Value("userinfo").(Values).Get("Token")
 
 		// Clear HMAC key
 		_, err := s.db.Exec(`UPDATE users SET hmac_key = NULL WHERE id = $1`, txtid)
