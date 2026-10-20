@@ -19,6 +19,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/gorilla/mux"
 	"github.com/nfnt/resize"
@@ -6688,14 +6689,26 @@ func resolveMessageRecipient(ctx context.Context, lidStore messageLIDStore, phon
 	}
 
 	if strings.ContainsRune(phone, '@') {
+		// ParseJID can silently ignore extra @ segments or accept an empty
+		// server. Reject malformed input without restricting existing JID types.
+		if strings.Count(phone, "@") != 1 || strings.IndexFunc(phone, func(r rune) bool {
+			return unicode.IsSpace(r) || unicode.IsControl(r)
+		}) >= 0 {
+			return types.EmptyJID, errors.New("invalid Phone: expected a complete WhatsApp JID")
+		}
 		recipient, ok := parseJID(phone)
-		if !ok {
+		if !ok || recipient.Server == "" {
 			return types.EmptyJID, errors.New("could not parse Phone")
 		}
 		return recipient, nil
 	}
 
 	bareID := strings.TrimPrefix(phone, "+")
+	// Bare identifiers are numeric phone numbers or cached LIDs. Do not turn
+	// usernames or Cloud API BSUIDs into phone-number JIDs.
+	if bareID == "" || strings.IndexFunc(bareID, func(r rune) bool { return r < '0' || r > '9' }) >= 0 {
+		return types.EmptyJID, errors.New("invalid Phone: use digits with an optional leading +, or a complete WhatsApp JID; usernames and BSUIDs are not supported")
+	}
 	if lidStore == nil {
 		return types.NewJID(bareID, types.DefaultUserServer), nil
 	}

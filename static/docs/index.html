@@ -751,6 +751,9 @@
                 <h2 class="mb-0">Chat</h2>
             </div>
             <p>Endpoints to send messages and manage chat interactions.</p>
+            <div class="alert alert-info">
+                <strong>Message destinations (Phone):</strong> Send phone digits with country code (an optional leading + is accepted), a full phone JID such as <code>5491155554444@s.whatsapp.net</code>, or a full LID JID such as <code>987654321012345@lid</code>. Use a full <code>@g.us</code> JID for groups where supported; endpoint-specific restrictions still apply. Preserve the full chat JID from incoming events when replying; a LID does not require a known phone number. Bare numeric IDs use cached PN/LID mappings and otherwise fall back to a phone JID; use a full JID if ambiguous. Keep identifiers as strings. Bare values cannot contain internal spaces or punctuation other than a single leading +. Usernames and Cloud API BSUIDs are not supported destinations. These rules also apply to <code>params.Phone</code> in mapped stdio send methods. A successful send response does not confirm delivery; track delivery/read events.
+            </div>
 
             <div class="endpoint">
                 <h3><span class="method post">POST</span> <span class="path">/chat/send/text</span></h3>
@@ -769,7 +772,7 @@
                         <tr>
                             <td class="required">Phone</td>
                             <td>string</td>
-                            <td>Recipient's phone number (with country code, without "+" or other special characters)</td>
+                            <td>Destination phone digits (optional leading +), full phone JID, LID JID, or group JID where supported; see the destination rules above.</td>
                         </tr>
                         <tr>
                             <td class="required">Body</td>
@@ -829,7 +832,7 @@
                         <tr>
                             <td class="required">Phone</td>
                             <td>string</td>
-                            <td>Recipient's phone number</td>
+                            <td>Destination phone digits or full WhatsApp JID; see the destination rules above.</td>
                         </tr>
                         <tr>
                             <td class="required">Image</td>
