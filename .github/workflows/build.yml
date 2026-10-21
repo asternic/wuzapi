@@ -70,3 +70,23 @@ jobs:
         name: wuzapi-binary
         path: wuzapi
         retention-days: 7
+
+  webclient:
+    name: Check Svelte Client
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: webclient
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: webclient/package-lock.json
+      - run: npm ci
+      - run: npm run check
+      - run: npm test
+      - run: npm run build
+      - name: Verify committed client assets
+        run: git diff --exit-code -- ../static/client
