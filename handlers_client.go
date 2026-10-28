@@ -108,7 +108,7 @@ func (s *server) ListChatMessages() http.HandlerFunc {
 			return
 		}
 		user := r.Context().Value("userinfo").(Values).Get("Id")
-		query := `SELECT id, user_id, chat_jid, sender_jid, message_id, timestamp, message_type, text_content, media_link,
+		query := `SELECT id, user_id, chat_jid, sender_jid, message_id, timestamp, sent_at, message_type, text_content, media_link,
     COALESCE(quoted_message_id, '') AS quoted_message_id, COALESCE(datajson, '') AS datajson
     FROM message_history WHERE user_id = ? AND chat_jid = ?`
 		args := []interface{}{user, chat}

@@ -346,7 +346,7 @@ func (s *server) SendCarousel() http.HandlerFunc {
 			return
 		}
 		historyLimit, _ := strconv.Atoi(info.Get("History"))
-		s.saveOutgoingMessageToHistory(userID, recipient.String(), id, "carousel", request.Body, "", historyLimit)
+		s.saveOutgoingMessageToHistory(userID, recipient.String(), id, "carousel", request.Body, "", response.Timestamp, historyLimit)
 		s.publishSentMessageEvent(info.Get("Token"), userID, userID, recipient, id, message, response.Timestamp, "carousel")
 		responseJSON, _ := json.Marshal(map[string]interface{}{"Details": "Sent", "Timestamp": response.Timestamp.Unix(), "Id": id})
 		s.Respond(w, r, http.StatusOK, string(responseJSON))

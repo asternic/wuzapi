@@ -2169,7 +2169,8 @@ paths:
         message ID in quoted_message_id, and replacement text or caption in text_content
         (which can be empty). The original row is not modified. Consumers must apply edits
         to their targets, using protocolMessage.timestampMS in datajson for edit ordering
-        when available. Database timestamps represent insertion time, including for HistorySync.
+        when available. Database timestamps represent insertion time, including for HistorySync;
+        sent_at holds the send time WhatsApp reported, when known.
         A limited result may contain an edit without its original message.
         Live and HistorySync edits use the same fields. Legacy unknown rows are repaired
         when the same edit is redelivered; existing rows are not scanned or backfilled.
@@ -2221,6 +2222,7 @@ paths:
                       sender_jid: "5491155554444@s.whatsapp.net"
                       message_id: "3EB0C767D26A1B5F7C83"
                       timestamp: "2023-12-01T15:30:00Z"
+                      sent_at: "2023-12-01T15:29:58Z"
                       message_type: "text"
                       text_content: "Hello, how are you?"
                       media_link: ""
@@ -3539,8 +3541,13 @@ definitions:
       timestamp:
         type: string
         format: date-time
-        description: "Timestamp when the message was sent/received"
+        description: "When the row was stored. HistorySync messages are stored at sync time, so use sent_at for the send time"
         example: "2023-12-01T15:30:00Z"
+      sent_at:
+        type: string
+        format: date-time
+        description: "When the message was sent, as reported by WhatsApp. Omitted when unknown, including rows stored before this field existed"
+        example: "2023-12-01T15:29:58Z"
       message_type:
         type: string
         description: "Type of message (text, image, audio, video, document, sticker, contact, location, etc.)"

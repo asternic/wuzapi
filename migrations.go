@@ -102,6 +102,13 @@ var migrations = []Migration{
 		UpSQL: `ALTER TABLE users ADD COLUMN IF NOT EXISTS device_jid TEXT NOT NULL DEFAULT '';
         CREATE UNIQUE INDEX IF NOT EXISTS idx_users_device_jid ON users(device_jid) WHERE device_jid <> '';`,
 	},
+	{
+		// sent_at is when WhatsApp says the message was sent; timestamp stays the
+		// time the row was stored (history sync stores old messages at pairing time).
+		ID:    16,
+		Name:  "add_message_sent_at",
+		UpSQL: `ALTER TABLE message_history ADD COLUMN IF NOT EXISTS sent_at TIMESTAMP;`,
+	},
 }
 
 const addProxyPoolSQL = `
@@ -566,6 +573,12 @@ func applyMigration(db *sqlx.DB, migration Migration) error {
 			if err == nil {
 				_, err = tx.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_device_jid ON users(device_jid) WHERE device_jid <> ''`)
 			}
+		} else {
+			_, err = tx.Exec(migration.UpSQL)
+		}
+	} else if migration.ID == 16 {
+		if db.DriverName() == "sqlite" {
+			err = addColumnIfNotExistsSQLite(tx, "message_history", "sent_at", "DATETIME")
 		} else {
 			_, err = tx.Exec(migration.UpSQL)
 		}

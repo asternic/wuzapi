@@ -128,7 +128,7 @@ func TestOutgoingHistoryKeepsMediaMetadata(t *testing.T) {
 		t.Fatal(err)
 	}
 	message := &waE2E.Message{AudioMessage: &waE2E.AudioMessage{URL: proto.String("https://example.test/encrypted"), MediaKey: []byte{1, 2, 3}, Mimetype: proto.String("audio/ogg")}}
-	s.saveOutgoingMessageToHistory("client-media", "123@lid", "voice-id", "audio", "", "", 10, message)
+	s.saveOutgoingMessageToHistory("client-media", "123@lid", "voice-id", "audio", "", "", time.Time{}, 10, message)
 	var raw string
 	if err := s.db.Get(&raw, "SELECT datajson FROM message_history WHERE user_id='client-media'"); err != nil {
 		t.Fatal(err)

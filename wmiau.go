@@ -1194,6 +1194,7 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 					mediaLink,
 					replyToMessageID,
 					string(evtJSON),
+					evt.Info.Timestamp,
 				)
 				if err != nil {
 					log.Error().Err(err).Msg("Failed to save message to history")
@@ -1413,8 +1414,12 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 
 						// Get message timestamp
 						msgTimestamp := time.Now()
+						// sentAt stays zero (stored as NULL) when the sync didn't include a send time,
+						// rather than recording the sync time as the send time.
+						var sentAt time.Time
 						if timestamp := msg.Message.GetMessageTimestamp(); timestamp > 0 {
 							msgTimestamp = time.Unix(int64(timestamp), 0)
+							sentAt = msgTimestamp
 						}
 
 						// Parse sender JID for MessageInfo
@@ -1509,6 +1514,7 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 								mediaLink,
 								quotedMessageID,
 								string(evtJSON),
+								sentAt,
 							)
 							if err != nil {
 								log.Error().Err(err).

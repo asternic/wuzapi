@@ -1219,7 +1219,7 @@ func (s *server) SendDocument() http.HandlerFunc {
 
 		historyStr := r.Context().Value("userinfo").(Values).Get("History")
 		historyLimit, _ := strconv.Atoi(historyStr)
-		s.saveOutgoingMessageToHistory(txtid, recipient.String(), msgid, "document", t.Caption, "", historyLimit, msg)
+		s.saveOutgoingMessageToHistory(txtid, recipient.String(), msgid, "document", t.Caption, "", resp.Timestamp, historyLimit, msg)
 
 		// Publish sent message event to RabbitMQ
 		token := r.Context().Value("userinfo").(Values).Get("Token")
@@ -1401,7 +1401,7 @@ func (s *server) SendAudio() http.HandlerFunc {
 
 		historyStr := r.Context().Value("userinfo").(Values).Get("History")
 		historyLimit, _ := strconv.Atoi(historyStr)
-		s.saveOutgoingMessageToHistory(txtid, recipient.String(), msgid, "audio", "", "", historyLimit, msg)
+		s.saveOutgoingMessageToHistory(txtid, recipient.String(), msgid, "audio", "", "", resp.Timestamp, historyLimit, msg)
 
 		token := r.Context().Value("userinfo").(Values).Get("Token")
 		userID := r.Context().Value("userinfo").(Values).Get("Id")
@@ -1592,7 +1592,7 @@ func (s *server) SendImage() http.HandlerFunc {
 
 		historyStr := r.Context().Value("userinfo").(Values).Get("History")
 		historyLimit, _ := strconv.Atoi(historyStr)
-		s.saveOutgoingMessageToHistory(txtid, recipient.String(), msgid, "image", t.Caption, "", historyLimit, msg)
+		s.saveOutgoingMessageToHistory(txtid, recipient.String(), msgid, "image", t.Caption, "", resp.Timestamp, historyLimit, msg)
 
 		// Publish sent message event to RabbitMQ
 		token := r.Context().Value("userinfo").(Values).Get("Token")
@@ -1755,7 +1755,7 @@ func (s *server) SendSticker() http.HandlerFunc {
 
 		historyStr := r.Context().Value("userinfo").(Values).Get("History")
 		historyLimit, _ := strconv.Atoi(historyStr)
-		s.saveOutgoingMessageToHistory(txtid, recipient.String(), msgid, "sticker", "", "", historyLimit, msg)
+		s.saveOutgoingMessageToHistory(txtid, recipient.String(), msgid, "sticker", "", "", resp.Timestamp, historyLimit, msg)
 
 		// Publish sent message event to RabbitMQ
 		token := r.Context().Value("userinfo").(Values).Get("Token")
@@ -1921,7 +1921,7 @@ func (s *server) SendVideo() http.HandlerFunc {
 
 		historyStr := r.Context().Value("userinfo").(Values).Get("History")
 		historyLimit, _ := strconv.Atoi(historyStr)
-		s.saveOutgoingMessageToHistory(txtid, recipient.String(), msgid, "video", t.Caption, "", historyLimit, msg)
+		s.saveOutgoingMessageToHistory(txtid, recipient.String(), msgid, "video", t.Caption, "", resp.Timestamp, historyLimit, msg)
 
 		// Publish sent message event to RabbitMQ
 		token := r.Context().Value("userinfo").(Values).Get("Token")
@@ -2043,7 +2043,7 @@ func (s *server) SendContact() http.HandlerFunc {
 
 		historyStr := r.Context().Value("userinfo").(Values).Get("History")
 		historyLimit, _ := strconv.Atoi(historyStr)
-		s.saveOutgoingMessageToHistory(txtid, recipient.String(), msgid, "contact", t.Name, "", historyLimit)
+		s.saveOutgoingMessageToHistory(txtid, recipient.String(), msgid, "contact", t.Name, "", resp.Timestamp, historyLimit)
 
 		// Publish sent message event to RabbitMQ
 		token := r.Context().Value("userinfo").(Values).Get("Token")
@@ -2167,7 +2167,7 @@ func (s *server) SendLocation() http.HandlerFunc {
 
 		historyStr := r.Context().Value("userinfo").(Values).Get("History")
 		historyLimit, _ := strconv.Atoi(historyStr)
-		s.saveOutgoingMessageToHistory(txtid, recipient.String(), msgid, "location", t.Name, "", historyLimit)
+		s.saveOutgoingMessageToHistory(txtid, recipient.String(), msgid, "location", t.Name, "", resp.Timestamp, historyLimit)
 
 		// Publish sent message event to RabbitMQ
 		token := r.Context().Value("userinfo").(Values).Get("Token")
@@ -2404,7 +2404,7 @@ func (s *server) SendButtons() http.HandlerFunc {
 
 		historyStr := r.Context().Value("userinfo").(Values).Get("History")
 		historyLimit, _ := strconv.Atoi(historyStr)
-		s.saveOutgoingMessageToHistory(txtid, recipient.String(), msgid, "buttons", body, "", historyLimit)
+		s.saveOutgoingMessageToHistory(txtid, recipient.String(), msgid, "buttons", body, "", resp.Timestamp, historyLimit)
 
 		token := r.Context().Value("userinfo").(Values).Get("Token")
 		s.publishSentMessageEvent(token, txtid, txtid, recipient, msgid, finalMsg, resp.Timestamp)
@@ -2693,7 +2693,7 @@ func (s *server) SendList() http.HandlerFunc {
 
 		historyStr := r.Context().Value("userinfo").(Values).Get("History")
 		historyLimit, _ := strconv.Atoi(historyStr)
-		s.saveOutgoingMessageToHistory(txtid, recipient.String(), msgid, "list", body, "", historyLimit)
+		s.saveOutgoingMessageToHistory(txtid, recipient.String(), msgid, "list", body, "", resp.Timestamp, historyLimit)
 
 		token := r.Context().Value("userinfo").(Values).Get("Token")
 		userID := r.Context().Value("userinfo").(Values).Get("Id")
@@ -2893,7 +2893,7 @@ func (s *server) SendMessage() http.HandlerFunc {
 		}
 		historyStr := r.Context().Value("userinfo").(Values).Get("History")
 		historyLimit, _ := strconv.Atoi(historyStr)
-		s.saveOutgoingMessageToHistory(txtid, recipient.String(), msgid, "text", t.Body, "", historyLimit)
+		s.saveOutgoingMessageToHistory(txtid, recipient.String(), msgid, "text", t.Body, "", resp.Timestamp, historyLimit)
 
 		// Publish sent message event to RabbitMQ
 		token := r.Context().Value("userinfo").(Values).Get("Token")
@@ -7344,14 +7344,14 @@ func (s *server) GetHistory() http.HandlerFunc {
 		var query string
 		if s.db.DriverName() == "postgres" {
 			query = `
-                SELECT id, user_id, chat_jid, sender_jid, message_id, timestamp, message_type, text_content, media_link, COALESCE(quoted_message_id, '') as quoted_message_id, COALESCE(datajson, '') as datajson
+                SELECT id, user_id, chat_jid, sender_jid, message_id, timestamp, sent_at, message_type, text_content, media_link, COALESCE(quoted_message_id, '') as quoted_message_id, COALESCE(datajson, '') as datajson
                 FROM message_history
                 WHERE user_id = $1 AND chat_jid = $2
                 ORDER BY timestamp DESC
                 LIMIT $3`
 		} else { // sqlite
 			query = `
-                SELECT id, user_id, chat_jid, sender_jid, message_id, timestamp, message_type, text_content, media_link, COALESCE(quoted_message_id, '') as quoted_message_id, COALESCE(datajson, '') as datajson
+                SELECT id, user_id, chat_jid, sender_jid, message_id, timestamp, sent_at, message_type, text_content, media_link, COALESCE(quoted_message_id, '') as quoted_message_id, COALESCE(datajson, '') as datajson
                 FROM message_history
                 WHERE user_id = ? AND chat_jid = ?
                 ORDER BY timestamp DESC
@@ -7374,8 +7374,8 @@ func (s *server) GetHistory() http.HandlerFunc {
 	}
 }
 
-// save outgoing message to history
-func (s *server) saveOutgoingMessageToHistory(userID, chatJID, messageID, messageType, textContent, mediaLink string, historyLimit int, message ...*waE2E.Message) {
+// save outgoing message to history; sentAt is the server timestamp from the send response
+func (s *server) saveOutgoingMessageToHistory(userID, chatJID, messageID, messageType, textContent, mediaLink string, sentAt time.Time, historyLimit int, message ...*waE2E.Message) {
 	if historyLimit > 0 {
 		// Keep media download metadata for the web client, using the same
 		// envelope as incoming history, without storing full plaintext media files.
@@ -7386,7 +7386,7 @@ func (s *server) saveOutgoingMessageToHistory(userID, chatJID, messageID, messag
 				dataJSON = string(encoded)
 			}
 		}
-		err := s.saveMessageToHistory(userID, chatJID, "me", messageID, messageType, textContent, mediaLink, "", dataJSON)
+		err := s.saveMessageToHistory(userID, chatJID, "me", messageID, messageType, textContent, mediaLink, "", dataJSON, sentAt)
 		if err != nil {
 			log.Error().Err(err).Msg("Failed to save outgoing message to history")
 		}
