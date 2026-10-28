@@ -8,6 +8,7 @@ import (
 	"go.mau.fi/whatsmeow/types/events"
 	"google.golang.org/protobuf/proto"
 	"testing"
+	"time"
 )
 
 func TestHistoryEditContent(t *testing.T) {
@@ -58,7 +59,7 @@ func TestHistoryEditPersistence(t *testing.T) {
 		s := &server{db: db}
 		save := func(id, kind, text, target, chat string) {
 			t.Helper()
-			if err := s.saveMessageToHistory("edit-user", chat, "sender", id, kind, text, "", target, `{"edit":true}`); err != nil {
+			if err := s.saveMessageToHistory("edit-user", chat, "sender", id, kind, text, "", target, `{"edit":true}`, time.Time{}); err != nil {
 				t.Fatal(err)
 			}
 		}

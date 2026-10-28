@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/jmoiron/sqlx"
@@ -24,7 +25,7 @@ func TestHistoryRetentionAndDeletion(t *testing.T) {
 			t.Fatal(err)
 		}
 		save := func(user, chat, id string) error {
-			return s.saveMessageToHistory(user, chat, "sender", id, "text", "hello", "", "", "{}")
+			return s.saveMessageToHistory(user, chat, "sender", id, "text", "hello", "", "", "{}", time.Time{})
 		}
 		count := func(user string) int {
 			t.Helper()

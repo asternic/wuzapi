@@ -732,5 +732,14 @@ use the protocol message's `timestampMS` in `datajson` to order successive edits
 available, since database timestamps record insertion time, including HistorySync.
 A limited response can include an edit without the original message.
 
+### Message send time
+
+Each `/chat/history` row has two times. `timestamp` is when WuzAPI stored the row, so
+every message from a HistorySync gets the sync time. `sent_at` is when the message was
+sent, as reported by WhatsApp: the message's own timestamp for live and HistorySync
+messages, and the server timestamp of the send response for messages sent through the
+API. It is omitted when unknown, including for rows stored before the field existed.
+Results are still ordered by `timestamp`.
+
 Previously imported `unknown` edits are repaired when redelivered. This does not
 backfill existing history or recover events that WhatsApp does not redeliver.

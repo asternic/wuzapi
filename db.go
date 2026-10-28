@@ -125,21 +125,27 @@ func initializeSQLite(config DatabaseConfig) (*sqlx.DB, error) {
 	return db, nil
 }
 
+// HistoryMessage is one message_history row. Timestamp is when the row was
+// stored; SentAt is the send time WhatsApp reported (nil when unknown, e.g.
+// rows stored before the column existed).
 type HistoryMessage struct {
-	ID              int       `json:"id" db:"id"`
-	UserID          string    `json:"user_id" db:"user_id"`
-	ChatJID         string    `json:"chat_jid" db:"chat_jid"`
-	SenderJID       string    `json:"sender_jid" db:"sender_jid"`
-	MessageID       string    `json:"message_id" db:"message_id"`
-	Timestamp       time.Time `json:"timestamp" db:"timestamp"`
-	MessageType     string    `json:"message_type" db:"message_type"`
-	TextContent     string    `json:"text_content" db:"text_content"`
-	MediaLink       string    `json:"media_link" db:"media_link"`
-	QuotedMessageID string    `json:"quoted_message_id,omitempty" db:"quoted_message_id"`
-	DataJson        string    `json:"data_json" db:"datajson"`
+	ID              int        `json:"id" db:"id"`
+	UserID          string     `json:"user_id" db:"user_id"`
+	ChatJID         string     `json:"chat_jid" db:"chat_jid"`
+	SenderJID       string     `json:"sender_jid" db:"sender_jid"`
+	MessageID       string     `json:"message_id" db:"message_id"`
+	Timestamp       time.Time  `json:"timestamp" db:"timestamp"`
+	SentAt          *time.Time `json:"sent_at,omitempty" db:"sent_at"`
+	MessageType     string     `json:"message_type" db:"message_type"`
+	TextContent     string     `json:"text_content" db:"text_content"`
+	MediaLink       string     `json:"media_link" db:"media_link"`
+	QuotedMessageID string     `json:"quoted_message_id,omitempty" db:"quoted_message_id"`
+	DataJson        string     `json:"data_json" db:"datajson"`
 }
 
-func (s *server) saveMessageToHistory(userID, chatJID, senderJID, messageID, messageType, textContent, mediaLink, quotedMessageID, dataJson string) error {
+// saveMessageToHistory stores one message. sentAt is the send time WhatsApp
+// reported for it; pass the zero time when it is unknown and sent_at stays NULL.
+func (s *server) saveMessageToHistory(userID, chatJID, senderJID, messageID, messageType, textContent, mediaLink, quotedMessageID, dataJson string, sentAt time.Time) error {
 	// Serialize persistence with user deletion and read the current retention setting.
 	// PostgreSQL locks the user row; SQLite acquires its write lock before reading.
 	tx, err := s.db.Beginx()
@@ -174,8 +180,8 @@ func (s *server) saveMessageToHistory(userID, chatJID, senderJID, messageID, mes
 	// Rebind adapts the ? placeholders to the active driver ($1.. on Postgres,
 	// ? on SQLite), so the query is defined once. The conditional upsert is valid
 	// on both Postgres and modern SQLite.
-	query := s.db.Rebind(`INSERT INTO message_history (user_id, chat_jid, sender_jid, message_id, timestamp, message_type, text_content, media_link, quoted_message_id, datajson)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	query := s.db.Rebind(`INSERT INTO message_history (user_id, chat_jid, sender_jid, message_id, timestamp, sent_at, message_type, text_content, media_link, quoted_message_id, datajson)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
               ON CONFLICT (user_id, message_id) DO UPDATE SET
                   message_type = excluded.message_type,
                   text_content = excluded.text_content,
@@ -184,7 +190,11 @@ func (s *server) saveMessageToHistory(userID, chatJID, senderJID, messageID, mes
               WHERE message_history.message_type = 'unknown'
                 AND excluded.message_type = 'edit'
                 AND message_history.chat_jid = excluded.chat_jid`)
-	_, err = tx.Exec(query, userID, chatJID, senderJID, messageID, time.Now(), messageType, textContent, mediaLink, quotedMessageID, dataJson)
+	var sentAtValue interface{}
+	if !sentAt.IsZero() {
+		sentAtValue = sentAt
+	}
+	_, err = tx.Exec(query, userID, chatJID, senderJID, messageID, time.Now(), sentAtValue, messageType, textContent, mediaLink, quotedMessageID, dataJson)
 	if err != nil {
 		return fmt.Errorf("failed to save message to history: %w", err)
 	}
