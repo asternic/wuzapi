@@ -653,7 +653,7 @@
     console.log("checkStatus");
     statusRequest().then((status) => {
       if(status.success==true) {
-        if(status.data.LoggedIn === true) {
+        if(status.data.loggedIn === true) {
           scanned = true;
           document.getElementById("connectstatus").innerHTML = "Connected!";
           document.getElementById("connectstatus").classList.remove('red');
@@ -944,15 +944,15 @@
 
     statusRequest().then((status) => {
       if(status.success==true) {
-          if(status.data.LoggedIn === false) {
-              if(status.data.Connected === true) {
+          if(status.data.loggedIn === false) {
+              if(status.data.connected === true) {
                   showQr();
               } else {
                   console.log("Not connected, attempting to connect.");
                   connect().then((data) => {console.log("promise connect 1"); console.log(data);});
               }
           } else {
-              if(status.data.Connected === false) {
+              if(status.data.connected === false) {
                   connect().then((data) => {console.log("promise connect 2"); console.log(data);});
               }
               document.getElementById("connectstatus").innerHTML = "Connected!";

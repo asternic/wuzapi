@@ -534,7 +534,7 @@ Response:
 
 ## Status
 
-Retrieve status (IsConnected means websocket connection is initiated, IsLoggedIn means QR code was scanned and session is ready to receive/send messages)
+Retrieve status (`connected` means the websocket connection is established; `loggedIn` means the session is authenticated and ready to receive/send messages)
 
 If its not logged in, you can use the [/session/qr](#user-content-gets-qr-code) endpoint to get the QR code to scan
 
@@ -552,8 +552,8 @@ Response:
 {
   "code": 200,
   "data": {
-    "Connected": true,
-    "LoggedIn": true
+    "connected": true,
+    "loggedIn": true
   },
   "success": true
 }

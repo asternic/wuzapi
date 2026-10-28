@@ -754,7 +754,7 @@ paths:
           content:
             application/json:
               schema:
-                example: { "code": 200, "data": { "Connected": true, "LoggedIn": true }, "success": true }
+                example: { "code": 200, "data": { "connected": true, "loggedIn": true }, "success": true }
   /session/pairphone:
     post:
       tags:
