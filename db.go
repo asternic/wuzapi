@@ -192,7 +192,9 @@ func (s *server) saveMessageToHistory(userID, chatJID, senderJID, messageID, mes
                 AND message_history.chat_jid = excluded.chat_jid`)
 	var sentAtValue interface{}
 	if !sentAt.IsZero() {
-		sentAtValue = sentAt
+		// Use a canonical zone for both drivers. In particular, SQLite's time
+		// parser cannot round-trip every name used by time.FixedZone.
+		sentAtValue = sentAt.UTC()
 	}
 	_, err = tx.Exec(query, userID, chatJID, senderJID, messageID, time.Now(), sentAtValue, messageType, textContent, mediaLink, quotedMessageID, dataJson)
 	if err != nil {

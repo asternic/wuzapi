@@ -741,5 +741,10 @@ messages, and the server timestamp of the send response for messages sent throug
 API. It is omitted when unknown, including for rows stored before the field existed.
 Results are still ordered by `timestamp`.
 
+PostgreSQL stores `sent_at` as `TIMESTAMPTZ` to preserve the instant across time
+zones. The upgrade treats existing timezone-less values as UTC, preserving their
+previous API interpretation. Values written by older versions running outside UTC
+may already be shifted; the discarded offset cannot be recovered automatically.
+
 Previously imported `unknown` edits are repaired when redelivered. This does not
 backfill existing history or recover events that WhatsApp does not redeliver.
