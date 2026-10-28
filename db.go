@@ -109,7 +109,10 @@ func initializeSQLite(config DatabaseConfig) (*sqlx.DB, error) {
 		return nil, fmt.Errorf("could not create dbdata directory: %w", err)
 	}
 
-	dbPath := filepath.ToSlash(filepath.Join(config.Path, "users.db"))
+	dbPath := filepath.ToSlash(filepath.Join(config.Path, "main.db"))
+	if err := migrateSQLiteUsers(dbPath, filepath.Join(config.Path, "users.db")); err != nil {
+		return nil, fmt.Errorf("failed to migrate users.db: %w", err)
+	}
 	db, err := sqlx.Open("sqlite", dbPath+"?_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)&_pragma=busy_timeout(10000)")
 	if err != nil {
 		return nil, fmt.Errorf("failed to open sqlite database: %w", err)
