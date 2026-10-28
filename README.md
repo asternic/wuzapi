@@ -220,6 +220,11 @@ DB_SSLMODE=false
 **For SQLite (default):**
 No database configuration needed - SQLite is used by default if no PostgreSQL settings are provided.
 
+All tables are stored in `dbdata/main.db`. Stop older instances before upgrading:
+existing `users.db` tables are migrated automatically on startup. The migration retains
+`users.db` as a pre-migration copy (it is not kept in sync), runs once, and aborts without
+merging data if an object with the same name already exists in `main.db`.
+
 #### Optional Settings
 ```
 TZ=America/New_York
