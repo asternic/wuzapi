@@ -748,3 +748,15 @@ may already be shifted; the discarded offset cannot be recovered automatically.
 
 Previously imported `unknown` edits are repaired when redelivered. This does not
 backfill existing history or recover events that WhatsApp does not redeliver.
+
+### Recovering an instance with ambiguous device ownership
+
+If deleting an instance fails because several stored WhatsApp devices match the account, the admin dashboard offers **Delete and preserve devices** after the normal deletion confirmation. The second confirmation explains that the instance, message history and files will be removed, while all WhatsApp credentials remain stored and devices stay linked to the phone. Canceling leaves the instance in place; other deletion errors do not offer this recovery action.
+
+Administrators can also call `DELETE /admin/users/{id}/preserve-devices` with the admin `Authorization` header, or use stdio:
+
+```json
+{"jsonrpc":"2.0","id":"recovery-1","method":"admin.users.delete.preserve_devices","params":{"userId":"INSTANCE_ID","adminToken":"ADMIN_TOKEN"}}
+```
+
+This recovery stops the instance without remote logout and preserves every stored device, without choosing among candidates. It requires no manual database edits. To use the number again, create a new instance and pair it again so exact device ownership is recorded. Cleanup of orphaned WhatsApp credentials is separate. See [deletion API and recovery responses](API.md#delete-user) for details and failure behavior.

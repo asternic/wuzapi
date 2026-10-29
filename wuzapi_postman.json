@@ -251,6 +251,25 @@
             "description": "Delete user and related data"
           },
           "response": []
+        },
+        {
+          "name": "Delete User Preserving Devices",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{admin_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin/users/1/preserve-devices",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "users", "1", "preserve-devices"]
+            },
+            "description": "Explicitly remove the instance, history and local/S3 files without remote logout or deleting any WhatsApp credentials. Devices remain linked to the phone. Use after full deletion returns 409 with error_code ambiguous_device_ownership, or call directly to opt into preserving credentials."
+          },
+          "response": []
         }
       ]
     },

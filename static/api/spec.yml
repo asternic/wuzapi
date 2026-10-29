@@ -288,7 +288,7 @@ paths:
       tags:
         - Admin
       summary: Delete a user from DB and S3, logout and disconnect from whatsapp and clear it up from memory
-      description: Deletes a user by their ID, including login out, disconnect and memory cleanup Also removes all user files from S3.
+      description: Stops the session, attempts remote logout, deletes safely identified credentials, and removes the user, history, memory state and local/S3 files. Ambiguous ownership returns 409 and retains the user and devices. File cleanup is best effort.
       security:
         - AdminAuth: []
       parameters:
@@ -306,6 +306,48 @@ paths:
             application/json:
               schema:
                 example: {"code":200,"data":{"id":"4e4942c7dee1deef99ab8fd9f7350de5","jid":"","name":"mariano"},"details":"User instance removed completely","success":true}
+        409:
+          description: Ambiguous device ownership or session shutdown/deletion conflict. Only ambiguous_device_ownership enables dashboard recovery.
+          content:
+            application/json:
+              schema:
+                example: {"code":409,"success":false,"error_code":"ambiguous_device_ownership","error":"could not safely remove device credentials; user retained"}
+  /admin/users/{id}/preserve-devices:
+    delete:
+      tags:
+        - Admin
+      summary: Delete an instance while preserving all WhatsApp device credentials
+      description: |
+        Explicitly opts into preserving credentials. Stops the session without remote logout,
+        removes the user and history atomically, and cleans up memory and local/S3 files.
+        Never resolves, deletes or reassigns WhatsApp devices. Devices remain linked to the phone.
+        File cleanup is best effort. Orphaned credentials require separate cleanup.
+        A previous failed full deletion is not required. No request body is needed.
+        Stdio method admin.users.delete.preserve_devices accepts userId and adminToken.
+      security:
+        - AdminAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: ID of the instance to remove
+      responses:
+        200:
+          description: Instance removed; all device credentials preserved
+          content:
+            application/json:
+              schema:
+                example: {"code":200,"success":true,"data":{"id":"INSTANCE_ID","name":"example","jid":"","devices_preserved":true},"details":"user instance removed; WhatsApp credentials preserved and devices remain linked to the phone"}
+        401:
+          description: Invalid or missing admin token
+        404:
+          description: User not found
+        409:
+          description: Session is still stopping or a deletion is already in progress; user retained
+        500:
+          description: Database error
   /admin/proxy-pool:
     get:
       tags:

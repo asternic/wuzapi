@@ -152,3 +152,21 @@ func waitForSessionStop(ctx context.Context, userID string) error {
 		}
 	}
 }
+
+// sessionDeletionClient allows the local-only recovery contract to be tested
+// without opening a live WhatsApp connection.
+type sessionDeletionClient interface {
+	IsConnected() bool
+	Logout(context.Context) error
+	Disconnect()
+}
+
+func disconnectSessionForDeletion(ctx context.Context, client sessionDeletionClient, preserveDevices bool) error {
+	var err error
+	if !preserveDevices && client.IsConnected() {
+		err = client.Logout(ctx)
+	}
+	// A failed remote logout must not prevent local session shutdown.
+	client.Disconnect()
+	return err
+}

@@ -6491,6 +6491,16 @@ func (s *server) DeleteUser() http.HandlerFunc {
 
 // Delete user complete
 func (s *server) DeleteUserComplete() http.HandlerFunc {
+	return s.deleteUserInstance(false)
+}
+
+// DeleteUserPreserveDevices removes application resources without choosing or
+// revoking WhatsApp credentials. Calling this endpoint explicitly opts in.
+func (s *server) DeleteUserPreserveDevices() http.HandlerFunc {
+	return s.deleteUserInstance(true)
+}
+
+func (s *server) deleteUserInstance(preserveDevices bool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 
@@ -6547,33 +6557,34 @@ func (s *server) DeleteUserComplete() http.HandlerFunc {
 		defer cleanupCancel()
 
 		// 1. Logout and disconnect instance
-		clientManager.stopSocketRecovery(id, false)
+		clientManager.stopSocketRecovery(id, preserveDevices)
 		if client := clientManager.GetWhatsmeowClient(id); client != nil {
-			if client.IsConnected() {
-				log.Info().Str("id", id).Msg("Logging out user")
-				if err := client.Logout(cleanupCtx); err != nil {
-					log.Warn().Err(err).Str("user_id", id).Msg("Remote logout failed; deleting local credentials")
-				}
-			}
 			log.Info().Str("id", id).Msg("Disconnecting from WhatsApp")
-			client.Disconnect()
+			if err := disconnectSessionForDeletion(cleanupCtx, client, preserveDevices); err != nil {
+				log.Warn().Err(err).Str("user_id", id).Msg("Remote logout failed; deleting local credentials")
+			}
 		}
 
 		// Stop the session owner before deleting credentials. Keep the user row
 		// if cleanup cannot establish an exact device or the store is unavailable.
 		signalKill(id)
 		if err := waitForSessionStop(cleanupCtx, id); err != nil {
-			s.respondWithJSON(w, http.StatusConflict, map[string]interface{}{"code": http.StatusConflict, "success": false, "error": "session is still stopping; retry full deletion"})
+			s.respondWithJSON(w, http.StatusConflict, map[string]interface{}{"code": http.StatusConflict, "success": false, "error": "session is still stopping; retry deletion"})
 			return
 		}
-		if err := s.deleteSessionDevice(cleanupCtx, id); err != nil {
-			log.Error().Err(err).Str("user_id", id).Msg("Failed to delete persisted device")
-			status := http.StatusInternalServerError
-			if errors.Is(err, errAmbiguousSessionDevice) {
-				status = http.StatusConflict
+		if !preserveDevices {
+			if err := s.deleteSessionDevice(cleanupCtx, id); err != nil {
+				log.Error().Err(err).Str("user_id", id).Msg("Failed to delete persisted device")
+				status := http.StatusInternalServerError
+				response := map[string]interface{}{"code": status, "success": false, "error": "could not safely remove device credentials; user retained"}
+				if errors.Is(err, errAmbiguousSessionDevice) {
+					status = http.StatusConflict
+					response["code"] = status
+					response["error_code"] = "ambiguous_device_ownership"
+				}
+				s.respondWithJSON(w, status, response)
+				return
 			}
-			s.respondWithJSON(w, status, map[string]interface{}{"code": status, "success": false, "error": "could not safely remove device credentials; user retained"})
-			return
 		}
 
 		// 2. Query S3 config before deleting the user
@@ -6628,16 +6639,14 @@ func (s *server) DeleteUserComplete() http.HandlerFunc {
 
 		log.Info().Str("id", id).Str("name", uname).Str("jid", jid).Msg("user deleted successfully")
 
-		// Success response
+		data := map[string]interface{}{"id": id, "name": uname, "jid": jid}
+		details := "user instance removed completely"
+		if preserveDevices {
+			data["devices_preserved"] = true
+			details = "user instance removed; WhatsApp credentials preserved and devices remain linked to the phone"
+		}
 		s.respondWithJSON(w, http.StatusOK, map[string]interface{}{
-			"code": http.StatusOK,
-			"data": map[string]interface{}{
-				"id":   id,
-				"name": uname,
-				"jid":  jid,
-			},
-			"success": true,
-			"details": "user instance removed completely",
+			"code": http.StatusOK, "data": data, "success": true, "details": details,
 		})
 	}
 }

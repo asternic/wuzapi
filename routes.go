@@ -57,6 +57,7 @@ func (s *server) routes() {
 	adminRoutes.Handle("/users/{id}", s.EditUser()).Methods("PUT")
 	adminRoutes.Handle("/users/{id}", s.DeleteUser()).Methods("DELETE")
 	adminRoutes.Handle("/users/{id}/full", s.DeleteUserComplete()).Methods("DELETE")
+	adminRoutes.Handle("/users/{id}/preserve-devices", s.DeleteUserPreserveDevices()).Methods("DELETE")
 	adminRoutes.Handle("/users/{id}/proxy-pool/release", s.ReleaseUserProxyPool()).Methods("POST")
 	adminRoutes.Handle("/proxy-pool", s.ListProxyPool()).Methods("GET")
 	adminRoutes.Handle("/proxy-pool", s.AddProxyPoolEntry()).Methods("POST")

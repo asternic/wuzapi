@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/gorilla/mux"
@@ -231,6 +232,9 @@ func TestAmbiguousFullDeletionRetainsUserAndDevices(t *testing.T) {
 		s.DeleteUserComplete()(response, req)
 		if response.Code != http.StatusConflict {
 			t.Fatalf("unsafe deletion: %d %s", response.Code, response.Body.String())
+		}
+		if !strings.Contains(response.Body.String(), `"error_code":"ambiguous_device_ownership"`) {
+			t.Fatalf("missing recovery code: %s", response.Body.String())
 		}
 		var count int
 		if err := db.Get(&count, `SELECT COUNT(*) FROM users WHERE id='ambiguous-delete'`); err != nil || count != 1 {

@@ -131,24 +131,55 @@ You can create a user with optional proxy and S3 storage configuration. All fiel
 
 If you omit `proxyConfig` or `s3Config`, the user will be created without proxy or S3 integration, maintaining full backward compatibility.
 
-## Delete User 
+## Delete User
 
-*DELETE /admin/users/{id}*
+All deletion endpoints require the admin token in the `Authorization` header.
 
-Deletes one user from the system by ID
+| Endpoint | Behavior |
+| --- | --- |
+| `DELETE /admin/users/{id}` | Deletes only the user database row. Does not coordinate session shutdown or clean up history, files or device credentials. |
+| `DELETE /admin/users/{id}/full` | Stops the session, attempts remote logout, safely deletes its identified device credentials, and removes the user, history, memory state and local/S3 files. |
+| `DELETE /admin/users/{id}/preserve-devices` | Stops the session and removes the user, history, memory state and local/S3 files, preserving all WhatsApp device credentials without remote logout. |
 
-Example Request:
+### Full deletion and ambiguous devices
+
+If `device_jid` is empty and several stored devices match the account, full deletion returns HTTP `409` and retains the user and devices:
+
+```json
+{"code":409,"success":false,"error_code":"ambiguous_device_ownership","error":"could not safely remove device credentials; user retained"}
 ```
-curl -s -X DELETE -H 'Authorization: {{WUZAPI_ADMIN_TOKEN}}' http://localhost:8080/admin/users/2
+
+The administrator can explicitly choose the recovery endpoint below. Never select an arbitrary device or delete all devices sharing the phone number.
+
+### Delete an instance while preserving devices
+
+```bash
+curl -s -X DELETE -H 'Authorization: {{WUZAPI_ADMIN_TOKEN}}' \
+  http://localhost:8080/admin/users/INSTANCE_ID/preserve-devices
 ```
 
-Response:
+No request body is required. Calling this endpoint explicitly opts into preserving credentials; it is available even without a previous failed full deletion.
 
 ```json
 {
-  "Details": "User deleted successfully"
+  "code": 200,
+  "success": true,
+  "data": {"id": "INSTANCE_ID", "name": "example", "jid": "", "devices_preserved": true},
+  "details": "user instance removed; WhatsApp credentials preserved and devices remain linked to the phone"
 }
 ```
+
+The operation blocks new connections while stopping the session. If shutdown exceeds the timeout or another deletion is in progress, it returns `409` and retains the user. It returns `404` for an unknown user, `401` for invalid admin authentication, and `500` for database errors. Local/S3 file cleanup errors are logged on a best-effort basis, as with full deletion; success does not guarantee every file was removed.
+
+This permanently removes application data but does **not** unlink devices from the phone. Unowned credentials remain stored; orphaned credential cleanup is a separate administrative task. To use the number again, create a new instance and pair it by QR or pairing code so its exact device ownership is recorded.
+
+Stdio equivalent (one JSON-RPC request per line):
+
+```json
+{"jsonrpc":"2.0","id":"recovery-1","method":"admin.users.delete.preserve_devices","params":{"userId":"INSTANCE_ID","adminToken":"ADMIN_TOKEN"}}
+```
+
+The simple and full deletion methods remain `admin.users.delete` and `admin.users.delete.full`.
 
 ---
 

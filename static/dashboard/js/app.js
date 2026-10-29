@@ -3,7 +3,7 @@ let scanned = false;
 let updateAdminTimeout = null;
 let updateUserTimeout = null;
 let updateInterval = 5000;
-let instanceToDelete = null;
+let deletionInProgress = false;
 let isAdminLogin = false;
 let currentInstanceData = null;
 
@@ -17,13 +17,6 @@ document.addEventListener('DOMContentLoaded', function() {
   const adminLoginBtn = document.getElementById('loginAsAdminBtn');
  
   hideWidgets();
-
-  $('#deleteInstanceModal').modal({
-    closable: true,
-    onDeny: function() {
-      instanceToDelete = null;
-    }
-  });
 
   // Initialize dropdowns for webhook events
   $('#webhookEvents').dropdown({
@@ -763,37 +756,73 @@ function showSuccess(message) {
 }
 
 function deleteInstance(id) {
-  instanceToDelete = id;
+  if (deletionInProgress) return;
   $('#deleteInstanceModal').modal({
+    closable: false,
+    onDeny: () => !deletionInProgress,
     onApprove: function() {
-      performDelete(instanceToDelete);
+      performDelete(id);
+      return false;
     }
   }).modal('show');
 }
 
-async function performDelete(id) {
-  console.log('Deleting instance with ID:', id);
-  const admintoken = getLocalStorageItem('admintoken');
-  const myHeaders = new Headers();
-  myHeaders.append('authorization', admintoken);
-  myHeaders.append('Content-Type', 'application/json');
-  res = await fetch(baseUrl + "/admin/users/"+id+"/full", {
-    method: "DELETE",
-    headers: myHeaders
-  });
-  data = await res.json();
-  if(data.success===true) {
-    $('#instance-row-' + id).remove();
-    showDeleteSuccess();
-  } else {
-    showError('Error deleting instance');
+function showPreserveDevicesRecovery(id) {
+  $('#preserveDevicesModal').modal({
+    closable: false,
+    onDeny: () => !deletionInProgress,
+    onApprove: function() {
+      performDelete(id, true);
+      return false;
+    }
+  }).modal('show');
+}
+
+async function performDelete(id, preserveDevices = false) {
+  if (deletionInProgress) return;
+  deletionInProgress = true;
+  const modal = preserveDevices ? '#preserveDevicesModal' : '#deleteInstanceModal';
+  const buttons = $(modal + ' .actions .button');
+  buttons.addClass('disabled');
+  $(modal + ' .positive.button').addClass('loading');
+  let offerRecovery = false;
+  try {
+    const headers = new Headers();
+    headers.append('authorization', getLocalStorageItem('admintoken'));
+    const suffix = preserveDevices ? '/preserve-devices' : '/full';
+    const response = await fetch(baseUrl + '/admin/users/' + encodeURIComponent(id) + suffix, {
+      method: 'DELETE', headers
+    });
+    const data = await response.json();
+    if (response.ok && data.success === true) {
+      $(modal).modal('hide');
+      updateAdmin();
+      showDeleteSuccess(preserveDevices);
+    } else if (!preserveDevices && response.status === 409 && data.error_code === 'ambiguous_device_ownership') {
+      offerRecovery = true;
+    } else {
+      showError(data.error || 'Error deleting instance');
+    }
+  } catch (error) {
+    showError('Could not delete instance. Check your connection and try again.');
+  } finally {
+    deletionInProgress = false;
+    buttons.removeClass('disabled');
+    $(modal + ' .positive.button').removeClass('loading');
+  }
+  if (offerRecovery) {
+    // Open the recovery confirmation only after the first modal has closed.
+    $(modal).modal('setting', 'onHidden', function() {
+      $(modal).modal('setting', 'onHidden', function() {});
+      showPreserveDevicesRecovery(id);
+    }).modal('hide');
   }
 }
 
-function showDeleteSuccess() {
+function showDeleteSuccess(preserveDevices = false) {
   $('body').toast({
     class: 'success',
-    message: 'Instance deleted successfully',
+    message: preserveDevices ? 'Instance deleted; WhatsApp credentials preserved' : 'Instance deleted successfully',
     position: 'top right',
     showProgress: 'bottom'
   });

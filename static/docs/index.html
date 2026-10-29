@@ -1614,6 +1614,21 @@
   "success": true
 }</code></pre>
             </div>
+            <div class="endpoint">
+                <h3><span class="method delete">DELETE</span> <span class="path">/admin/users/{id}/preserve-devices</span></h3>
+                <p>Administrative recovery for ambiguous device ownership. Requires the admin token in the <code>Authorization</code> header and no request body. Explicitly removes the instance, history, memory state and local/S3 files while preserving every WhatsApp device credential. No remote logout is performed; devices remain linked to the phone. File cleanup is best effort.</p>
+                <p><code>DELETE /admin/users/{id}</code> only removes the user row. <code>DELETE /admin/users/{id}/full</code> also attempts logout and safely removes identified device credentials. If full deletion returns <code>409</code> with <code>error_code: ambiguous_device_ownership</code>, the dashboard offers a second confirmation to delete while preserving devices. Other errors do not enable recovery.</p>
+                <h4>Example request:</h4>
+                <pre><code class="language-bash">curl -X DELETE -H 'Authorization: ADMIN_TOKEN' \
+  http://localhost:8080/admin/users/INSTANCE_ID/preserve-devices</code></pre>
+                <h4>Response (200):</h4>
+                <pre><code class="language-json">{"code":200,"success":true,"data":{"id":"INSTANCE_ID","name":"example","jid":"","devices_preserved":true},"details":"user instance removed; WhatsApp credentials preserved and devices remain linked to the phone"}</code></pre>
+                <p>Errors: <code>401</code> invalid admin token; <code>404</code> unknown user; <code>409</code> session shutdown timeout or deletion already in progress (user retained); <code>500</code> database failure. No prior failed deletion is required.</p>
+                <h4>Stdio equivalent:</h4>
+                <pre><code class="language-json">{"jsonrpc":"2.0","id":"recovery-1","method":"admin.users.delete.preserve_devices","params":{"userId":"INSTANCE_ID","adminToken":"ADMIN_TOKEN"}}</code></pre>
+                <p>To use the number again, create a new instance and pair it again. Cleanup of orphaned credentials is separate; this operation never chooses among candidate devices.</p>
+            </div>
+
         </section>
 
         <section id="s3-config">

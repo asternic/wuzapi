@@ -243,6 +243,14 @@ func (ss *stdioServer) routeRequest(req *jsonRpcRequest) {
 			return
 		}
 		httpPath = "/admin/users/" + userId + "/full"
+	case "admin.users.delete.preserve_devices":
+		httpMethod = "DELETE"
+		userId, ok := ss.getUserIdParam(req)
+		if !ok {
+			// Error sent by getUserIdParam.
+			return
+		}
+		httpPath = "/admin/users/" + userId + "/preserve-devices"
 
 	// Session management
 	case "session.connect":
