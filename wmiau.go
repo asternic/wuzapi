@@ -1342,7 +1342,16 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 
 						// If senderJID is still empty, skip this message
 						if senderJID == "" {
-							log.Warn().Str("messageID", messageID).Msg("Cannot determine sender JID, skipping message")
+							// Say which chat and kind of entry this is (a system notice has a stub type, a message has
+							// content) so the skipped entries can be told apart from messages that lost their sender.
+							log.Warn().
+								Str("userID", mycli.userID).
+								Str("messageID", messageID).
+								Str("chatJID", chatJID.String()).
+								Str("stubType", msg.Message.GetMessageStubType().String()).
+								Bool("hasContent", msg.Message.GetMessage() != nil).
+								Bool("isGroupHistoryMessage", msg.Message.GetIsGroupHistoryMessage()).
+								Msg("Cannot determine sender JID, skipping message")
 							continue
 						}
 
