@@ -3051,6 +3051,8 @@ func (s *server) DeleteMessage() http.HandlerFunc {
 			return
 		}
 
+		s.saveOutgoingAction(r.Context().Value("userinfo").(Values), recipient, resp, message)
+
 		log.Info().Str("timestamp", fmt.Sprintf("%v", resp.Timestamp)).Str("id", t.Id).Msg("Message deleted")
 		response := map[string]interface{}{
 			"Details":   "Deleted",
@@ -3147,11 +3149,13 @@ func (s *server) SendEditMessage() http.HandlerFunc {
 			msg.ExtendedTextMessage.ContextInfo.MentionedJID = jids
 		}
 
-		resp, err = sendMessageWithRecovery(txtid, clientManager.GetWhatsmeowClient(txtid), context.Background(), recipient, clientManager.GetWhatsmeowClient(txtid).BuildEdit(recipient, msgid, msg))
+		edit := clientManager.GetWhatsmeowClient(txtid).BuildEdit(recipient, msgid, msg)
+		resp, err = sendMessageWithRecovery(txtid, clientManager.GetWhatsmeowClient(txtid), context.Background(), recipient, edit)
 		if err != nil {
 			s.Respond(w, r, http.StatusInternalServerError, errors.New(fmt.Sprintf("error sending edit message: %v", err)))
 			return
 		}
+		s.saveOutgoingAction(r.Context().Value("userinfo").(Values), recipient, resp, edit)
 
 		log.Info().Str("timestamp", fmt.Sprintf("%d", resp.Timestamp.Unix())).Str("id", msgid).Msg("Message edit sent")
 		response := map[string]interface{}{"Details": "Sent", "Timestamp": resp.Timestamp.Unix(), "Id": msgid}
@@ -4439,6 +4443,7 @@ func (s *server) React() http.HandlerFunc {
 			s.Respond(w, r, http.StatusInternalServerError, errors.New(fmt.Sprintf("error sending message: %v", err)))
 			return
 		}
+		s.saveOutgoingAction(r.Context().Value("userinfo").(Values), recipient, resp, msg)
 
 		log.Info().Str("timestamp", fmt.Sprintf("%v", resp.Timestamp)).Str("id", msgid).Msg("Message sent")
 		response := map[string]interface{}{"Details": "Sent", "Timestamp": resp.Timestamp.Unix(), "Id": msgid}
@@ -7385,6 +7390,11 @@ func (s *server) GetHistory() http.HandlerFunc {
 
 // save outgoing message to history; sentAt is the server timestamp from the send response
 func (s *server) saveOutgoingMessageToHistory(userID, chatJID, messageID, messageType, textContent, mediaLink string, sentAt time.Time, historyLimit int, message ...*waE2E.Message) {
+	s.saveOutgoingRow(userID, chatJID, messageID, messageType, textContent, mediaLink, "", sentAt, historyLimit, message...)
+}
+
+// saveOutgoingRow stores one row sent by this user; quotedMessageID is the target of a reaction or edit
+func (s *server) saveOutgoingRow(userID, chatJID, messageID, messageType, textContent, mediaLink, quotedMessageID string, sentAt time.Time, historyLimit int, message ...*waE2E.Message) {
 	if historyLimit > 0 {
 		// Keep media download metadata for the web client, using the same
 		// envelope as incoming history, without storing full plaintext media files.
@@ -7395,7 +7405,7 @@ func (s *server) saveOutgoingMessageToHistory(userID, chatJID, messageID, messag
 				dataJSON = string(encoded)
 			}
 		}
-		err := s.saveMessageToHistory(userID, chatJID, "me", messageID, messageType, textContent, mediaLink, "", dataJSON, sentAt)
+		err := s.saveMessageToHistory(userID, chatJID, "me", messageID, messageType, textContent, mediaLink, quotedMessageID, dataJSON, sentAt)
 		if err != nil {
 			log.Error().Err(err).Msg("Failed to save outgoing message to history")
 		}
