@@ -2214,6 +2214,9 @@ paths:
         when available. Database timestamps represent insertion time, including for HistorySync;
         sent_at holds the send time WhatsApp reported, when known.
         A limited result may contain an edit without its original message.
+        Reactions, edits and deletes sent through the API are stored like received ones, with
+        sender_jid `me` and the send's own message_id. Reactions keep the target in quoted_message_id
+        (a removed reaction sent through the API has an empty text_content); deletes keep it in text_content.
         Live and HistorySync edits use the same fields. Legacy unknown rows are repaired
         when the same edit is redelivered; existing rows are not scanned or backfilled.
       security:

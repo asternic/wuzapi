@@ -940,6 +940,13 @@ Response:
 
 Chat endpoints support sending, deleting and editing messages, read receipts, and presence.
 
+When history is enabled, reactions (`/chat/react`), edits (`/chat/send/edit`) and
+deletes (`/chat/delete`) sent through the API are stored in `message_history`
+like received ones: a separate row with its own `message_id`, `sender_jid` `me`
+and `message_type` `reaction`, `edit` or `delete`. Reactions and edits keep the
+target's ID in `quoted_message_id`, deletes in `text_content`. Removing a reaction
+through the API stores a `reaction` row with an empty `text_content`.
+
 ## Delete a message
 
 *POST /chat/delete*
