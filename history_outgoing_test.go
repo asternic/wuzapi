@@ -109,6 +109,67 @@ func TestOutgoingActionRespectsDisabledHistory(t *testing.T) {
 	})
 }
 
+func TestNewsletterActionsUseSeparateHistoryIDs(t *testing.T) {
+	historyDrivers(t, func(t *testing.T, db *sqlx.DB) {
+		if err := initializeSchema(db); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := db.Exec("INSERT INTO users (id,name,token,history) VALUES ('newsletter-user','Channel','channel-token',100)"); err != nil {
+			t.Fatal(err)
+		}
+		s := &server{db: db}
+		chat := types.NewJID("123456", types.NewsletterServer)
+		userinfo := Values{m: map[string]string{"Id": "newsletter-user", "History": "100"}}
+		client := deleteTestClient()
+		sent := time.Unix(1700000000, 0)
+		for _, target := range []string{"stored-original", "missing-original"} {
+			if target == "stored-original" {
+				if err := s.saveMessageToHistory("newsletter-user", chat.String(), "me", target, "text", "original", "", "", "{}", sent); err != nil {
+					t.Fatal(err)
+				}
+			}
+			// Whatsmeow returns the target ID for every newsletter edit/revoke.
+			// Multiple edits can also receive the same second-resolution timestamp.
+			resp := whatsmeow.SendResponse{ID: target, Timestamp: sent}
+			for _, text := range []string{"first edit", "second edit"} {
+				edit := client.BuildEdit(chat, target, &waE2E.Message{Conversation: proto.String(text)})
+				s.saveOutgoingAction(userinfo, chat, resp, edit)
+			}
+			revoke, err := buildDeleteMessage(client, chat, "", target)
+			if err != nil {
+				t.Fatal(err)
+			}
+			s.saveOutgoingAction(userinfo, chat, resp, revoke)
+			var rows []HistoryMessage
+			if err := db.Select(&rows, db.Rebind("SELECT * FROM message_history WHERE quoted_message_id=? OR (message_type='delete' AND text_content=?) ORDER BY id"), target, target); err != nil {
+				t.Fatal(err)
+			}
+			if len(rows) != 3 {
+				t.Fatalf("%s: got %d action rows, want 3", target, len(rows))
+			}
+			for i, row := range rows {
+				if row.MessageID == target || row.ChatJID != chat.String() || row.SenderJID != "me" || row.SentAt == nil || row.SentAt.Unix() != sent.Unix() {
+					t.Fatalf("invalid action row: %+v", row)
+				}
+				if i < 2 {
+					if row.MessageType != "edit" || row.QuotedMessageID != target || row.TextContent != []string{"first edit", "second edit"}[i] {
+						t.Fatalf("invalid edit: %+v", row)
+					}
+				} else if row.MessageType != "delete" || row.TextContent != target || row.QuotedMessageID != "" {
+					t.Fatalf("invalid delete: %+v", row)
+				}
+			}
+		}
+		var original HistoryMessage
+		if err := db.Get(&original, "SELECT * FROM message_history WHERE message_id='stored-original'"); err != nil {
+			t.Fatal(err)
+		}
+		if original.MessageType != "text" || original.TextContent != "original" {
+			t.Fatalf("original overwritten: %+v", original)
+		}
+	})
+}
+
 func TestOutgoingActionIgnoresOtherMessages(t *testing.T) {
 	for _, message := range []*waE2E.Message{{}, {Conversation: proto.String("text")}} {
 		if action, ok := outgoingAction(message); ok {

@@ -946,6 +946,9 @@ like received ones: a separate row with its own `message_id`, `sender_jid` `me`
 and `message_type` `reaction`, `edit` or `delete`. Reactions and edits keep the
 target's ID in `quoted_message_id`, deletes in `text_content`. Removing a reaction
 through the API stores a `reaction` row with an empty `text_content`.
+Newsletter edits and deletes use a generated local history `message_id`, because
+WhatsApp reuses the original message's ID for these actions. The target fields
+and endpoint responses remain the same.
 
 ## Delete a message
 

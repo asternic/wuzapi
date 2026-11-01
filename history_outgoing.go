@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/rand"
 	"strconv"
 
 	"github.com/rs/zerolog/log"
@@ -39,9 +40,8 @@ func outgoingAction(message *waE2E.Message) (outgoingHistoryAction, bool) {
 }
 
 // saveOutgoingAction stores a reaction, edit or revoke after a successful send.
-// The row's message_id is the ID of the send itself (resp.ID), not the target's:
-// saving under the target's ID would collide with the original message and be
-// dropped by the unique (user_id, message_id) constraint.
+// Normally resp.ID identifies the action itself. Newsletter edits and revokes
+// reuse the target's ID on the wire, so they need a separate local history ID.
 func (s *server) saveOutgoingAction(userinfo Values, chat types.JID, resp whatsmeow.SendResponse, message *waE2E.Message) {
 	action, ok := outgoingAction(message)
 	if !ok {
@@ -49,5 +49,9 @@ func (s *server) saveOutgoingAction(userinfo Values, chat types.JID, resp whatsm
 		return
 	}
 	historyLimit, _ := strconv.Atoi(userinfo.Get("History"))
-	s.saveOutgoingRow(userinfo.Get("Id"), chat.String(), resp.ID, action.messageType, action.textContent, "", action.target, resp.Timestamp, historyLimit, action.message)
+	messageID := resp.ID
+	if chat.Server == types.NewsletterServer && (action.messageType == "edit" || action.messageType == "delete") {
+		messageID = "newsletter-action-" + rand.Text()
+	}
+	s.saveOutgoingRow(userinfo.Get("Id"), chat.String(), messageID, action.messageType, action.textContent, "", action.target, resp.Timestamp, historyLimit, action.message)
 }
