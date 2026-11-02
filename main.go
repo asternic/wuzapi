@@ -13,7 +13,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -39,11 +38,17 @@ const (
 )
 
 type server struct {
-	db           *sqlx.DB
-	router       *mux.Router
-	exPath       string
-	mode         ServerMode
-	historySaves atomic.Uint64 // Messages saved to history, used by historyTrimInterval
+	db             *sqlx.DB
+	router         *mux.Router
+	exPath         string
+	mode           ServerMode
+	historySavesMu sync.Mutex
+	historySaves   map[historyChatKey]uint64
+}
+
+type historyChatKey struct {
+	userID  string
+	chatJID string
 }
 
 // historyTrimInterval runs the per-chat history trim on every Nth saved message (1 = every message).

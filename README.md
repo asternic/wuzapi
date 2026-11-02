@@ -650,7 +650,10 @@ persistence for live, outgoing, and HistorySync messages without suppressing
 HistorySync webhooks. Positive limits apply to each chat across those sources.
 Enforcing the limit walks the whole chat, so with large limits it can slow saves
 down: `WUZAPI_HISTORY_TRIM_INTERVAL=100` runs it on every 100th saved message
-instead of every message (default 1), and a chat can then briefly exceed its limit.
+for each user and chat independently, instead of every message (default 1).
+Counters are kept in memory and reset on restart. A chat can exceed its limit
+between trims; if it stops receiving messages, the excess remains until a future
+save triggers a trim. Use the default of 1 to enforce the limit on every save.
 The requested window is sent in that user's pairing payload; WhatsApp and the phone determine which messages are
 available. Incoming batches use the existing `HistorySync` processing and webhooks.
 Zero sync days does not suppress WhatsApp's normal history events.
