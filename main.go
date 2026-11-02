@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -38,11 +39,15 @@ const (
 )
 
 type server struct {
-	db     *sqlx.DB
-	router *mux.Router
-	exPath string
-	mode   ServerMode
+	db           *sqlx.DB
+	router       *mux.Router
+	exPath       string
+	mode         ServerMode
+	historySaves atomic.Uint64 // Messages saved to history, used by historyTrimInterval
 }
+
+// historyTrimInterval runs the per-chat history trim on every Nth saved message (1 = every message).
+var historyTrimInterval uint64 = 1
 
 // Replace the global variables
 var (
@@ -325,6 +330,15 @@ func main() {
 	}
 	automaticPresence = configuredPresence
 	log.Info().Str("presence", string(automaticPresence)).Msg("Automatic session presence configured")
+
+	if v := os.Getenv("WUZAPI_HISTORY_TRIM_INTERVAL"); v != "" {
+		interval, err := strconv.ParseUint(v, 10, 64)
+		if err != nil || interval == 0 {
+			log.Fatal().Str("value", v).Msg("Invalid WUZAPI_HISTORY_TRIM_INTERVAL value")
+		}
+		historyTrimInterval = interval
+		log.Info().Uint64("interval", interval).Msg("History trim interval configured")
+	}
 
 	if v := os.Getenv("WUZAPI_SOCKET_RECOVERY"); v != "" {
 		enabled, err := strconv.ParseBool(v)

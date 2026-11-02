@@ -147,7 +147,9 @@ type HistoryMessage struct {
 // reported for it; pass the zero time when it is unknown and sent_at stays NULL.
 func (s *server) saveMessageToHistory(userID, chatJID, senderJID, messageID, messageType, textContent, mediaLink, quotedMessageID, dataJson string, sentAt time.Time) error {
 	// Serialize persistence with user deletion and read the current retention setting.
-	// PostgreSQL locks the user row; SQLite acquires its write lock before reading.
+	// PostgreSQL takes FOR KEY SHARE on the user row: it blocks the deletion but not other saves,
+	// so a large history sync doesn't queue every message of the user behind one lock.
+	// SQLite acquires its write lock before reading.
 	tx, err := s.db.Beginx()
 	if err != nil {
 		return err
@@ -160,7 +162,7 @@ func (s *server) saveMessageToHistory(userID, chatJID, senderJID, messageID, mes
 	}
 	queryLimit := "SELECT COALESCE(history, 0) FROM users WHERE id=?"
 	if s.db.DriverName() == "postgres" {
-		queryLimit += " FOR UPDATE"
+		queryLimit += " FOR KEY SHARE"
 	}
 	var limit int
 	if err = tx.Get(&limit, tx.Rebind(queryLimit), userID); err == sql.ErrNoRows {
@@ -200,8 +202,12 @@ func (s *server) saveMessageToHistory(userID, chatJID, senderJID, messageID, mes
 	if err != nil {
 		return fmt.Errorf("failed to save message to history: %w", err)
 	}
-	if err = s.trimMessageHistory(tx, userID, chatJID, limit); err != nil {
-		return err
+	// Trimming walks the whole chat, even when nothing is over the limit, so on chats with
+	// many messages it can run on only every Nth save (WUZAPI_HISTORY_TRIM_INTERVAL).
+	if s.historySaves.Add(1)%historyTrimInterval == 0 {
+		if err = s.trimMessageHistory(tx, userID, chatJID, limit); err != nil {
+			return err
+		}
 	}
 	return tx.Commit()
 }
@@ -245,6 +251,14 @@ func (s *server) trimMessageHistory(tx *sqlx.Tx, userID, chatJID string, limit i
                 ORDER BY timestamp DESC
                 LIMIT -1 OFFSET ?
             )`
+	}
+
+	// Saves of one user can run in parallel, so trims of one chat take turns: two of them
+	// deleting the same rows in a different order would deadlock.
+	if s.db.DriverName() == "postgres" {
+		if _, err := tx.Exec("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", userID+" "+chatJID); err != nil {
+			return fmt.Errorf("failed to lock chat for trimming: %w", err)
+		}
 	}
 
 	if _, err := tx.Exec(querySecrets, userID, chatJID, limit); err != nil {
