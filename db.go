@@ -147,7 +147,9 @@ type HistoryMessage struct {
 // reported for it; pass the zero time when it is unknown and sent_at stays NULL.
 func (s *server) saveMessageToHistory(userID, chatJID, senderJID, messageID, messageType, textContent, mediaLink, quotedMessageID, dataJson string, sentAt time.Time) error {
 	// Serialize persistence with user deletion and read the current retention setting.
-	// PostgreSQL locks the user row; SQLite acquires its write lock before reading.
+	// PostgreSQL takes FOR KEY SHARE on the user row: it blocks the deletion but not other saves,
+	// so a large history sync doesn't queue every message of the user behind one lock.
+	// SQLite acquires its write lock before reading.
 	tx, err := s.db.Beginx()
 	if err != nil {
 		return err
@@ -160,7 +162,7 @@ func (s *server) saveMessageToHistory(userID, chatJID, senderJID, messageID, mes
 	}
 	queryLimit := "SELECT COALESCE(history, 0) FROM users WHERE id=?"
 	if s.db.DriverName() == "postgres" {
-		queryLimit += " FOR UPDATE"
+		queryLimit += " FOR KEY SHARE"
 	}
 	var limit int
 	if err = tx.Get(&limit, tx.Rebind(queryLimit), userID); err == sql.ErrNoRows {
@@ -170,6 +172,15 @@ func (s *server) saveMessageToHistory(userID, chatJID, senderJID, messageID, mes
 	}
 	if limit <= 0 {
 		return nil
+	}
+	// Lock the chat before the upsert, even when this save will skip trimming.
+	// ON CONFLICT DO UPDATE locks existing rows even if its WHERE rejects the
+	// update. Taking that row lock before the chat lock can deadlock with a trim
+	// holding the chat lock and trying to delete the same old message.
+	if s.db.DriverName() == "postgres" {
+		if _, err = tx.Exec("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", userID+" "+chatJID); err != nil {
+			return fmt.Errorf("failed to lock chat for history save: %w", err)
+		}
 	}
 	// Idempotent insert: HistorySync batches (and reconnects) routinely redeliver
 	// messages already persisted via the live Message event. The (user_id, message_id)
@@ -200,10 +211,34 @@ func (s *server) saveMessageToHistory(userID, chatJID, senderJID, messageID, mes
 	if err != nil {
 		return fmt.Errorf("failed to save message to history: %w", err)
 	}
-	if err = s.trimMessageHistory(tx, userID, chatJID, limit); err != nil {
-		return err
+	// Trimming walks the whole chat, even when nothing is over the limit, so on chats with
+	// many messages it can run on only every Nth save (WUZAPI_HISTORY_TRIM_INTERVAL).
+	if s.shouldTrimMessageHistory(userID, chatJID) {
+		if err = s.trimMessageHistory(tx, userID, chatJID, limit); err != nil {
+			return err
+		}
 	}
 	return tx.Commit()
+}
+
+func (s *server) shouldTrimMessageHistory(userID, chatJID string) bool {
+	if historyTrimInterval <= 1 {
+		return true
+	}
+	s.historySavesMu.Lock()
+	defer s.historySavesMu.Unlock()
+	if s.historySaves == nil {
+		s.historySaves = make(map[historyChatKey]uint64)
+	}
+	key := historyChatKey{userID: userID, chatJID: chatJID}
+	count := s.historySaves[key] + 1
+	if count >= historyTrimInterval {
+		// Completed intervals do not need to retain a counter in memory.
+		delete(s.historySaves, key)
+		return true
+	}
+	s.historySaves[key] = count
+	return false
 }
 
 func (s *server) trimMessageHistory(tx *sqlx.Tx, userID, chatJID string, limit int) error {
@@ -272,5 +307,15 @@ func (s *server) deleteUserAndHistory(userID string) error {
 	if _, err = tx.Exec(tx.Rebind("DELETE FROM message_history WHERE user_id=?"), userID); err != nil {
 		return err
 	}
-	return tx.Commit()
+	if err = tx.Commit(); err != nil {
+		return err
+	}
+	s.historySavesMu.Lock()
+	for key := range s.historySaves {
+		if key.userID == userID {
+			delete(s.historySaves, key)
+		}
+	}
+	s.historySavesMu.Unlock()
+	return nil
 }

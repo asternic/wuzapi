@@ -234,6 +234,7 @@ WUZAPI_PORT=8080 # Port for the WuzAPI server
 WUZAPI_GLOBAL_WEBHOOK= # Global webhook URL for all instances
 WUZAPI_AUTO_PRESENCE=available # use unavailable to preserve primary-phone push notifications
 WUZAPI_PROXY_POOL_FALLBACK=block # use direct to connect without a proxy when the proxy pool is full
+WUZAPI_HISTORY_TRIM_INTERVAL=1 # trim a chat's history on every Nth saved message
 ```
 
 `WUZAPI_AUTO_PRESENCE` controls the presence announced after a session connects or
@@ -647,6 +648,12 @@ Sync days and `history` are separate settings: `history` is the local per-chat
 message retention count, not a number of days. A value of 0 disables local
 persistence for live, outgoing, and HistorySync messages without suppressing
 HistorySync webhooks. Positive limits apply to each chat across those sources.
+Enforcing the limit walks the whole chat, so with large limits it can slow saves
+down: `WUZAPI_HISTORY_TRIM_INTERVAL=100` runs it on every 100th saved message
+for each user and chat independently, instead of every message (default 1).
+Counters are kept in memory and reset on restart. A chat can exceed its limit
+between trims; if it stops receiving messages, the excess remains until a future
+save triggers a trim. Use the default of 1 to enforce the limit on every save.
 The requested window is sent in that user's pairing payload; WhatsApp and the phone determine which messages are
 available. Incoming batches use the existing `HistorySync` processing and webhooks.
 Zero sync days does not suppress WhatsApp's normal history events.
