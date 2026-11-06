@@ -1632,7 +1632,7 @@
             <div class="endpoint">
                 <h3><span class="path">GET / PUT /admin/users/{id}/sip-gateway</span></h3>
                 <p>Read or set the account's SIP route with the admin token. Enable the process listener with <code>WUZAPI_SIP_LOCAL</code> and reconnect the WhatsApp session after saving.</p>
-                <pre><code class="language-json">{"enabled":true,"target":"sip:wa-in@pbx.example.com:5060"}</code></pre>
+                <pre><code class="language-json">{"enabled":true,"target":"sip:wa-in@pbx.example.com:5060","maxCalls":8}</code></pre>
                 <p>Send <code>{"enabled":false}</code> to disable the route.</p>
             </div>
 

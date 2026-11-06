@@ -121,6 +121,11 @@ var migrations = []Migration{
 		Name:  "add_sip_gateway_target",
 		UpSQL: `ALTER TABLE users ADD COLUMN sip_gateway_target TEXT;`,
 	},
+	{
+		ID:    19,
+		Name:  "add_sip_gateway_max_calls",
+		UpSQL: `ALTER TABLE users ADD COLUMN sip_gateway_max_calls INTEGER NOT NULL DEFAULT 2 CHECK (sip_gateway_max_calls BETWEEN 1 AND 32);`,
+	},
 }
 
 const addProxyPoolSQL = `

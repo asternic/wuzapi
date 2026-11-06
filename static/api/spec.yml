@@ -317,6 +317,11 @@ paths:
                 target:
                   type: string
                   description: SIP URI required when enabled.
+                maxCalls:
+                  type: integer
+                  minimum: 1
+                  maximum: 32
+                  description: Concurrent call limit for the account. Defaults to 2. Omit to preserve the saved value.
       responses:
         200:
           description: SIP gateway settings saved

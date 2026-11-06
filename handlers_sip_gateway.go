@@ -13,10 +13,12 @@ func (s *server) UserSIPGateway() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := mux.Vars(r)["id"]
 		target := ""
+		var maxCalls int
 		if r.Method == http.MethodPut {
 			var request struct {
-				Enabled *bool  `json:"enabled"`
-				Target  string `json:"target"`
+				Enabled  *bool  `json:"enabled"`
+				Target   string `json:"target"`
+				MaxCalls *int   `json:"maxCalls"`
 			}
 			if err := json.NewDecoder(r.Body).Decode(&request); err != nil || request.Enabled == nil {
 				s.respondAdminError(w, http.StatusBadRequest, "enabled must be a boolean")
@@ -29,22 +31,22 @@ func (s *server) UserSIPGateway() http.HandlerFunc {
 				}
 				target = request.Target
 			}
-			result, err := s.db.ExecContext(r.Context(), "UPDATE users SET sip_gateway_target = $1 WHERE id = $2", target, id)
-			if err != nil {
-				s.respondAdminError(w, http.StatusInternalServerError, "database error")
+			if request.MaxCalls != nil && (*request.MaxCalls < 1 || *request.MaxCalls > sipAccountCallLimit) {
+				s.respondAdminError(w, http.StatusBadRequest, "maxCalls must be between 1 and 32")
 				return
 			}
-			count, err := result.RowsAffected()
-			if err != nil {
-				s.respondAdminError(w, http.StatusInternalServerError, "database error")
-				return
-			}
-			if count == 0 {
+			err := s.db.QueryRowxContext(r.Context(), "UPDATE users SET sip_gateway_target = $1, sip_gateway_max_calls = COALESCE($2, sip_gateway_max_calls) WHERE id = $3 RETURNING sip_gateway_max_calls", target, request.MaxCalls, id).Scan(&maxCalls)
+			if errors.Is(err, sql.ErrNoRows) {
 				s.respondAdminError(w, http.StatusNotFound, "user not found")
 				return
 			}
+			if err != nil {
+				s.respondAdminError(w, http.StatusInternalServerError, "database error")
+				return
+			}
 		} else {
-			uri, err := s.sipTarget(r.Context(), id)
+			uri, limit, err := s.sipTarget(r.Context(), id)
+			maxCalls = limit
 			if errors.Is(err, sql.ErrNoRows) {
 				s.respondAdminError(w, http.StatusNotFound, "user not found")
 				return
@@ -57,7 +59,7 @@ func (s *server) UserSIPGateway() http.HandlerFunc {
 				target = uri.String()
 			}
 		}
-		data, _ := json.Marshal(map[string]interface{}{"enabled": target != "", "target": target})
+		data, _ := json.Marshal(map[string]interface{}{"enabled": target != "", "target": target, "maxCalls": maxCalls})
 		s.Respond(w, r, http.StatusOK, string(data))
 	}
 }

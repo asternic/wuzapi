@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -36,6 +37,14 @@ func configureSIPGateway() (*sipGateway, error) {
 	routes := os.Getenv("WUZAPI_SIP_TARGETS")
 	if local == "" && routes == "" {
 		return nil, nil
+	}
+	maxCalls := 32
+	if value := os.Getenv("WUZAPI_SIP_MAX_CALLS"); value != "" {
+		limit, err := strconv.ParseInt(value, 10, 32)
+		if err != nil || limit < 1 {
+			return nil, fmt.Errorf("WUZAPI_SIP_MAX_CALLS must be a positive integer")
+		}
+		maxCalls = int(limit)
 	}
 	addr, err := net.ResolveUDPAddr("udp4", local)
 	if err != nil || addr.IP.To4() == nil || addr.IP.IsUnspecified() || addr.Port == 0 {
@@ -83,14 +92,14 @@ func configureSIPGateway() (*sipGateway, error) {
 			log.Debug().Err(err).Msg("SIP listener stopped")
 		}
 	}()
-	return &sipGateway{ua: ua, listener: listener, dialogs: dialogs, ip: addr.IP, targets: targets, slots: make(chan struct{}, 32)}, nil
+	return &sipGateway{ua: ua, listener: listener, dialogs: dialogs, ip: addr.IP, targets: targets, slots: make(chan struct{}, maxCalls)}, nil
 }
 
 func (g *sipGateway) attach(ctx context.Context, s *server, userID string, wa *whatsmeow.Client) func() {
 	if g == nil {
 		return func() {}
 	}
-	target, err := s.sipTarget(ctx, userID)
+	target, maxCalls, err := s.sipTarget(ctx, userID)
 	if err != nil {
 		log.Warn().Err(err).Str("user_id", userID).Msg("Cannot load SIP route")
 	}
@@ -112,7 +121,7 @@ func (g *sipGateway) attach(ctx context.Context, s *server, userID string, wa *w
 			return
 		}
 		_, group := call.GroupState()
-		if group || call.IsVideo() || len(active) >= 4 {
+		if group || call.IsVideo() || len(active) >= maxCalls {
 			go func() { _ = call.Reject() }()
 			return
 		}
@@ -205,19 +214,24 @@ func parseSIPTarget(value string) (sip.Uri, error) {
 	return uri, nil
 }
 
-func (s *server) sipTarget(ctx context.Context, id string) (sip.Uri, error) {
+const sipAccountCallLimit = 32
+
+func (s *server) sipTarget(ctx context.Context, id string) (sip.Uri, int, error) {
 	var target sql.NullString
-	if err := s.db.GetContext(ctx, &target, "SELECT sip_gateway_target FROM users WHERE id = $1", id); err != nil {
-		return sip.Uri{}, err
+	var maxCalls int
+	err := s.db.QueryRowxContext(ctx, "SELECT sip_gateway_target, sip_gateway_max_calls FROM users WHERE id = $1", id).Scan(&target, &maxCalls)
+	if err != nil {
+		return sip.Uri{}, 0, err
 	}
 	if target.Valid {
 		if target.String == "" {
-			return sip.Uri{}, nil
+			return sip.Uri{}, maxCalls, nil
 		}
-		return parseSIPTarget(target.String)
+		uri, err := parseSIPTarget(target.String)
+		return uri, maxCalls, err
 	}
 	if inboundSIP != nil {
-		return inboundSIP.targets[id], nil
+		return inboundSIP.targets[id], maxCalls, nil
 	}
-	return sip.Uri{}, nil
+	return sip.Uri{}, maxCalls, nil
 }

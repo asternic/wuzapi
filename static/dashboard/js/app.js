@@ -2372,6 +2372,7 @@ async function openSIPGateway(id) {
     $('#sipGatewayAccount').text(id);
     $('#sipGatewayEnabled').prop('checked', result.data.enabled);
     $('#sipGatewayTarget').val(result.data.target);
+    $('#sipGatewayMaxCalls').val(result.data.maxCalls ?? 2);
     $('#modalSIPGateway').modal('show');
   } catch (error) {
     if (load === sipGatewayLoad) showError('Failed to load SIP gateway settings');
@@ -2383,6 +2384,11 @@ async function saveSIPGateway() {
   if (!sipGatewayAccount || button.prop('disabled')) return;
   const enabled = $('#sipGatewayEnabled').prop('checked');
   const target = $('#sipGatewayTarget').val().trim();
+  const maxCalls = Number($('#sipGatewayMaxCalls').val());
+  if (!Number.isInteger(maxCalls) || maxCalls < 1 || maxCalls > 32) {
+    showError('Maximum simultaneous calls must be between 1 and 32');
+    return;
+  }
   if (enabled && !target) {
     showError('Enter a SIP destination');
     return;
@@ -2392,7 +2398,7 @@ async function saveSIPGateway() {
     const response = await fetch(baseUrl + '/admin/users/' + encodeURIComponent(sipGatewayAccount) + '/sip-gateway', {
       method: 'PUT',
       headers: { authorization: getLocalStorageItem('admintoken'), 'Content-Type': 'application/json' },
-      body: JSON.stringify({ enabled, target })
+      body: JSON.stringify({ enabled, target, maxCalls })
     });
     const result = await response.json();
     if (!response.ok || !result.success) {

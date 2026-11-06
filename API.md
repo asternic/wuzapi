@@ -2468,8 +2468,10 @@ Use `GET /admin/users/{id}/sip-gateway` to read the route and
 `PUT /admin/users/{id}/sip-gateway` to set it. Both require the admin token.
 
 ```json
-{"enabled":true,"target":"sip:wa-in@pbx.example.com:5060"}
+{"enabled":true,"target":"sip:wa-in@pbx.example.com:5060","maxCalls":8}
 ```
+
+`maxCalls` is optional (1–32). The default is 2, and omitting it on updates preserves the saved limit. The instance-wide limit defaults to 32 and can be set with `WUZAPI_SIP_MAX_CALLS`.
 
 Send `{"enabled":false}` to disable the route, including any legacy default
 from `WUZAPI_SIP_TARGETS`. A saved configuration takes precedence over that
@@ -2478,3 +2480,13 @@ The server must start with `WUZAPI_SIP_LOCAL` set to enable the SIP listener.
 
 In stdio use `admin.users.sip-gateway.get` or `admin.users.sip-gateway.set`
 with `userId` and `adminToken`. The set method also takes the fields above.
+
+
+```json
+{"jsonrpc":"2.0","id":"sip-1","method":"admin.users.sip-gateway.set","params":{"userId":"USER_ID","adminToken":"ADMIN_TOKEN","enabled":true,"target":"sip:wa-in@pbx.example.com:5060","maxCalls":8}}
+```
+
+Both endpoints return `enabled`, `target` and `maxCalls` in `data`.
+An invalid route or limit returns `400`, and an unknown account returns `404`.
+For the network settings, PJSIP endpoint and dialplan, see the
+[WuzAPI deployment example](README.md#experimental-inbound-whatsapp-calls-over-sip).

@@ -21,9 +21,12 @@ func TestAdminUserSIPGateway(t *testing.T) {
 		{"GET", *adminToken, "", `"enabled":false`, 200},
 		{"PUT", *adminToken, `{"enabled":true,"target":"https://example.com"}`, "", 400},
 		{"PUT", *adminToken, `{"enabled":true,"target":"` + target + `"}`, target, 200},
-		{"GET", *adminToken, "", target, 200},
+		{"GET", *adminToken, "", `"maxCalls":2`, 200},
+		{"PUT", *adminToken, `{"enabled":true,"target":"` + target + `","maxCalls":33}`, "", 400},
+		{"PUT", *adminToken, `{"enabled":true,"target":"` + target + `","maxCalls":8}`, `"maxCalls":8`, 200},
+		{"GET", *adminToken, "", `"maxCalls":8`, 200},
 		{"PUT", *adminToken, `{"enabled":false}`, `"enabled":false`, 200},
-		{"GET", *adminToken, "", `"enabled":false`, 200},
+		{"GET", *adminToken, "", `"maxCalls":8`, 200},
 	} {
 		req := httptest.NewRequest(tc.method, "/admin/users/sip-test/sip-gateway", strings.NewReader(tc.payload))
 		req.Header.Set("Authorization", tc.token)

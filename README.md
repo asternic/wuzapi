@@ -770,34 +770,109 @@ This recovery stops the instance without remote logout and preserves every store
 
 ### Experimental inbound WhatsApp calls over SIP
 
-The gateway reuses the linked WhatsApp session of each configured WuzAPI user.
-Set the SIP listener before starting WuzAPI. The legacy environment map is optional:
+WuzAPI forwards incoming one-to-one WhatsApp voice calls to a SIP PBX using the
+account's existing linked device. Asterisk can deliver the calls to WebPhone PRO,
+a regular SIP phone, or a group of extensions. The caller ID uses the WhatsApp
+phone number and cached profile name when available, with `WhatsApp` as the
+fallback display name.
 
-```sh
-export WUZAPI_SIP_LOCAL='192.0.2.20:52070'
-export WUZAPI_SIP_TARGETS='{"USER_ID":"sip:wa-in@192.0.2.10:5060"}'
+#### WuzAPI configuration
+
+For this example, WuzAPI runs at `192.0.2.20` and Asterisk at `192.0.2.10`.
+Replace both documentation addresses with addresses reachable in your deployment.
+Add this to the WuzAPI `.env` and restart the service:
+
+```dotenv
+WUZAPI_SIP_LOCAL=192.0.2.20:52070
+WUZAPI_SIP_MAX_CALLS=32
 ```
 
-Set account routes through the admin SIP gateway endpoints described in API.md.
-Reconnect the account after saving its route. If using the legacy map, use the
-WuzAPI user ID as the JSON key. Replace the example IPs. The local
-IPv4 address must be assigned to an interface and reachable by Asterisk for
-SIP and RTP. For two VPSes use a directly reachable address or a VPN. This
-pilot advertises the bind address and uses an ephemeral UDP port per RTP
-stream. Restrict ingress to the PBX at the firewall. SIP and RTP are unencrypted.
-All accounts share the SIP listener. The pilot admits up to four concurrent
-calls per account and 32 across the process.
+In the admin dashboard, open the account's **SIP Gateway** settings, enable the
+route, and enter `sip:wa-in@192.0.2.10:5060`. Save, then use **Disconnect → Connect**
+on that account to load the settings and preserve its linked device.
+The same settings are available through the [admin API and stdio](API.md#sip-gateway-per-account).
+A saved route takes precedence over the optional startup map
+`WUZAPI_SIP_TARGETS='{"USER_ID":"sip:wa-in@192.0.2.10:5060"}'`.
 
-Configure an Asterisk PJSIP endpoint identified by the gateway's source IP
-with `allow=ulaw`, `direct_media=no` and `moh_passthrough=no`. Route `wa-in`
-to a test extension or ring group without answering the channel before an
-operator picks up. With this configuration Asterisk handles hold and resume
-from ordinary SIP phones and sends music on hold as RTP to WuzAPI. Phone mute
-is local to the SIP phone. The gateway supports inbound 1:1 audio, and its SIP
-leg does not negotiate mid-dialog SDP changes in this pilot.
+Accounts share one SIP/UDP listener. Each call uses its own ephemeral RTP/UDP
+port. Set **Maximum simultaneous calls** per account (1–32, default 2).
+`WUZAPI_SIP_MAX_CALLS` caps the total across all accounts (default 32).
+For example, a global limit of 100 and a per-account limit of 1 allow up to
+100 accounts to receive one gateway call each, subject to the host's media capacity. Ringing and held calls also occupy slots. Existing limits
+saved by earlier pilot builds are preserved.
 
-Use the existing linked account after restarting WuzAPI. Call it from two
-phones, answer from two extensions, and verify independent bidirectional
-audio, hold/resume, mute, hangup and messaging on that account. Try again
-with the SIP destination unavailable and verify that calls recover when it
-comes back. No separate QR pairing is needed for an already linked account.
+The listener IP must be assigned to a local IPv4 interface. WuzAPI advertises
+that same IP for media. Use directly reachable addresses or a VPN between the
+servers. SIP and RTP on this leg are unencrypted. Restrict UDP access to the
+peer server's IP. Allow the SIP ports and the RTP ports each server advertises
+in SDP. Asterisk uses its configured RTP range, while WuzAPI uses the OS
+ephemeral UDP range. Asterisk and WuzAPI on the same host can use loopback
+addresses if Asterisk listens there.
+
+#### Asterisk PJSIP example
+
+Add these sections to the active PJSIP configuration. For a PBX that generates
+its configuration, use the supported custom include files.
+
+```ini
+[wuzapi-wa]
+type=endpoint
+context=from-wuzapi-wa
+disallow=all
+allow=ulaw
+direct_media=no
+moh_passthrough=no
+
+[wuzapi-wa-identify]
+type=identify
+endpoint=wuzapi-wa
+match=192.0.2.20/32
+```
+
+The `match` address is the source IP **as seen by Asterisk**. Keep the WebPhone
+or SIP extension registered to Asterisk and use this example in the dialplan.
+Replace `6001` with your test extension:
+
+```ini
+[from-wuzapi-wa]
+exten => wa-in,1,NoOp(Inbound WhatsApp call)
+ same => n,Dial(PJSIP/6001,15)
+ same => n,Hangup()
+```
+
+Keep the call unanswered until an operator picks up. For example, avoid
+`Answer()` or voicemail before `Dial()`. With `moh_passthrough=no`, Asterisk
+handles phone hold/resume and sends music on hold to WuzAPI as RTP. The phone's
+mute button silences its microphone locally. This pilot handles incoming audio
+and delegates hold to Asterisk. The gateway leg has no mid-dialog SDP renegotiation.
+
+After saving the PBX configuration:
+
+```sh
+sudo asterisk -rx 'pjsip reload'
+sudo asterisk -rx 'dialplan reload'
+sudo asterisk -rx 'pjsip show endpoint wuzapi-wa'
+sudo asterisk -rx 'dialplan show from-wuzapi-wa'
+sudo asterisk -rx 'pjsip show contacts'
+```
+
+Confirm the endpoint shows the expected identify match and the test phone is
+registered. If Asterisk logs `No matching endpoint found`, compare the source
+IP in that log with `match` and verify the identify section loaded.
+See the [Asterisk PJSIP troubleshooting guide](https://docs.asterisk.org/Configuration/Channel-Drivers/SIP/Configuring-res_pjsip/Asterisk-PJSIP-Troubleshooting-Guide/).
+
+#### Verify the route
+
+1. Call the linked WhatsApp account, answer from the SIP phone, and check the
+   caller ID and audio in both directions.
+2. Try hold/resume and mute. For concurrency, route to a group with two
+   available phones and answer two calls to the same WhatsApp account. Check
+   that holding or ending either call leaves the other conversation intact.
+3. Repeat with the destination unregistered or unanswered. WhatsApp should
+   remain unanswered. Restore the destination and verify that the next call
+   can ring without restarting WuzAPI.
+
+If the phone rings but audio is one-way, compare the SDP addresses and ports
+with the RTP seen on both hosts. In WuzAPI, `first RTP decoded from relay`
+indicates audio decoded from WhatsApp. With `LOG_LEVEL=debug`,
+`Sent first RTP packet to Asterisk` shows the address used for the SIP media leg.
