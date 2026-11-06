@@ -204,3 +204,42 @@ func TestFailedActionsStoreNothing(t *testing.T) {
 		}
 	})
 }
+
+// TestOutgoingPollRow checks that a sent poll is stored with its question and
+// the poll message (options included) in datajson.
+func TestOutgoingPollRow(t *testing.T) {
+	client := deleteTestClient()
+	poll := client.BuildPollCreation("Dinner?", []string{"Friday", "Saturday"}, 1)
+	sent := time.Unix(1700000000, 0)
+	historyDrivers(t, func(t *testing.T, db *sqlx.DB) {
+		if err := initializeSchema(db); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := db.Exec("INSERT INTO users (id,name,token,history) VALUES ('poll-user','Poll','poll-token',100)"); err != nil {
+			t.Fatal(err)
+		}
+		s := &server{db: db}
+		s.saveOutgoingMessageToHistory("poll-user", "999@s.whatsapp.net", "POLL", "poll", "Dinner?", "", sent, 100, poll)
+		var row HistoryMessage
+		if err := db.Get(&row, db.Rebind("SELECT * FROM message_history WHERE user_id=? AND message_id=?"), "poll-user", "POLL"); err != nil {
+			t.Fatal(err)
+		}
+		if row.SenderJID != "me" || row.MessageType != "poll" || row.TextContent != "Dinner?" {
+			t.Fatalf("%+v", row)
+		}
+		var event struct {
+			Info    struct{ IsFromMe bool }
+			Message *waE2E.Message
+		}
+		if err := json.Unmarshal([]byte(row.DataJson), &event); err != nil {
+			t.Fatal(err)
+		}
+		created := event.Message.GetPollCreationMessageV3()
+		if created == nil {
+			created = event.Message.GetPollCreationMessage()
+		}
+		if !event.Info.IsFromMe || created.GetName() != "Dinner?" || len(created.GetOptions()) != 2 || created.GetOptions()[1].GetOptionName() != "Saturday" {
+			t.Fatalf("poll not stored: %s", row.DataJson)
+		}
+	})
+}

@@ -2977,6 +2977,11 @@ func (s *server) SendPoll() http.HandlerFunc {
 		// resolve the hashed selections back to readable strings.
 		clientManager.SetPollOptions(txtid, msgid, req.Options)
 
+		// Store the sent poll like every other send, so it shows in the chat history
+		historyStr := r.Context().Value("userinfo").(Values).Get("History")
+		historyLimit, _ := strconv.Atoi(historyStr)
+		s.saveOutgoingMessageToHistory(txtid, recipient.String(), msgid, "poll", req.Header, "", resp.Timestamp, historyLimit, pollMessage)
+
 		// Publish sent message event to RabbitMQ
 		token := r.Context().Value("userinfo").(Values).Get("Token")
 		userID := r.Context().Value("userinfo").(Values).Get("Id")
