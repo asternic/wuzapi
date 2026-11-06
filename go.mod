@@ -88,4 +88,4 @@ require (
 	rsc.io/qr v0.2.0 // indirect
 )
 
-replace github.com/purpshell/meowcaller => github.com/asternic/meowcaller v0.0.0-20261106143516-289ac080d69f
+replace github.com/purpshell/meowcaller => github.com/asternic/meowcaller v0.0.0-20261106205303-e51b6107e51e
