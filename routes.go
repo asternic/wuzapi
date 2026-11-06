@@ -55,6 +55,7 @@ func (s *server) routes() {
 	adminRoutes.Handle("/users/{id}", s.ListUsers()).Methods("GET")
 	adminRoutes.Handle("/users", s.AddUser()).Methods("POST")
 	adminRoutes.Handle("/users/{id}", s.EditUser()).Methods("PUT")
+	adminRoutes.Handle("/users/{id}/sip-gateway", s.UserSIPGateway()).Methods("GET", "PUT")
 	adminRoutes.Handle("/users/{id}", s.DeleteUser()).Methods("DELETE")
 	adminRoutes.Handle("/users/{id}/full", s.DeleteUserComplete()).Methods("DELETE")
 	adminRoutes.Handle("/users/{id}/preserve-devices", s.DeleteUserPreserveDevices()).Methods("DELETE")

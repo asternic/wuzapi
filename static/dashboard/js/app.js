@@ -981,38 +981,34 @@ function hideWidgets() {
   });
 }
 
-async function connect(token='') {
-  console.log("Connecting...");
-  if(token=='') {
-     token = getLocalStorageItem('token');
-  }
-  const myHeaders = new Headers();
-  myHeaders.append('token', token);
-  myHeaders.append('Content-Type', 'application/json');
-  res = await fetch(baseUrl + "/session/connect", {
-    method: "POST",
-    headers: myHeaders,
-    body: JSON.stringify({Subscribe: ['All'], Immediate: true})
-  });
-  data = await res.json();
-  updateInterval=1000; // Decrease interval to react quicker to QR scan
-  return data;
+async function connect(token = '') {
+  await changeSessionConnection('connect', token);
 }
 
-async function disconnect(token) {
-  console.log("Disconnecting...");
-  if(token=='') {
-     token = getLocalStorageItem('token');
+async function disconnect(token = '') {
+  await changeSessionConnection('disconnect', token);
+}
+
+async function changeSessionConnection(action, token) {
+  const headers = { token: token || getLocalStorageItem('token') };
+  const request = { method: 'POST', headers };
+  if (action === 'connect') {
+    headers['Content-Type'] = 'application/json';
+    request.body = JSON.stringify({ Immediate: true });
   }
-  const myHeaders = new Headers();
-  myHeaders.append('token', token);
-  myHeaders.append('Content-Type', 'application/json');
-  res = await fetch(baseUrl + "/session/disconnect", {
-    method: "POST",
-    headers: myHeaders,
-  });
-  data = await res.json();
-  return data;
+
+  try {
+    const response = await fetch(baseUrl + '/session/' + action, request);
+    const result = await response.json();
+    if (!response.ok || !result.success) {
+      showError(result.error || 'Failed to ' + action + ' the session');
+      return;
+    }
+    updateInterval = 1000;
+    showSuccess(action === 'connect' ? 'Connection requested.' : 'Session disconnected.');
+  } catch (error) {
+    showError('Failed to ' + action + ' the session');
+  }
 }
 
 async function status() {
@@ -1457,6 +1453,9 @@ function populateInstances(instances) {
           <button class="ui primary button dashboard-button" onclick="openDashboard('${instance.id}', '${instance.token}')">
             <i class="external alternate icon"></i> Open
           </button>
+          <button class="ui teal button dashboard-button" onclick="openSIPGateway('${instance.id}')">
+            <i class="phone icon"></i> SIP Gateway
+          </button>
           <button class="ui negative button dashboard-button" onclick="deleteInstance('${instance.id}')">
             <i class="trash alternate icon"></i> Delete
           </button>
@@ -1528,6 +1527,13 @@ function populateInstances(instances) {
                                   ${getLocalStorageItem('isAdmin') && !instance.connected ? `<button class="ui mini orange button" onclick="releaseProxyPool('${instance.id}')" title="Free this pool slot; a pool proxy is assigned again on the next connect">Release</button>` : ''}
                               </div>
                           </div>` : ''}
+                          ${getLocalStorageItem('isAdmin') ? `
+                          <div class="item">
+                              <div class="header">SIP Gateway</div>
+                              <button type="button" class="ui mini teal button" onclick="openSIPGateway('${instance.id}')">
+                                  <i class="phone icon"></i> Configure
+                              </button>
+                          </div>` : ''}
                           <div class="item">
                               <div class="header">Webhook Proxy</div>
                               <div class="content">${instance.proxy_config.webhook_use_proxy === false ? 'Bypass proxy' : 'Use proxy'}</div>
@@ -1583,6 +1589,7 @@ function populateInstances(instances) {
             
             <div class="extra content">
               <button class="ui primary positive button dashboard-button ${instance.connected === true ? 'hidden' : ''}" id="button-connect-${instance.id}" onclick="connect('${instance.token}')">Connect</button>
+              <button class="ui teal button dashboard-button ${instance.connected === true ? '' : 'hidden'}" id="button-disconnect-${instance.id}" onclick="disconnect('${instance.token}')">Disconnect</button>
               <button class="ui primary negative button dashboard-button ${instance.connected === true ? '' : 'hidden'}" id="button-logout-${instance.id}" onclick="logout('${instance.token}')">Logout</button>
               <button class="ui primary positive button dashboard-button ${instance.connected === true && instance.loggedIn === false ? '' : 'hidden'}" id="button-pair-${instance.id}" onclick="modalPairPhone()">Login with Pairing Code</button>
               </div>
@@ -2343,5 +2350,60 @@ async function doBusinessProfile() {
       button.disabled = false;
       button.classList.remove('loading');
     }
+  }
+}
+
+let sipGatewayAccount = null;
+let sipGatewayLoad = 0;
+
+async function openSIPGateway(id) {
+  const load = ++sipGatewayLoad;
+  try {
+    const response = await fetch(baseUrl + '/admin/users/' + encodeURIComponent(id) + '/sip-gateway', {
+      headers: { authorization: getLocalStorageItem('admintoken') }
+    });
+    const result = await response.json();
+    if (load !== sipGatewayLoad) return;
+    if (!response.ok || !result.success) {
+      showError(result.error || 'Failed to load SIP gateway settings');
+      return;
+    }
+    sipGatewayAccount = id;
+    $('#sipGatewayAccount').text(id);
+    $('#sipGatewayEnabled').prop('checked', result.data.enabled);
+    $('#sipGatewayTarget').val(result.data.target);
+    $('#modalSIPGateway').modal('show');
+  } catch (error) {
+    if (load === sipGatewayLoad) showError('Failed to load SIP gateway settings');
+  }
+}
+
+async function saveSIPGateway() {
+  const button = $('#sipGatewaySave');
+  if (!sipGatewayAccount || button.prop('disabled')) return;
+  const enabled = $('#sipGatewayEnabled').prop('checked');
+  const target = $('#sipGatewayTarget').val().trim();
+  if (enabled && !target) {
+    showError('Enter a SIP destination');
+    return;
+  }
+  button.prop('disabled', true).addClass('loading');
+  try {
+    const response = await fetch(baseUrl + '/admin/users/' + encodeURIComponent(sipGatewayAccount) + '/sip-gateway', {
+      method: 'PUT',
+      headers: { authorization: getLocalStorageItem('admintoken'), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enabled, target })
+    });
+    const result = await response.json();
+    if (!response.ok || !result.success) {
+      showError(result.error || 'Failed to save SIP gateway settings');
+      return;
+    }
+    $('#modalSIPGateway').modal('hide');
+    showSuccess('SIP gateway settings saved. Reconnect the WhatsApp session to apply them.');
+  } catch (error) {
+    showError('Failed to save SIP gateway settings');
+  } finally {
+    button.prop('disabled', false).removeClass('loading');
   }
 }

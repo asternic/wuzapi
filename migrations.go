@@ -116,6 +116,11 @@ var migrations = []Migration{
 		Name:  "message_sent_at_timezone",
 		UpSQL: `ALTER TABLE message_history ALTER COLUMN sent_at TYPE TIMESTAMPTZ USING sent_at AT TIME ZONE 'UTC';`,
 	},
+	{
+		ID:    18,
+		Name:  "add_sip_gateway_target",
+		UpSQL: `ALTER TABLE users ADD COLUMN sip_gateway_target TEXT;`,
+	},
 }
 
 const addProxyPoolSQL = `

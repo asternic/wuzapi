@@ -1340,6 +1340,28 @@
   </div>
 
   <!-- Confirmation Modal -->
+  <div class="ui small modal" id="modalSIPGateway">
+    <i class="close icon"></i>
+    <div class="header">SIP Gateway</div>
+    <div class="content">
+      <p>Account <strong id="sipGatewayAccount"></strong></p>
+      <div class="ui form">
+        <div class="field">
+          <label><input type="checkbox" id="sipGatewayEnabled"> Forward incoming WhatsApp calls to SIP</label>
+        </div>
+        <div class="field">
+          <label for="sipGatewayTarget">SIP destination</label>
+          <input type="text" id="sipGatewayTarget" placeholder="sip:wa-in@pbx.example.com:5060">
+        </div>
+      </div>
+      <p>The server needs a SIP listener configured with <code>WUZAPI_SIP_LOCAL</code>. Reconnect the WhatsApp session after saving.</p>
+    </div>
+    <div class="actions">
+      <button type="button" class="ui cancel button">Cancel</button>
+      <button type="button" class="ui primary button" id="sipGatewaySave" onclick="saveSIPGateway()">Save</button>
+    </div>
+  </div>
+
   <div class="ui small modal" id="confirmationModal">
     <div class="header" id="confirmationTitle">Confirm Action</div>
     <div class="content">
@@ -1457,7 +1479,7 @@
 
   <script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/fomantic-ui@2.9.4/dist/semantic.min.js"></script>
-  <script src="js/app.js?v=conversation-tools-1"></script>
+  <script src="js/app.js?v=sip-gateway-3"></script>
   <script src="js/groups.js"></script>
   <script src="js/proxypool.js?v=proxy-pool-4"></script>
 </body>

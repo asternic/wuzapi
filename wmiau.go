@@ -575,6 +575,8 @@ func (s *server) startClient(userID string, textjid string, token string, kill c
 		}
 	}()
 
+	defer inboundSIP.attach(ctx, s, userID, client)()
+
 	// Now we can use the client with the manager
 	clientManager.SetWhatsmeowClient(userID, client)
 

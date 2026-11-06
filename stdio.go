@@ -235,6 +235,16 @@ func (ss *stdioServer) routeRequest(req *jsonRpcRequest) {
 			return
 		}
 		httpPath = "/admin/users/" + userId
+	case "admin.users.sip-gateway.get", "admin.users.sip-gateway.set":
+		httpMethod = "GET"
+		if req.Method == "admin.users.sip-gateway.set" {
+			httpMethod = "PUT"
+		}
+		userID, ok := ss.getUserIdParam(req)
+		if !ok {
+			return
+		}
+		httpPath = "/admin/users/" + userID + "/sip-gateway"
 	case "admin.users.delete.full":
 		httpMethod = "DELETE"
 		userId, ok := ss.getUserIdParam(req)

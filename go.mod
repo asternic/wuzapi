@@ -18,11 +18,16 @@ require (
 
 require (
 	github.com/PuerkitoBio/goquery v1.10.3
+	github.com/emiago/sipgo v1.3.0
 	github.com/justinas/alice v1.2.0
 	github.com/lib/pq v1.10.9
 	github.com/nfnt/resize v0.0.0-20180221191011-83c6a9932646
+	github.com/pion/rtp v1.10.6
+	github.com/pion/sdp/v3 v3.0.20
+	github.com/purpshell/meowcaller v0.0.0-20260726180203-6d9b7b2c1807
 	github.com/rabbitmq/amqp091-go v1.10.0
 	github.com/vincent-petithory/dataurl v1.0.0
+	github.com/zaf/g711 v1.4.0
 	golang.org/x/image v0.32.0
 	golang.org/x/sync v0.23.0
 	modernc.org/sqlite v1.37.1
@@ -43,8 +48,20 @@ require (
 	github.com/coder/websocket v1.8.15 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/elliotchance/orderedmap/v3 v3.1.1 // indirect
+	github.com/gobwas/httphead v0.1.0 // indirect
+	github.com/gobwas/pool v0.2.1 // indirect
+	github.com/gobwas/ws v1.3.2 // indirect
+	github.com/hajimehoshi/go-mp3 v0.3.4 // indirect
+	github.com/icholy/digest v1.1.0 // indirect
 	github.com/ncruces/go-strftime v0.1.9 // indirect
 	github.com/petermattis/goid v0.0.0-20260820044319-269ab09b5261 // indirect
+	github.com/pion/datachannel v1.6.0 // indirect
+	github.com/pion/dtls/v3 v3.1.2 // indirect
+	github.com/pion/logging v0.2.4 // indirect
+	github.com/pion/opus v0.1.0 // indirect
+	github.com/pion/randutil v0.1.0 // indirect
+	github.com/pion/sctp v1.9.4 // indirect
+	github.com/pion/transport/v4 v4.0.1 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	github.com/rs/xid v1.6.0 // indirect
 	github.com/vektah/gqlparser/v2 v2.5.37 // indirect
@@ -70,3 +87,5 @@ require (
 	golang.org/x/sys v0.48.0
 	rsc.io/qr v0.2.0 // indirect
 )
+
+replace github.com/purpshell/meowcaller => github.com/asternic/meowcaller v0.0.0-20261106143516-289ac080d69f

@@ -260,6 +260,16 @@ func main() {
 	}
 
 	flag.Parse()
+	gateway, sipErr := configureSIPGateway()
+	if sipErr != nil {
+		log.Fatal().Err(sipErr).Msg("Cannot configure SIP gateway")
+	}
+	inboundSIP = gateway
+	if gateway != nil {
+		defer gateway.ua.Close()
+		defer gateway.listener.Close()
+	}
+
 	if _, err := getMediaStore(); err != nil {
 		log.Fatal().Err(err).Msg("Could not initialize media storage")
 	}

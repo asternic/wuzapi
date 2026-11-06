@@ -767,3 +767,37 @@ Administrators can also call `DELETE /admin/users/{id}/preserve-devices` with th
 ```
 
 This recovery stops the instance without remote logout and preserves every stored device, without choosing among candidates. It requires no manual database edits. To use the number again, create a new instance and pair it again so exact device ownership is recorded. Cleanup of orphaned WhatsApp credentials is separate. See [deletion API and recovery responses](API.md#delete-user) for details and failure behavior.
+
+### Experimental inbound WhatsApp calls over SIP
+
+The gateway reuses the linked WhatsApp session of each configured WuzAPI user.
+Set the SIP listener before starting WuzAPI. The legacy environment map is optional:
+
+```sh
+export WUZAPI_SIP_LOCAL='192.0.2.20:52070'
+export WUZAPI_SIP_TARGETS='{"USER_ID":"sip:wa-in@192.0.2.10:5060"}'
+```
+
+Set account routes through the admin SIP gateway endpoints described in API.md.
+Reconnect the account after saving its route. If using the legacy map, use the
+WuzAPI user ID as the JSON key. Replace the example IPs. The local
+IPv4 address must be assigned to an interface and reachable by Asterisk for
+SIP and RTP. For two VPSes use a directly reachable address or a VPN. This
+pilot advertises the bind address and uses an ephemeral UDP port per RTP
+stream. Restrict ingress to the PBX at the firewall. SIP and RTP are unencrypted.
+All accounts share the SIP listener. The pilot admits up to four concurrent
+calls per account and 32 across the process.
+
+Configure an Asterisk PJSIP endpoint identified by the gateway's source IP
+with `allow=ulaw`, `direct_media=no` and `moh_passthrough=no`. Route `wa-in`
+to a test extension or ring group without answering the channel before an
+operator picks up. With this configuration Asterisk handles hold and resume
+from ordinary SIP phones and sends music on hold as RTP to WuzAPI. Phone mute
+is local to the SIP phone. The gateway supports inbound 1:1 audio, and its SIP
+leg does not negotiate mid-dialog SDP changes in this pilot.
+
+Use the existing linked account after restarting WuzAPI. Call it from two
+phones, answer from two extensions, and verify independent bidirectional
+audio, hold/resume, mute, hangup and messaging on that account. Try again
+with the SIP destination unavailable and verify that calls recover when it
+comes back. No separate QR pairing is needed for an already linked account.

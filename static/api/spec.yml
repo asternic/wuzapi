@@ -283,6 +283,47 @@ paths:
             application/json:
               schema:
                 example: {"code":200,"data":{"id":"6b927654cada7635a4586bf8fad260a3"},"details":"User deleted successfully","success":true}
+  /admin/users/{id}/sip-gateway:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      summary: Get the account SIP gateway route
+      security:
+        - AdminAuth: []
+      responses:
+        200:
+          description: SIP gateway settings
+        404:
+          description: User not found
+    put:
+      summary: Set the account SIP gateway route
+      description: Reconnect the WhatsApp session after saving changes.
+      security:
+        - AdminAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [enabled]
+              properties:
+                enabled:
+                  type: boolean
+                target:
+                  type: string
+                  description: SIP URI required when enabled.
+      responses:
+        200:
+          description: SIP gateway settings saved
+        400:
+          description: Invalid settings
+        404:
+          description: User not found
   /admin/users/{id}/full:
     delete:
       tags:

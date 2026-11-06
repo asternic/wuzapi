@@ -2461,3 +2461,20 @@ curl -X POST http://localhost:8080/chat/send/voice \
 This multipart endpoint is HTTP-only. Stdio clients continue to send prepared
 audio through `chat.send.audio`. Microphone capture in the web client requires
 HTTPS or localhost.
+
+### SIP gateway per account
+
+Use `GET /admin/users/{id}/sip-gateway` to read the route and
+`PUT /admin/users/{id}/sip-gateway` to set it. Both require the admin token.
+
+```json
+{"enabled":true,"target":"sip:wa-in@pbx.example.com:5060"}
+```
+
+Send `{"enabled":false}` to disable the route, including any legacy default
+from `WUZAPI_SIP_TARGETS`. A saved configuration takes precedence over that
+environment variable. Reconnect the WhatsApp session after changing the route.
+The server must start with `WUZAPI_SIP_LOCAL` set to enable the SIP listener.
+
+In stdio use `admin.users.sip-gateway.get` or `admin.users.sip-gateway.set`
+with `userId` and `adminToken`. The set method also takes the fields above.
