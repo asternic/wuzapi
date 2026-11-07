@@ -876,3 +876,34 @@ If the phone rings but audio is one-way, compare the SDP addresses and ports
 with the RTP seen on both hosts. In WuzAPI, `first RTP decoded from relay`
 indicates audio decoded from WhatsApp. With `LOG_LEVEL=debug`,
 `Sent first RTP packet to Asterisk` shows the address used for the SIP media leg.
+
+#### Pilot outbound WhatsApp calls from Asterisk
+
+Enable **Allow outgoing WhatsApp calls from this PBX** in the account's
+SIP Gateway settings, save, and reconnect the session. The SIP target host
+authorizes the PBX source IP. For a hostname, WuzAPI resolves its IPv4 addresses
+when the session starts. Keep the outbound dialplan accessible to authorized
+extensions and restrict SIP ingress at the firewall. Inbound and outbound calls
+share the account and process limits.
+
+When exactly one attached outbound account matches the PBX IP, send
+`wa-NUMBER`. If several accounts use the same PBX, configure the dialplan
+to send `wa-USER_ID-NUMBER` so the account is selected explicitly even when
+other accounts disconnect. An ambiguous unqualified request returns SIP 484.
+
+For a PBX that already has the `wuzapi-wa` PJSIP endpoint from the inbound
+example, add this to an authorized internal context. Use your installation's
+custom dialplan include or a custom outbound route:
+
+```ini
+exten => _88X.,1,NoOp(Outbound WhatsApp call)
+ same => n,Dial(PJSIP/wuzapi-wa/sip:wa-${EXTEN:2}@192.0.2.20:52070,35)
+ same => n,Hangup()
+```
+
+Replace the host and port with the WuzAPI listener. Dial `88` followed by
+the international number in digits, including the country code. For example,
+`8854911555913934` sends `wa-5491155913934` to WuzAPI. The PBX leg uses
+SIP/UDP and PCMU. Verify ringing, bidirectional audio, cancellation before
+answer and hangup from both ends. For the first test use a private network and
+one extension.

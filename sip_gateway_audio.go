@@ -43,7 +43,7 @@ func bridgeSIPCall(ctx context.Context, call incomingCall, dialogs *sipgo.Dialog
 	}
 	defer conn.Close()
 
-	offer := fmt.Sprintf("v=0\r\no=- 1 1 IN IP4 %[1]s\r\ns=WA Lab\r\nc=IN IP4 %[1]s\r\nt=0 0\r\nm=audio %[2]d RTP/AVP 0\r\na=rtpmap:0 PCMU/8000\r\na=ptime:20\r\na=sendrecv\r\n", ip, conn.LocalAddr().(*net.UDPAddr).Port)
+	offer := sipAudioSDP(ip, conn.LocalAddr().(*net.UDPAddr).Port)
 	dial, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
 	if name == "" {
@@ -88,11 +88,7 @@ func bridgeSIPCall(ctx context.Context, call incomingCall, dialogs *sipgo.Dialog
 
 	audioCtx, stopAudio := context.WithCancel(ctx)
 	defer stopAudio()
-	media := &audioBridge{ctx: audioCtx, input: make(chan float32, 1600), output: make(chan [160]byte, 9)}
-	go media.receive(conn, peer)
-	go media.send(conn, peer)
-	call.Receive(meowcaller.SinkFunc(media.enqueue))
-	call.Play(media)
+	startSIPAudio(audioCtx, call, conn, peer)
 	if err := call.Answer(); err != nil {
 		return err
 	}
@@ -240,4 +236,16 @@ func (m *audioBridge) send(conn *net.UDPConn, peer *net.UDPAddr) {
 			}
 		}
 	}
+}
+
+func sipAudioSDP(ip net.IP, port int) string {
+	return fmt.Sprintf("v=0\r\no=- 1 1 IN IP4 %[1]s\r\ns=WuzAPI\r\nc=IN IP4 %[1]s\r\nt=0 0\r\nm=audio %[2]d RTP/AVP 0\r\na=rtpmap:0 PCMU/8000\r\na=ptime:20\r\na=sendrecv\r\n", ip, port)
+}
+
+func startSIPAudio(ctx context.Context, call incomingCall, conn *net.UDPConn, peer *net.UDPAddr) {
+	media := &audioBridge{ctx: ctx, input: make(chan float32, 1600), output: make(chan [160]byte, 9)}
+	go media.receive(conn, peer)
+	go media.send(conn, peer)
+	call.Receive(meowcaller.SinkFunc(media.enqueue))
+	call.Play(media)
 }

@@ -28,6 +28,7 @@ type sipGateway struct {
 	ip       net.IP
 	targets  map[string]sip.Uri
 	slots    chan struct{}
+	outbound sync.Map // WuzAPI user ID to *sipOutboundSession
 }
 
 var inboundSIP *sipGateway
@@ -77,11 +78,8 @@ func configureSIPGateway() (*sipGateway, error) {
 		ua.Close()
 		return nil, err
 	}
-	server.OnBye(func(req *sip.Request, tx sip.ServerTransaction) {
-		if err := dialogs.ReadBye(req, tx); err != nil {
-			_ = tx.Respond(sip.NewResponseFromRequest(req, 481, "Call Does Not Exist", nil))
-		}
-	})
+	g := &sipGateway{ua: ua, dialogs: dialogs, ip: addr.IP, targets: targets, slots: make(chan struct{}, maxCalls)}
+	g.registerSIPHandlers(server, client, addr)
 	listener, err := net.ListenUDP("udp4", addr)
 	if err != nil {
 		ua.Close()
@@ -92,14 +90,15 @@ func configureSIPGateway() (*sipGateway, error) {
 			log.Debug().Err(err).Msg("SIP listener stopped")
 		}
 	}()
-	return &sipGateway{ua: ua, listener: listener, dialogs: dialogs, ip: addr.IP, targets: targets, slots: make(chan struct{}, maxCalls)}, nil
+	g.listener = listener
+	return g, nil
 }
 
 func (g *sipGateway) attach(ctx context.Context, s *server, userID string, wa *whatsmeow.Client) func() {
 	if g == nil {
 		return func() {}
 	}
-	target, maxCalls, err := s.sipTarget(ctx, userID)
+	target, maxCalls, allowOutbound, err := s.sipTarget(ctx, userID)
 	if err != nil {
 		log.Warn().Err(err).Str("user_id", userID).Msg("Cannot load SIP route")
 	}
@@ -110,18 +109,52 @@ func (g *sipGateway) attach(ctx context.Context, s *server, userID string, wa *w
 	var mu sync.Mutex
 	var running sync.WaitGroup
 	stopping := false
+	outgoing := 0
 	active := make(map[string]context.CancelFunc)
+	if allowOutbound {
+		lookup, cancel := context.WithTimeout(ctx, 2*time.Second)
+		peers, err := net.DefaultResolver.LookupNetIP(lookup, "ip4", target.Host)
+		cancel()
+		if err != nil || len(peers) == 0 {
+			log.Warn().Err(err).Str("user_id", userID).Msg("Cannot resolve outbound SIP PBX")
+		} else {
+			g.outbound.Store(userID, &sipOutboundSession{peers: peers, calls: calls, ctx: ctx, reserve: func() (func(), int) {
+				mu.Lock()
+				defer mu.Unlock()
+				if stopping || ctx.Err() != nil || !wa.IsLoggedIn() || !wa.IsConnected() {
+					return nil, 503
+				}
+				if len(active)+outgoing >= maxCalls {
+					return nil, 486
+				}
+				select {
+				case g.slots <- struct{}{}:
+				default:
+					return nil, 486
+				}
+				outgoing++
+				running.Add(1)
+				return func() {
+					mu.Lock()
+					outgoing--
+					mu.Unlock()
+					<-g.slots
+					running.Done()
+				}, 0
+			}})
+		}
+	}
 	calls.OnIncomingCall(func(call *meowcaller.Call) {
 		mu.Lock()
 		defer mu.Unlock()
-		if stopping || ctx.Err() != nil {
+		if stopping || ctx.Err() != nil || target.Host == "" {
 			return
 		}
 		if _, exists := active[call.ID()]; exists {
 			return
 		}
 		_, group := call.GroupState()
-		if group || call.IsVideo() || len(active) >= maxCalls {
+		if group || call.IsVideo() || len(active)+outgoing >= maxCalls {
 			go func() { _ = call.Reject() }()
 			return
 		}
@@ -158,6 +191,7 @@ func (g *sipGateway) attach(ctx context.Context, s *server, userID string, wa *w
 	return func() {
 		mu.Lock()
 		stopping = true
+		g.outbound.Delete(userID)
 		for _, cancel := range active {
 			cancel()
 		}
@@ -216,22 +250,23 @@ func parseSIPTarget(value string) (sip.Uri, error) {
 
 const sipAccountCallLimit = 32
 
-func (s *server) sipTarget(ctx context.Context, id string) (sip.Uri, int, error) {
+func (s *server) sipTarget(ctx context.Context, id string) (sip.Uri, int, bool, error) {
 	var target sql.NullString
 	var maxCalls int
-	err := s.db.QueryRowxContext(ctx, "SELECT sip_gateway_target, sip_gateway_max_calls FROM users WHERE id = $1", id).Scan(&target, &maxCalls)
+	var outbound bool
+	err := s.db.QueryRowxContext(ctx, "SELECT sip_gateway_target, sip_gateway_max_calls, sip_gateway_outbound FROM users WHERE id = $1", id).Scan(&target, &maxCalls, &outbound)
 	if err != nil {
-		return sip.Uri{}, 0, err
+		return sip.Uri{}, 0, false, err
 	}
 	if target.Valid {
 		if target.String == "" {
-			return sip.Uri{}, maxCalls, nil
+			return sip.Uri{}, maxCalls, false, nil
 		}
 		uri, err := parseSIPTarget(target.String)
-		return uri, maxCalls, err
+		return uri, maxCalls, outbound, err
 	}
 	if inboundSIP != nil {
-		return inboundSIP.targets[id], maxCalls, nil
+		return inboundSIP.targets[id], maxCalls, outbound, nil
 	}
-	return sip.Uri{}, maxCalls, nil
+	return sip.Uri{}, maxCalls, false, nil
 }

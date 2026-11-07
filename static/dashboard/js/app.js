@@ -2371,6 +2371,7 @@ async function openSIPGateway(id) {
     sipGatewayAccount = id;
     $('#sipGatewayAccount').text(id);
     $('#sipGatewayEnabled').prop('checked', result.data.enabled);
+    $('#sipGatewayAllowOutbound').prop('checked', result.data.allowOutbound);
     $('#sipGatewayTarget').val(result.data.target);
     $('#sipGatewayMaxCalls').val(result.data.maxCalls ?? 2);
     $('#modalSIPGateway').modal('show');
@@ -2398,7 +2399,7 @@ async function saveSIPGateway() {
     const response = await fetch(baseUrl + '/admin/users/' + encodeURIComponent(sipGatewayAccount) + '/sip-gateway', {
       method: 'PUT',
       headers: { authorization: getLocalStorageItem('admintoken'), 'Content-Type': 'application/json' },
-      body: JSON.stringify({ enabled, target, maxCalls })
+      body: JSON.stringify({ enabled, target, maxCalls, allowOutbound: enabled && $('#sipGatewayAllowOutbound').prop('checked') })
     });
     const result = await response.json();
     if (!response.ok || !result.success) {

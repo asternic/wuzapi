@@ -2486,7 +2486,12 @@ with `userId` and `adminToken`. The set method also takes the fields above.
 {"jsonrpc":"2.0","id":"sip-1","method":"admin.users.sip-gateway.set","params":{"userId":"USER_ID","adminToken":"ADMIN_TOKEN","enabled":true,"target":"sip:wa-in@pbx.example.com:5060","maxCalls":8}}
 ```
 
-Both endpoints return `enabled`, `target` and `maxCalls` in `data`.
+Both endpoints return `enabled`, `target` `maxCalls` and `allowOutbound` in `data`.
 An invalid route or limit returns `400`, and an unknown account returns `404`.
 For the network settings, PJSIP endpoint and dialplan, see the
 [WuzAPI deployment example](README.md#experimental-inbound-whatsapp-calls-over-sip).
+
+
+Set `allowOutbound` to `true` to allow SIP origination from the IP addresses of
+the configured target host. It defaults to false. Omit it to preserve the
+saved permission when enabled. Disabling the route clears the permission.

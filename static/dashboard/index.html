@@ -1350,6 +1350,9 @@
           <label><input type="checkbox" id="sipGatewayEnabled"> Forward incoming WhatsApp calls to SIP</label>
         </div>
         <div class="field">
+          <label><input type="checkbox" id="sipGatewayAllowOutbound"> Allow outgoing WhatsApp calls from this PBX</label>
+        </div>
+        <div class="field">
           <label for="sipGatewayTarget">SIP destination</label>
           <input type="text" id="sipGatewayTarget" placeholder="sip:wa-in@pbx.example.com:5060">
         </div>
@@ -1483,7 +1486,7 @@
 
   <script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/fomantic-ui@2.9.4/dist/semantic.min.js"></script>
-  <script src="js/app.js?v=sip-gateway-5"></script>
+  <script src="js/app.js?v=sip-gateway-6"></script>
   <script src="js/groups.js"></script>
   <script src="js/proxypool.js?v=proxy-pool-4"></script>
 </body>
