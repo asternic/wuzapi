@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -105,6 +106,12 @@ func (g *sipGateway) attach(ctx context.Context, s *server, userID string, wa *w
 	if err != nil || target.Host == "" {
 		return func() {}
 	}
+
+	auth, err := s.sipAuth(ctx, userID)
+	if err != nil {
+		log.Error().Str("user_id", userID).Msg("Cannot decrypt SIP credentials; check the global encryption key")
+		return func() {}
+	}
 	calls := meowcaller.NewClient(wa, meowcaller.WithLogger(log.With().Str("user_id", userID).Str("component", "meowcaller").Logger()))
 	var mu sync.Mutex
 	var running sync.WaitGroup
@@ -182,7 +189,7 @@ func (g *sipGateway) attach(ctx context.Context, s *server, userID string, wa *w
 			}()
 			if callCtx.Err() == nil {
 				number, name := sipCallerIdentity(callCtx, wa, call.Peer())
-				if err := bridgeSIPCall(callCtx, call, g.dialogs, target, g.ip, number, name); err != nil {
+				if err := bridgeSIPCall(callCtx, call, g.dialogs, target, g.ip, number, name, auth); err != nil {
 					log.Warn().Str("user_id", userID).Err(err).Msg("SIP call ended")
 				}
 			}
@@ -269,4 +276,23 @@ func (s *server) sipTarget(ctx context.Context, id string) (sip.Uri, int, bool, 
 		return inboundSIP.targets[id], maxCalls, outbound, nil
 	}
 	return sip.Uri{}, maxCalls, false, nil
+}
+
+func (s *server) sipAuth(ctx context.Context, id string) (sipgo.AnswerOptions, error) {
+	var auth sipgo.AnswerOptions
+	var encoded string
+	if err := s.db.QueryRowxContext(ctx, "SELECT sip_gateway_auth_username, sip_gateway_auth_password FROM users WHERE id = $1", id).Scan(&auth.Username, &encoded); err != nil {
+		return auth, err
+	}
+	if encoded != "" {
+		ciphertext, err := base64.StdEncoding.DecodeString(encoded)
+		if err != nil {
+			return auth, err
+		}
+		auth.Password, err = decryptHMACKey(ciphertext)
+		if err != nil {
+			return auth, err
+		}
+	}
+	return auth, nil
 }

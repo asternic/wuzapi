@@ -131,6 +131,12 @@ var migrations = []Migration{
 		Name:  "add_sip_gateway_outbound",
 		UpSQL: `ALTER TABLE users ADD COLUMN sip_gateway_outbound BOOLEAN NOT NULL DEFAULT FALSE;`,
 	},
+	{
+		ID:   21,
+		Name: "add_sip_gateway_auth",
+		UpSQL: `ALTER TABLE users ADD COLUMN sip_gateway_auth_username TEXT NOT NULL DEFAULT '';
+ALTER TABLE users ADD COLUMN sip_gateway_auth_password TEXT NOT NULL DEFAULT '';`,
+	},
 }
 
 const addProxyPoolSQL = `

@@ -2373,6 +2373,10 @@ async function openSIPGateway(id) {
     $('#sipGatewayEnabled').prop('checked', result.data.enabled);
     $('#sipGatewayAllowOutbound').prop('checked', result.data.allowOutbound);
     $('#sipGatewayTarget').val(result.data.target);
+    $('#sipGatewayAuthUsername').val(result.data.authUsername || '');
+    $('#sipGatewayAuthPassword').val('');
+    $('#sipGatewayClearAuth').prop('checked', false);
+    $('#sipGatewayAuthStatus').text(result.data.hasAuthPassword ? 'A password is saved.' : 'No password saved.');
     $('#sipGatewayMaxCalls').val(result.data.maxCalls ?? 2);
     $('#modalSIPGateway').modal('show');
   } catch (error) {
@@ -2394,18 +2398,28 @@ async function saveSIPGateway() {
     showError('Enter a SIP destination');
     return;
   }
+  const settings = { enabled, target, maxCalls, allowOutbound: enabled && $('#sipGatewayAllowOutbound').prop('checked'),
+    authUsername: $('#sipGatewayAuthUsername').val().trim() };
+  const password = $('#sipGatewayAuthPassword').val();
+  if ($('#sipGatewayClearAuth').prop('checked')) {
+    settings.authUsername = '';
+    settings.authPassword = '';
+  } else if (password !== '') {
+    settings.authPassword = password;
+  }
   button.prop('disabled', true).addClass('loading');
   try {
     const response = await fetch(baseUrl + '/admin/users/' + encodeURIComponent(sipGatewayAccount) + '/sip-gateway', {
       method: 'PUT',
       headers: { authorization: getLocalStorageItem('admintoken'), 'Content-Type': 'application/json' },
-      body: JSON.stringify({ enabled, target, maxCalls, allowOutbound: enabled && $('#sipGatewayAllowOutbound').prop('checked') })
+      body: JSON.stringify(settings)
     });
     const result = await response.json();
     if (!response.ok || !result.success) {
       showError(result.error || 'Failed to save SIP gateway settings');
       return;
     }
+    $('#sipGatewayAuthPassword').val('');
     $('#modalSIPGateway').modal('hide');
     showSuccess('SIP gateway settings saved. Reconnect the WhatsApp session to apply them.');
   } catch (error) {

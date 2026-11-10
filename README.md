@@ -861,6 +861,51 @@ registered. If Asterisk logs `No matching endpoint found`, compare the source
 IP in that log with `match` and verify the identify section loaded.
 See the [Asterisk PJSIP troubleshooting guide](https://docs.asterisk.org/Configuration/Channel-Drivers/SIP/Configuring-res_pjsip/Asterisk-PJSIP-Troubleshooting-Guide/).
 
+#### SIP authentication on a shared localhost PBX
+
+When WuzAPI and other SIP clients use `127.0.0.1`, a broad IP identify match
+can assign their requests to the same endpoint. Configure the account's
+**SIP authentication username** and **SIP authentication password** in the
+dashboard, save, and reconnect. An empty password field preserves the existing
+password. Select **Clear saved SIP credentials** to remove both fields.
+Set a persistent `WUZAPI_GLOBAL_ENCRYPTION_KEY` before saving passwords.
+
+For example, set username `wuzapi-wa` and create this Asterisk endpoint and
+auth object. Replace the example password in both WuzAPI and Asterisk.
+
+```ini
+[wuzapi-wa]
+type=endpoint
+context=from-wuzapi-wa
+disallow=all
+allow=ulaw
+direct_media=no
+moh_passthrough=no
+identify_by=auth_username
+auth=wuzapi-wa-auth
+
+[wuzapi-wa-auth]
+type=auth
+auth_type=userpass
+username=wuzapi-wa
+password=EXAMPLE_PASSWORD
+```
+
+Remove the `wuzapi-wa-identify` section matching all localhost traffic.
+Ensure `auth_username` is included in the existing global
+`endpoint_identifier_order` setting. For example,
+`auth_username,ip,username,anonymous` preserves the common identifier types.
+Apply this to the existing global configuration using your PBX's supported
+customization mechanism. Keep the endpoint name and authentication username
+equal in this example so Asterisk can identify the authenticated request.
+The initial request may receive 401. WuzAPI retries with Digest credentials
+and retains the WhatsApp caller ID in the From header.
+
+Use `pjsip show identifiers` and `pjsip show endpoint wuzapi-wa` to inspect
+the active configuration. Verify existing SIP registrations after changing
+global identification order.
+See [Asterisk identification and authentication settings](https://docs.asterisk.org/Latest_API/API_Documentation/Module_Configuration/res_pjsip/).
+
 #### Verify the route
 
 1. Call the linked WhatsApp account, answer from the SIP phone, and check the

@@ -1356,6 +1356,17 @@
           <label for="sipGatewayTarget">SIP destination</label>
           <input type="text" id="sipGatewayTarget" placeholder="sip:wa-in@pbx.example.com:5060">
         </div>
+
+        <div class="field">
+          <label for="sipGatewayAuthUsername">SIP authentication username</label>
+          <input type="text" id="sipGatewayAuthUsername" autocomplete="off" placeholder="Optional">
+        </div>
+        <div class="field">
+          <label for="sipGatewayAuthPassword">SIP authentication password</label>
+          <input type="password" id="sipGatewayAuthPassword" autocomplete="new-password" placeholder="Leave blank to keep the saved password">
+          <p id="sipGatewayAuthStatus"></p>
+          <label><input type="checkbox" id="sipGatewayClearAuth"> Clear saved SIP credentials</label>
+        </div>
         <div class="field">
           <label for="sipGatewayMaxCalls">Maximum simultaneous calls</label>
           <input type="number" id="sipGatewayMaxCalls" min="1" max="32" step="1" value="2">
@@ -1486,7 +1497,7 @@
 
   <script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/fomantic-ui@2.9.4/dist/semantic.min.js"></script>
-  <script src="js/app.js?v=sip-gateway-6"></script>
+  <script src="js/app.js?v=sip-gateway-7"></script>
   <script src="js/groups.js"></script>
   <script src="js/proxypool.js?v=proxy-pool-4"></script>
 </body>

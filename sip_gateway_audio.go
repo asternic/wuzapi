@@ -28,7 +28,7 @@ type incomingCall interface {
 	Receive(meowcaller.AudioSink)
 }
 
-func bridgeSIPCall(ctx context.Context, call incomingCall, dialogs *sipgo.DialogClientCache, dest sip.Uri, ip net.IP, number, name string) error {
+func bridgeSIPCall(ctx context.Context, call incomingCall, dialogs *sipgo.DialogClientCache, dest sip.Uri, ip net.IP, number, name string, auth sipgo.AnswerOptions) error {
 	answered := false
 	defer func() {
 		if answered {
@@ -62,7 +62,7 @@ func bridgeSIPCall(ctx context.Context, call incomingCall, dialogs *sipgo.Dialog
 		return err
 	}
 	defer dialog.Close()
-	if err := dialog.WaitAnswer(dial, sipgo.AnswerOptions{}); err != nil &&
+	if err := dialog.WaitAnswer(dial, auth); err != nil &&
 		(dialog.InviteResponse == nil || !dialog.InviteResponse.IsSuccess()) {
 		return err
 	}

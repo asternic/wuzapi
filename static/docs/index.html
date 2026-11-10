@@ -1634,6 +1634,7 @@
                 <p>Read or set the account's SIP route with the admin token. Enable the process listener with <code>WUZAPI_SIP_LOCAL</code> and reconnect the WhatsApp session after saving.</p>
                 <pre><code class="language-json">{"enabled":true,"target":"sip:wa-in@pbx.example.com:5060","maxCalls":8,"allowOutbound":true}</code></pre>
                 <p>Send <code>{"enabled":false}</code> to disable the route.</p>
+                <p>Set <code>authUsername</code> and <code>authPassword</code> for SIP Digest authentication toward the PBX. Omit fields to preserve them. Clear both with empty strings. Responses include <code>hasAuthPassword</code> instead of the password. Set a persistent <code>WUZAPI_GLOBAL_ENCRYPTION_KEY</code> before saving and reconnect after changes.</p>
             </div>
 
         </section>

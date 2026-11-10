@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"github.com/icholy/digest"
 	"net"
 	"testing"
 	"time"
@@ -102,8 +103,9 @@ func (*testCall) Play(meowcaller.AudioSource) *meowcaller.Player { return nil }
 func (*testCall) Receive(meowcaller.AudioSink)                   {}
 
 func TestBridgeSIPAnswerAndUnavailable(t *testing.T) {
-	for _, status := range []int{200, 480} {
-		t.Run(fmt.Sprint(status), func(t *testing.T) {
+	for _, scenario := range []struct{ status, challenge int }{{200, 0}, {480, 0}, {200, 401}, {200, 407}} {
+		status := scenario.status
+		t.Run(fmt.Sprintf("%d-auth-%d", status, scenario.challenge), func(t *testing.T) {
 			ip := net.IPv4(127, 0, 0, 1)
 			conn, err := net.ListenUDP("udp4", &net.UDPAddr{IP: ip})
 			if err != nil {
@@ -125,6 +127,30 @@ func TestBridgeSIPAnswerAndUnavailable(t *testing.T) {
 				t.Fatal(err)
 			}
 			server.OnInvite(func(req *sip.Request, tx sip.ServerTransaction) {
+				if scenario.challenge != 0 {
+					challenge := &digest.Challenge{Realm: "pbx-test", Nonce: "test-nonce", Algorithm: "MD5", QOP: []string{"auth"}}
+					header, challengeHeader := "Authorization", "WWW-Authenticate"
+					if scenario.challenge == 407 {
+						header, challengeHeader = "Proxy-Authorization", "Proxy-Authenticate"
+					}
+					if req.GetHeader(header) == nil {
+						response := sip.NewResponseFromRequest(req, scenario.challenge, "Authentication Required", nil)
+						response.AppendHeader(sip.NewHeader(challengeHeader, challenge.String()))
+						_ = tx.Respond(response)
+						return
+					}
+					credentials, err := digest.ParseCredentials(req.GetHeader(header).Value())
+					if err != nil {
+						t.Error(err)
+						return
+					}
+					expected, err := digest.Digest(challenge, digest.Options{Method: "INVITE", URI: credentials.URI, Username: "wa-test", Password: "test-sip-password", Count: credentials.Nc, Cnonce: credentials.Cnonce})
+					if err != nil || credentials.Username != "wa-test" || credentials.Response != expected.Response {
+						t.Errorf("invalid SIP digest credentials")
+						_ = tx.Respond(sip.NewResponseFromRequest(req, 403, "Forbidden", nil))
+						return
+					}
+				}
 				from := req.From()
 				if from == nil || from.Address.User != "+15551234567" || from.DisplayName != "María" || !from.Params.Has("tag") {
 					t.Errorf("unexpected INVITE From: %v", from)
@@ -160,7 +186,7 @@ func TestBridgeSIPAnswerAndUnavailable(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 			defer cancel()
 			call := &testCall{cancel: cancel}
-			err = bridgeSIPCall(ctx, call, dialogs, dest, ip, "15551234567", "María")
+			err = bridgeSIPCall(ctx, call, dialogs, dest, ip, "15551234567", "María", sipgo.AnswerOptions{Username: "wa-test", Password: "test-sip-password"})
 			if status == 200 {
 				if err != nil || !call.answered || !call.hungUp || call.rejected {
 					t.Fatalf("successful SIP dialog: call=%+v error=%v", call, err)

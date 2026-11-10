@@ -2495,3 +2495,21 @@ For the network settings, PJSIP endpoint and dialplan, see the
 Set `allowOutbound` to `true` to allow SIP origination from the IP addresses of
 the configured target host. It defaults to false. Omit it to preserve the
 saved permission when enabled. Disabling the route clears the permission.
+
+
+SIP Digest credentials for calls forwarded to the PBX are configured with
+`authUsername` and `authPassword` in the same PUT request. For example:
+
+```json
+{"enabled":true,"target":"sip:wa-in@127.0.0.1:5060","authUsername":"wuzapi-wa","authPassword":"EXAMPLE_PASSWORD"}
+```
+
+Omitting either field preserves its stored value. Send both fields as empty
+strings to clear the credentials. GET and PUT responses include `authUsername`
+and `hasAuthPassword`. Responses never return the password. Reconnect the
+WhatsApp session after changing credentials.
+
+Passwords are encrypted using `WUZAPI_GLOBAL_ENCRYPTION_KEY`. Configure a stable
+32-byte key before saving credentials so they can be decrypted after a restart.
+These credentials authenticate INVITEs from WuzAPI to the PBX. The separate
+`allowOutbound` permission for PBX-to-WuzAPI calls still authorizes by source IP.

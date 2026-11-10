@@ -325,6 +325,14 @@ paths:
                 allowOutbound:
                   type: boolean
                   description: Allow calls originated by the configured SIP target host. Defaults to false.
+                authUsername:
+                  type: string
+                  description: PBX Digest username. Omit to preserve.
+                authPassword:
+                  type: string
+                  format: password
+                  writeOnly: true
+                  description: PBX Digest password. Omit to preserve. Empty clears the saved password. Responses return hasAuthPassword instead.
       responses:
         200:
           description: SIP gateway settings saved
