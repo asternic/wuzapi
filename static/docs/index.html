@@ -1160,6 +1160,63 @@
 }</code></pre><p>Returns the standard success/error envelope. Invalid payloads return 400, invalid authentication 401, and session/upstream failures 500. See <a href="/api/#/Chat">Swagger</a> for response schemas.</p></div>
 <div class="endpoint">
             <h3>
+            <span class="method post">POST</span> <span class="path">/chat/deletechat</span>
+            </h3>
+            <h4>Delete a chat conversation</h4>
+            <p>Deletes a whole conversation through WhatsApp app state, like Delete chat in the phone app, across the account's linked devices. Use /chat/delete to revoke a single message.</p>
+            <p>Authenticate with your user <code>token</code> header. Stdio: <code>chat.deletechat</code>.</p>
+            <p>WhatsApp clients use the last message to decide what the deletion covers; supply its timestamp and key when known. Without them, the range ends at the current time and contains no message key. Messages stored in WuzAPI's local history are not deleted.</p>
+            <table class="api-table">
+            <thead>
+            <tr>
+            <th>Parameter</th>
+            <th>Type</th>
+            <th>Notes</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr>
+            <td>Chat (required)</td>
+            <td>string</td>
+            <td>Individual PN/LID or group JID.</td>
+            </tr>
+            <tr>
+            <td>DeleteMedia</td>
+            <td>boolean</td>
+            <td>Also delete the chat's media files from the devices. Defaults to false.</td>
+            </tr>
+            <tr>
+            <td>LastMessageTimestamp</td>
+            <td>integer</td>
+            <td>Unix seconds of the chat's last message. Must be positive and no more than 24 hours in the future. Defaults to now.</td>
+            </tr>
+            <tr>
+            <td>LastMessageId</td>
+            <td>string</td>
+            <td>ID of the chat's last message. Requires LastMessageTimestamp and LastMessageFromMe.</td>
+            </tr>
+            <tr>
+            <td>LastMessageFromMe</td>
+            <td>boolean</td>
+            <td>Whether the last message was sent by this account. Requires LastMessageId.</td>
+            </tr>
+            <tr>
+            <td>LastMessageSender</td>
+            <td>string</td>
+            <td>Author's PN/LID JID without a device suffix. Required when the last message was sent by someone else in a group; rejected otherwise.</td>
+            </tr>
+            </tbody>
+            </table>
+            <pre>
+            <code class="language-json">{
+  &quot;Chat&quot;: &quot;5491112345678@s.whatsapp.net&quot;,
+  &quot;DeleteMedia&quot;: false,
+  &quot;LastMessageTimestamp&quot;: 1700000000,
+  &quot;LastMessageId&quot;: &quot;MESSAGE_ID&quot;,
+  &quot;LastMessageFromMe&quot;: false
+}</code></pre><p>Returns the standard success envelope with <code>Details: Updated</code>. Unknown fields and trailing JSON are rejected. Invalid payloads return 400, invalid authentication 401, and session/upstream failures 500. See <a href="/api/#/Chat">Swagger</a> for response schemas.</p></div>
+<div class="endpoint">
+            <h3>
             <span class="method post">POST</span> <span class="path">/chat/poll/vote</span>
             </h3>
             <h4>Vote in a poll or retract a vote</h4>
