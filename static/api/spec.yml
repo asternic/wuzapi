@@ -3091,6 +3091,75 @@ paths:
           description: Missing or invalid user token.
         '500':
           description: No session or upstream operation failed.
+  /chat/deletechat:
+    post:
+      tags:
+      - Chat
+      summary: Delete a chat conversation
+      description: 'Deletes the whole conversation on every device of the account,
+        like Delete chat in the phone app (app state). Send the last message when
+        known: WhatsApp clients use it to decide what the deletion covers. Messages
+        stored in WuzAPI history are not deleted. Stdio method: chat.deletechat.
+        Unknown fields and trailing JSON are rejected.'
+      security:
+      - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                Chat: *id001
+                DeleteMedia:
+                  type: boolean
+                  description: Also delete the chat's media files. Default false.
+                LastMessageTimestamp:
+                  type: integer
+                  format: int64
+                  minimum: 1
+                  description: Unix seconds of the chat's last message. Defaults to now.
+                LastMessageId:
+                  type: string
+                  description: ID of the chat's last message. Requires LastMessageTimestamp
+                    and LastMessageFromMe.
+                LastMessageFromMe:
+                  type: boolean
+                LastMessageSender:
+                  type: string
+                  description: Author JID of the last message, required only when someone
+                    else sent it in a group.
+              required:
+              - Chat
+              additionalProperties: false
+            example:
+              Chat: 5491112345678@s.whatsapp.net
+              LastMessageTimestamp: 1700000000
+              LastMessageId: MESSAGE_ID
+              LastMessageFromMe: false
+      responses:
+        '200':
+          description: Success in the standard WuzAPI envelope.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      Details:
+                        type: string
+        '400':
+          description: Invalid payload.
+        '401':
+          description: Missing or invalid user token.
+        '500':
+          description: No session or upstream operation failed.
   /labels/edit:
     post:
       tags:

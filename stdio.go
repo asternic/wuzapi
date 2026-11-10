@@ -379,6 +379,9 @@ func (ss *stdioServer) routeRequest(req *jsonRpcRequest) {
 	case "chat.unread":
 		httpMethod = "POST"
 		httpPath = "/chat/unread"
+	case "chat.deletechat":
+		httpMethod = "POST"
+		httpPath = "/chat/deletechat"
 	case "chat.pinchat":
 		httpMethod = "POST"
 		httpPath = "/chat/pinchat"
@@ -567,7 +570,7 @@ func (ss *stdioServer) executeHTTPHandler(req *jsonRpcRequest, httpMethod, httpP
 		// payloads intact: admin user creation uses token as a data field.
 		strictPayload := false
 		switch httpPath {
-		case "/chat/mute", "/chat/unread", "/labels/edit", "/labels/chat", "/labels/message", "/chat/poll/vote", "/user/business-profile":
+		case "/chat/mute", "/chat/unread", "/chat/deletechat", "/labels/edit", "/labels/chat", "/labels/message", "/chat/poll/vote", "/user/business-profile":
 			strictPayload = true
 		}
 		payload := make(map[string]interface{}, len(req.Params))
