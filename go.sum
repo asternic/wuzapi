@@ -9,8 +9,8 @@ github.com/agnivade/levenshtein v1.2.1 h1:EHBY3UOn1gwdy/VbFwgo4cxecRznFk7fKWN1KO
 github.com/agnivade/levenshtein v1.2.1/go.mod h1:QVVI16kDrtSuwcpd0p1+xMC6Z/VfhtCyDIjcwga4/DU=
 github.com/andybalholm/cascadia v1.3.3 h1:AG2YHrzJIm4BZ19iwJ/DAua6Btl3IwJX+VI4kktS1LM=
 github.com/andybalholm/cascadia v1.3.3/go.mod h1:xNd9bqTn98Ln4DwST8/nG+H0yuB8Hmgu1YHNnWw0GeA=
-github.com/asternic/meowcaller v0.0.0-20261106205303-e51b6107e51e h1:iOaj5qXKKOkpWkXo1aNR9x9s0MKQlQMRUSMXJCcNOa8=
-github.com/asternic/meowcaller v0.0.0-20261106205303-e51b6107e51e/go.mod h1:kSME01MaSkwul6tSmExmgBWUOmfkw3DNpfnozsn01eE=
+github.com/asternic/meowcaller v0.0.0-20261110153829-7fba4347d224 h1:0bDvac8HTiQ+3vuHTuxXt6ONXW25X2cGFxEDgKF7NjY=
+github.com/asternic/meowcaller v0.0.0-20261110153829-7fba4347d224/go.mod h1:kSME01MaSkwul6tSmExmgBWUOmfkw3DNpfnozsn01eE=
 github.com/aws/aws-sdk-go-v2 v1.36.3 h1:mJoei2CxPutQVxaATCzDUjcZEjVRdpsiiXi2o38yqWM=
 github.com/aws/aws-sdk-go-v2 v1.36.3/go.mod h1:LLXuLpgzEbD766Z5ECcRmi8AzSwfZItDtmABVkRLGzg=
 github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.6.10 h1:zAybnyUQXIZ5mok5Jqwlf58/TFE7uvd3IAsa1aF9cXs=

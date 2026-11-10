@@ -19,6 +19,7 @@ require (
 require (
 	github.com/PuerkitoBio/goquery v1.10.3
 	github.com/emiago/sipgo v1.3.0
+	github.com/icholy/digest v1.1.0
 	github.com/justinas/alice v1.2.0
 	github.com/lib/pq v1.10.9
 	github.com/nfnt/resize v0.0.0-20180221191011-83c6a9932646
@@ -52,7 +53,6 @@ require (
 	github.com/gobwas/pool v0.2.1 // indirect
 	github.com/gobwas/ws v1.3.2 // indirect
 	github.com/hajimehoshi/go-mp3 v0.3.4 // indirect
-	github.com/icholy/digest v1.1.0 // indirect
 	github.com/ncruces/go-strftime v0.1.9 // indirect
 	github.com/petermattis/goid v0.0.0-20260820044319-269ab09b5261 // indirect
 	github.com/pion/datachannel v1.6.0 // indirect
@@ -88,4 +88,4 @@ require (
 	rsc.io/qr v0.2.0 // indirect
 )
 
-replace github.com/purpshell/meowcaller => github.com/asternic/meowcaller v0.0.0-20261106205303-e51b6107e51e
+replace github.com/purpshell/meowcaller => github.com/asternic/meowcaller v0.0.0-20261110153829-7fba4347d224

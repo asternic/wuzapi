@@ -776,6 +776,20 @@ a regular SIP phone, or a group of extensions. The caller ID uses the WhatsApp
 phone number and cached profile name when available, with `WhatsApp` as the
 fallback display name.
 
+#### Call engine dependency
+
+The gateway imports `github.com/purpshell/meowcaller`. A `replace` in
+`go.mod` pins the Asternic fork to an exact commit so builds reproduce the
+tested relay election, inbound acceptance and per-device encryption rejection
+behavior. Keep the fork patches together on an integration branch and update
+the pinned commit only after testing.
+
+To return to upstream, select a revision containing the required fixes and
+compatible with the pinned whatsmeow version, remove the replacement, and
+update the upstream requirement. Run the Go checks and verify inbound/outbound
+audio, simultaneous calls, hold/resume, cancellation and the linked-device
+encryption rejection case before switching deployments.
+
 #### WuzAPI configuration
 
 For this example, WuzAPI runs at `192.0.2.20` and Asterisk at `192.0.2.10`.
