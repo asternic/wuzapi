@@ -128,6 +128,7 @@ func (s *server) routes() {
 	s.router.Handle("/labels/message", c.Then(s.appStateHandler(labelAssociationPatch(true), sendAPIPatch))).Methods("POST")
 	s.router.Handle("/chat/mute", c.Then(s.appStateHandler(mutePatch, sendAPIPatch))).Methods("POST")
 	s.router.Handle("/chat/unread", c.Then(s.appStateHandler(unreadPatch, sendAPIPatch))).Methods("POST")
+	s.router.Handle("/chat/deletechat", c.Then(s.appStateHandler(deleteChatPatch, sendAPIPatch))).Methods("POST")
 	s.router.Handle("/chat/pinchat", c.Then(s.PinChat())).Methods("POST")
 	s.router.Handle("/chat/star", c.Then(s.StarMessage())).Methods("POST")
 	s.router.Handle("/chat/pin", c.Then(s.PinMessage())).Methods("POST")
