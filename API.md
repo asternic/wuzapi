@@ -2337,6 +2337,26 @@ group chats, and return the normal success envelope with `Details: Updated`.
 No local persistence or migration is added. Unknown fields and trailing JSON
 are rejected.
 
+## Delete a chat conversation
+
+`POST /chat/deletechat` (stdio `chat.deletechat`) deletes a whole conversation
+on every device of the account, like "Delete chat" in the phone app. It is an
+app state change; `/chat/delete` revokes a single message instead.
+
+```json
+{"Chat":"5491112345678@s.whatsapp.net","DeleteMedia":false,"LastMessageTimestamp":1700000000,"LastMessageId":"MESSAGE_ID","LastMessageFromMe":false}
+```
+
+Only `Chat` is required (phone/LID and group JIDs). WhatsApp clients use the
+last message to decide what the deletion covers, so send it when you know it:
+`LastMessageTimestamp` (Unix seconds), `LastMessageId` and `LastMessageFromMe`.
+`LastMessageSender` is required when that message was sent by someone else in a
+group, and rejected otherwise. Without them the range ends at the current time
+and has no message key. `DeleteMedia:true` also deletes the chat's media files
+from the devices. The messages stored in WuzAPI's message history are not
+deleted. Success returns `Details: Updated`; unknown fields and trailing JSON are
+rejected.
+
 ## WhatsApp labels
 
 Authenticated label operations update WhatsApp app state (account/client support

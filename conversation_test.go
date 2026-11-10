@@ -115,4 +115,60 @@ func testFeatureRoute(t *testing.T, path, method, body string) {
 func TestConversationRoutes(t *testing.T) {
 	testFeatureRoute(t, "/chat/mute", "chat.mute", `{"Chat":"123@g.us","Mute":true}`)
 	testFeatureRoute(t, "/chat/unread", "chat.unread", `{"Chat":"123@g.us","Unread":true}`)
+	testFeatureRoute(t, "/chat/deletechat", "chat.deletechat", `{"Chat":"123@g.us"}`)
+}
+
+func TestDeleteChatPatch(t *testing.T) {
+	patch, err := deleteChatPatch(strings.NewReader(`{"Chat":"456@lid"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	mutation := patch.Mutations[0]
+	if patch.Type != appstate.WAPatchRegularHigh || mutation.Index[0] != appstate.IndexDeleteChat || mutation.Index[1] != "456@lid" || mutation.Index[2] != "0" {
+		t.Fatalf("wrong index %v", mutation.Index)
+	}
+	messageRange := mutation.Value.GetDeleteChatAction().GetMessageRange()
+	if len(messageRange.GetMessages()) != 0 || messageRange.GetLastMessageTimestamp() < time.Now().Add(-time.Minute).Unix() {
+		t.Fatal("default range should end now without a message key")
+	}
+
+	patch, err = deleteChatPatch(strings.NewReader(`{"Chat":"5491112345678@s.whatsapp.net","DeleteMedia":true,"LastMessageTimestamp":1700000000,"LastMessageId":"ABC","LastMessageFromMe":true}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if patch.Mutations[0].Index[2] != "1" {
+		t.Fatal("DeleteMedia not applied")
+	}
+	messageRange = patch.Mutations[0].Value.GetDeleteChatAction().GetMessageRange()
+	key := messageRange.GetMessages()[0].GetKey()
+	if messageRange.GetLastMessageTimestamp() != 1700000000 || key.GetID() != "ABC" || !key.GetFromMe() || key.GetRemoteJID() != "5491112345678@s.whatsapp.net" || key.Participant != nil {
+		t.Fatalf("wrong range %v", messageRange)
+	}
+
+	patch, err = deleteChatPatch(strings.NewReader(`{"Chat":"123@g.us","LastMessageTimestamp":1700000000,"LastMessageId":"ABC","LastMessageFromMe":false,"LastMessageSender":"456@lid"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if patch.Mutations[0].Value.GetDeleteChatAction().GetMessageRange().GetMessages()[0].GetKey().GetParticipant() != "456@lid" {
+		t.Fatal("group sender not set")
+	}
+
+	for _, body := range []string{
+		`{}`,
+		`{"Chat":"123@newsletter"}`,
+		`{"Chat":"123@g.us","Typo":1}`,
+		`{"Chat":"123@g.us"} {}`,
+		`{"Chat":"123@g.us","LastMessageTimestamp":0}`,
+		`{"Chat":"123@g.us","LastMessageTimestamp":99999999999}`,
+		`{"Chat":"123@g.us","LastMessageId":"ABC","LastMessageFromMe":true}`,
+		`{"Chat":"123@g.us","LastMessageTimestamp":1700000000,"LastMessageId":"ABC"}`,
+		`{"Chat":"123@g.us","LastMessageTimestamp":1700000000,"LastMessageId":"ABC","LastMessageFromMe":false}`,
+		`{"Chat":"123@g.us","LastMessageTimestamp":1700000000,"LastMessageId":"ABC","LastMessageFromMe":false,"LastMessageSender":"456@lid:2"}`,
+		`{"Chat":"456@lid","LastMessageTimestamp":1700000000,"LastMessageId":"ABC","LastMessageFromMe":false,"LastMessageSender":"789@lid"}`,
+		`{"Chat":"456@lid","LastMessageFromMe":true}`,
+	} {
+		if _, err := deleteChatPatch(strings.NewReader(body)); err == nil {
+			t.Errorf("accepted %s", body)
+		}
+	}
 }
