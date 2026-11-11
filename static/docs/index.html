@@ -866,6 +866,7 @@
             <div class="endpoint">
                 <h3><span class="method get">GET</span> <span class="path">/chat/history</span></h3>
                 <p>Recover the message history of a specific chat. Returns the messages in reverse chronological order (most recent first).</p>
+                <p>Use <code>chat_jid=index</code> to list only the authenticated user's conversations, keyed by their user ID. Each entry contains <code>chat_jid</code> and <code>last_updated</code>, newest first. Returns an empty object when the user has no stored messages. History must be enabled. Other users' conversation metadata is never included. Stdio: <code>chat.history</code> with <code>chat_jid: "index"</code>.</p>
                 
                 <h4>Parâmetros de Query:</h4>
                 <table class="api-table">

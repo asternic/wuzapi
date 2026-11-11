@@ -2481,3 +2481,14 @@ curl -X POST http://localhost:8080/chat/send/voice \
 This multipart endpoint is HTTP-only. Stdio clients continue to send prepared
 audio through `chat.send.audio`. Microphone capture in the web client requires
 HTTPS or localhost.
+
+### Legacy chat history index
+
+`GET /chat/history?chat_jid=index` returns only the authenticated user's
+conversation metadata. The `data` object is keyed by that user's ID and contains
+an array of `{ "chat_jid": "777@lid", "last_updated": "2026-11-11T12:00:00Z" }`
+entries, ordered by latest message time descending. It is `{}` when the user has
+no stored messages. History must be enabled. Other users' IDs, chats, and activity
+timestamps are never included.
+
+Stdio method: `chat.history`, with `token` and `chat_jid: "index"`.

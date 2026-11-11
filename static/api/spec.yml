@@ -2206,6 +2206,9 @@ paths:
       summary: Get chat message history
       description: |
         Retrieves message history for a specific chat, newest first. Requires history to be enabled.
+        With chat_jid=index, returns only the authenticated user's conversation index,
+        keyed by their user ID, with chat_jid and last_updated per chat (newest first).
+        Users with no stored messages receive an empty object. Other users' metadata is never included.
         History contains events, not a materialized view of the latest message contents.
         An edit is a separate row with message_type `edit`, its own message_id, the target
         message ID in quoted_message_id, and replacement text or caption in text_content
@@ -2227,7 +2230,7 @@ paths:
         - name: chat_jid
           in: query
           required: true
-          description: The JID (WhatsApp ID) of the chat to retrieve history for
+          description: The JID (WhatsApp ID) of the chat, or index for the authenticated user's conversation index
           schema:
             type: string
             example: "5491155553333@s.whatsapp.net"
