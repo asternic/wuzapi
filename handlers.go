@@ -7306,22 +7306,14 @@ func (s *server) GetHistory() http.HandlerFunc {
 			return
 		}
 
-		// If chat_jid is "index", return mapping of all instances to their chat_jids
+		// If chat_jid is "index", return only the authenticated user's chat_jids.
 		if chatJID == "index" {
-			var query string
-			if s.db.DriverName() == "postgres" {
-				query = `
-					SELECT user_id, chat_jid, MAX(timestamp) as last_message_time
-					FROM message_history 
-					GROUP BY user_id, chat_jid 
-					ORDER BY user_id, last_message_time DESC`
-			} else { // sqlite
-				query = `
-					SELECT user_id, chat_jid, MAX(timestamp) as last_message_time
-					FROM message_history 
-					GROUP BY user_id, chat_jid 
-					ORDER BY user_id, last_message_time DESC`
-			}
+			query := s.db.Rebind(`
+				SELECT user_id, chat_jid, MAX(timestamp) as last_message_time
+				FROM message_history
+				WHERE user_id = ?
+				GROUP BY user_id, chat_jid
+				ORDER BY user_id, last_message_time DESC`)
 
 			type ChatMapping struct {
 				UserID          string `json:"user_id" db:"user_id"`
@@ -7330,7 +7322,7 @@ func (s *server) GetHistory() http.HandlerFunc {
 			}
 
 			var mappings []ChatMapping
-			err := s.db.Select(&mappings, query)
+			err := s.db.Select(&mappings, query, txtid)
 			if err != nil {
 				s.Respond(w, r, http.StatusInternalServerError, fmt.Errorf("failed to get chat mappings: %w", err))
 				return
