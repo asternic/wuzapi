@@ -3,11 +3,99 @@ package main
 import (
 	"context"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
+	"github.com/gorilla/mux"
 	"github.com/jmoiron/sqlx"
+	"go.mau.fi/whatsmeow"
 )
+
+func TestSessionQRNormalClosure(t *testing.T) {
+	qr := make(chan whatsmeow.QRChannelItem, 2)
+	qr <- whatsmeow.QRChannelItem{Event: "code", Code: "test-code"}
+	qr <- whatsmeow.QRChannelSuccess
+	close(qr)
+	for _, want := range []string{"code", "success"} {
+		evt, ok := receiveSessionQR(context.Background(), qr)
+		if !ok || evt.Event != want {
+			t.Fatalf("event=%q ok=%v, want %q", evt.Event, ok, want)
+		}
+	}
+	if _, ok := receiveSessionQR(context.Background(), qr); ok {
+		t.Fatal("closed QR channel reported an event")
+	}
+}
+
+func TestSessionQRCanceledBeforeReceive(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	qr := make(chan whatsmeow.QRChannelItem, 1)
+	qr <- whatsmeow.QRChannelSuccess
+	if _, ok := receiveSessionQR(ctx, qr); ok {
+		t.Fatal("processed a buffered QR event after cancellation")
+	}
+}
+
+func TestFullDeletionCancelsOpenQRChannel(t *testing.T) {
+	s := makeTestServer(t)
+	const userID = "delete-open-qr"
+	insertDeviceTestUser(t, s, userID, "", "")
+	kill := make(chan bool, 1)
+	setKillChannel(userID, kill)
+	t.Cleanup(func() { deleteKillChannel(userID, kill) })
+	otherKill := make(chan bool, 1)
+	setKillChannel("qr-other-session", otherKill)
+	t.Cleanup(func() { deleteKillChannel("qr-other-session", otherKill) })
+	ctx, cancel := sessionContext(kill)
+	defer cancel()
+	qr := make(chan whatsmeow.QRChannelItem)
+	ownerDone := make(chan struct{})
+	go func() {
+		defer close(ownerDone)
+		defer deleteKillChannel(userID, kill)
+		for {
+			if _, ok := receiveSessionQR(ctx, qr); !ok {
+				return
+			}
+		}
+	}()
+	// Synchronize with the owner consuming QR events before requesting deletion.
+	select {
+	case qr <- whatsmeow.QRChannelItem{Event: "code", Code: "test-code"}:
+	case <-time.After(2 * time.Second):
+		t.Fatal("session owner did not start consuming QR events")
+	}
+	// Leave qr open, as Whatsmeow can do after an expected disconnect.
+	response := httptest.NewRecorder()
+	req := mux.SetURLVars(httptest.NewRequest(http.MethodDelete, "/", nil), map[string]string{"id": userID})
+	s.DeleteUserComplete()(response, req)
+	if response.Code != http.StatusOK {
+		t.Fatalf("%d %s", response.Code, response.Body.String())
+	}
+	select {
+	case <-ownerDone:
+	case <-time.After(2 * time.Second):
+		t.Fatal("QR session owner did not exit")
+	}
+	if _, running := getKillChannel(userID); running {
+		t.Fatal("deleted session still registered")
+	}
+	var count int
+	if err := s.db.Get(&count, `SELECT COUNT(*) FROM users WHERE id=$1`, userID); err != nil || count != 0 {
+		t.Fatalf("user retained: count=%d err=%v", count, err)
+	}
+	if ch, running := getKillChannel("qr-other-session"); !running || ch != otherKill {
+		t.Fatal("another session's registration changed")
+	}
+	select {
+	case <-otherKill:
+		t.Fatal("another session was signaled")
+	default:
+	}
+}
 
 func TestSessionConnectRetry(t *testing.T) {
 	failure := errors.New("temporary connection failure")

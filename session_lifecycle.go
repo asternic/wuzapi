@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/rs/zerolog/log"
+	"go.mau.fi/whatsmeow"
 )
 
 // Guarded by proxyPoolMu, like session start reservations.
@@ -41,6 +42,20 @@ func sessionContext(kill <-chan bool) (context.Context, context.CancelFunc) {
 		}
 	}()
 	return ctx, cancel
+}
+
+// A manual disconnect can stop Whatsmeow's QR emitter without closing its
+// output channel. Session shutdown must not depend on that channel closing.
+func receiveSessionQR(ctx context.Context, qrChan <-chan whatsmeow.QRChannelItem) (whatsmeow.QRChannelItem, bool) {
+	if ctx.Err() != nil {
+		return whatsmeow.QRChannelItem{}, false
+	}
+	select {
+	case <-ctx.Done():
+		return whatsmeow.QRChannelItem{}, false
+	case evt, ok := <-qrChan:
+		return evt, ok
+	}
 }
 
 // A registered goroutine owns its proxy until it has finished shutting down,
