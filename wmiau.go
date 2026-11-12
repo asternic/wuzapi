@@ -845,6 +845,10 @@ func (mycli *MyClient) sendAutomaticPresence() {
 }
 
 func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
+	if groupEventsIgnored() && shouldDropGroupEvent(rawEvt) {
+		return
+	}
+
 	txtid := mycli.userID
 	postmap := make(map[string]interface{})
 	postmap["event"] = rawEvt
