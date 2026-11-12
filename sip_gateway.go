@@ -149,6 +149,8 @@ func (g *sipGateway) attach(ctx context.Context, s *server, userID string, wa *w
 					running.Done()
 				}, 0
 			}})
+			log.Info().Str("user_id", userID).Any("pbx_ips", peers).
+				Msg("SIP outbound route attached")
 		}
 	}
 	calls.OnIncomingCall(func(call *meowcaller.Call) {

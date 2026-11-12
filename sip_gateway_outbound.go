@@ -86,10 +86,19 @@ func outboundWhatsAppNumber(user string) (id, number string, ok bool) {
 	return id, "+" + number, len(number) >= 7 && len(number) <= 15 && number[0] != '0' && strings.Trim(number, "0123456789") == ""
 }
 
+func sipPBXMatches(peers []netip.Addr, source netip.Addr) bool {
+	if !source.IsValid() {
+		return false
+	}
+	return slices.ContainsFunc(peers, func(peer netip.Addr) bool {
+		return peer.Unmap() == source.Unmap()
+	})
+}
+
 func (g *sipGateway) outboundFor(source netip.Addr, id string) (*sipOutboundSession, int) {
 	if id != "" {
 		value, ok := g.outbound.Load(id)
-		if ok && slices.Contains(value.(*sipOutboundSession).peers, source) {
+		if ok && sipPBXMatches(value.(*sipOutboundSession).peers, source) {
 			return value.(*sipOutboundSession), 0
 		}
 		return nil, 403
@@ -98,7 +107,7 @@ func (g *sipGateway) outboundFor(source netip.Addr, id string) (*sipOutboundSess
 	ambiguous := false
 	g.outbound.Range(func(_, value any) bool {
 		candidate := value.(*sipOutboundSession)
-		if !slices.Contains(candidate.peers, source) {
+		if !sipPBXMatches(candidate.peers, source) {
 			return true
 		}
 		ambiguous = session != nil
@@ -126,7 +135,14 @@ func (g *sipGateway) dialWhatsApp(req *sip.Request, tx sip.ServerTransaction, di
 	}
 	session, status := g.outboundFor(sipSourceIP(req), id)
 	if session == nil {
-		log.Warn().Int("sip_status", status).Msg("SIP outbound route unavailable")
+		var routes []string
+		g.outbound.Range(func(key, _ any) bool {
+			routes = append(routes, key.(string))
+			return true
+		})
+		log.Warn().Int("sip_status", status).Str("source_ip", sipSourceIP(req).String()).
+			Str("requested_user_id", id).Strs("attached_user_ids", routes).
+			Msg("SIP outbound route unavailable")
 		respondSIP(req, tx, status)
 		return
 	}
