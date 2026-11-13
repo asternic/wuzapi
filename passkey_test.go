@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
+	"go.mau.fi/whatsmeow"
 	"go.mau.fi/whatsmeow/types"
 	"go.mau.fi/whatsmeow/types/events"
 )
@@ -485,5 +486,31 @@ func TestPasskeyConfirm_StateWithNilClientReturns400(t *testing.T) {
 	// State should still exist (peek was used, not consume)
 	if pk := peekPendingPasskey(userID); pk == nil {
 		t.Fatal("state should still exist after nil-client check")
+	}
+}
+
+func TestDeletePendingPasskeyForClient(t *testing.T) {
+	resetPasskeyMap(t)
+	stopped := &whatsmeow.Client{}
+	newer := &whatsmeow.Client{}
+
+	// The stopped client's request is dropped.
+	storePendingPasskey("pc-1", &PendingPasskeyState{Request: &events.PairPasskeyRequest{}, Client: stopped})
+	deletePendingPasskeyForClient("pc-1", stopped)
+	if peekPendingPasskey("pc-1") != nil {
+		t.Fatal("expected the stopped client's passkey request to be deleted")
+	}
+
+	// A request received by a newer client survives the old client's cleanup.
+	storePendingPasskey("pc-2", &PendingPasskeyState{Request: &events.PairPasskeyRequest{}, Client: newer})
+	deletePendingPasskeyForClient("pc-2", stopped)
+	if pk := peekPendingPasskey("pc-2"); pk == nil || pk.Client != newer {
+		t.Fatal("expected the newer client's passkey request to survive")
+	}
+
+	// No pending request: nothing to do.
+	deletePendingPasskeyForClient("pc-3", stopped)
+	if peekPendingPasskey("pc-3") != nil {
+		t.Fatal("expected no passkey request for pc-3")
 	}
 }

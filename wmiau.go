@@ -129,6 +129,21 @@ func deletePendingPasskey(userID string) {
 	pendingPasskeyMu.Unlock()
 }
 
+// deletePendingPasskeyForClient drops the user's pending passkey request if it
+// was received by client. A request can only be answered through the client
+// that received it, so once that client stops, the request is dead: keeping it
+// makes /session/passkey-status report a challenge that /session/passkey-response
+// then fails with "failed to get companion ref: websocket not connected".
+// A request from a newer client is left alone.
+func deletePendingPasskeyForClient(userID string, client *whatsmeow.Client) {
+	pendingPasskeyMu.Lock()
+	defer pendingPasskeyMu.Unlock()
+	if state, ok := pendingPasskeyRequests[userID]; ok && state.Client == client {
+		delete(pendingPasskeyRequests, userID)
+		log.Info().Str("userID", userID).Msg("Dropped pending passkey request of stopped client")
+	}
+}
+
 // peekPendingPasskey checks if there is a pending passkey request for this user
 // WITHOUT consuming it. Used by /session/qr, /session/passkey-status, and
 // /session/passkey-confirm.
@@ -568,6 +583,7 @@ func (s *server) startClient(userID string, textjid string, token string, kill c
 		clientManager.DeleteWhatsmeowClient(userID)
 		clientManager.DeleteMyClient(userID)
 		clientManager.DeleteHTTPClient(userID)
+		deletePendingPasskeyForClient(userID, client)
 		// Temporary connection failures must not disable startup reconnects.
 		// Explicit disconnects and logouts update connected separately.
 		if err := s.clearSessionQRCode(userID); err != nil {
