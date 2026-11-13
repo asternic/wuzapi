@@ -368,9 +368,14 @@ func callHook(myurl string, payload map[string]string, userID string) {
 
 // webhook for regular messages with HMAC
 func callHookWithHmac(myurl string, payload map[string]string, userID string, encryptedHmacKey []byte) {
+	postHookWithHmac(clientManager.GetHTTPClient(userID), myurl, payload, userID, encryptedHmacKey)
+}
+
+// postHookWithHmac delivers with the client the caller looked up, so a delivery
+// queued just before its session stops still has one.
+func postHookWithHmac(client *resty.Client, myurl string, payload map[string]string, userID string, encryptedHmacKey []byte) {
 	log.Info().Str("userID", userID).Msg("Sending POST to client with retry logic")
 
-	client := clientManager.GetHTTPClient(userID)
 	if client == nil {
 		log.Warn().Str("userID", userID).Msg("HTTP client is nil for user, skipping webhook")
 		return

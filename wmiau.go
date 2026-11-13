@@ -195,7 +195,11 @@ func sendToUserWebHookWithHmac(webhookurl string, path string, jsonData []byte, 
 		log.Info().Msg("Calling user webhook")
 
 		if path == "" {
-			safeGo("callHookWithHmac", func() { callHookWithHmac(webhookurl, data, userID, encryptedHmacKey) })
+			// Look the client up now: a LoggedOut signals the kill right after
+			// this returns, and the session's teardown deletes the client before
+			// the goroutine would read it.
+			client := clientManager.GetHTTPClient(userID)
+			safeGo("callHookWithHmac", func() { postHookWithHmac(client, webhookurl, data, userID, encryptedHmacKey) })
 		} else {
 			if err := callHookFileWithHmac(webhookurl, data, userID, path, encryptedHmacKey); err != nil {
 				log.Error().Err(err).Msg("Error calling hook file")
