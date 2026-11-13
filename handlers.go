@@ -2187,6 +2187,9 @@ func (s *server) SendLocation() http.HandlerFunc {
 }
 
 // Sends Buttons
+func voiceCallParams(title string) map[string]string {
+	return map[string]string{"display_text": title}
+}
 func (s *server) SendButtons() http.HandlerFunc {
 
 	type buttonStruct struct {
@@ -2285,6 +2288,9 @@ func (s *server) SendButtons() http.HandlerFunc {
 			case "cta_call":
 				name = "cta_call"
 				pm = map[string]string{"display_text": title, "phone_number": btn.PhoneNumber}
+			case "voice_call":
+				name = "voice_call"
+				pm = voiceCallParams(title)
 			case "copy":
 				name = "cta_copy"
 				pm = map[string]string{"display_text": title, "copy_code": btn.CopyCode}
