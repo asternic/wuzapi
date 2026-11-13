@@ -2187,6 +2187,9 @@ func (s *server) SendLocation() http.HandlerFunc {
 }
 
 // Sends Buttons
+func copyButtonParams(title, id, code string) map[string]string {
+	return map[string]string{"display_text": title, "id": id, "copy_code": code}
+}
 func (s *server) SendButtons() http.HandlerFunc {
 
 	type buttonStruct struct {
@@ -2287,7 +2290,7 @@ func (s *server) SendButtons() http.HandlerFunc {
 				pm = map[string]string{"display_text": title, "phone_number": btn.PhoneNumber}
 			case "copy":
 				name = "cta_copy"
-				pm = map[string]string{"display_text": title, "copy_code": btn.CopyCode}
+				pm = copyButtonParams(title, id, btn.CopyCode)
 			default:
 				continue
 			}
