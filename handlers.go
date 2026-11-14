@@ -2187,6 +2187,18 @@ func (s *server) SendLocation() http.HandlerFunc {
 }
 
 // Sends Buttons
+func nativeButtonParams(name, params string) (string, string, error) {
+	name = strings.TrimSpace(name)
+	if name == "" || !json.Valid([]byte(params)) {
+		return "", "", errors.New("native button requires a name and valid params_json")
+	}
+	var object map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(params), &object); err != nil || object == nil {
+		return "", "", errors.New("native button params_json must be a JSON object")
+	}
+	return name, params, nil
+}
+
 func voiceCallParams(title string) map[string]string {
 	return map[string]string{"display_text": title}
 }
@@ -2202,6 +2214,8 @@ func (s *server) SendButtons() http.HandlerFunc {
 		URL         string `json:"url"`          // Required for cta_url
 		PhoneNumber string `json:"phone_number"` // Required for cta_call
 		CopyCode    string `json:"copy_code"`    // Required for copy
+		Name        string `json:"name"`
+		ParamsJSON  string `json:"params_json"`
 	}
 
 	type sendButtonsStruct struct {
@@ -2253,7 +2267,7 @@ func (s *server) SendButtons() http.HandlerFunc {
 			if title == "" {
 				title = strings.TrimSpace(btn.ButtonText)
 			}
-			if title == "" {
+			if title == "" && !strings.EqualFold(strings.TrimSpace(btn.Type), "native") {
 				continue
 			}
 
@@ -2276,6 +2290,16 @@ func (s *server) SendButtons() http.HandlerFunc {
 			btnType := strings.ToLower(strings.TrimSpace(btn.Type))
 			if btnType == "" {
 				btnType = "reply"
+			}
+
+			if btnType == "native" {
+				name, params, err := nativeButtonParams(btn.Name, btn.ParamsJSON)
+				if err != nil {
+					s.Respond(w, r, http.StatusBadRequest, err)
+					return
+				}
+				nativeBtns = append(nativeBtns, &waE2E.InteractiveMessage_NativeFlowMessage_NativeFlowButton{Name: proto.String(name), ButtonParamsJSON: proto.String(params)})
+				continue
 			}
 
 			switch btnType {
