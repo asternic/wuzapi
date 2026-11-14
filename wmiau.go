@@ -129,6 +129,21 @@ func deletePendingPasskey(userID string) {
 	pendingPasskeyMu.Unlock()
 }
 
+// deletePendingPasskeyForClient drops the user's pending passkey request if it
+// was received by client. A request can only be answered through the client
+// that received it, so once that client stops, the request is dead: keeping it
+// makes /session/passkey-status report a challenge that /session/passkey-response
+// then fails with "failed to get companion ref: websocket not connected".
+// A request from a newer client is left alone.
+func deletePendingPasskeyForClient(userID string, client *whatsmeow.Client) {
+	pendingPasskeyMu.Lock()
+	defer pendingPasskeyMu.Unlock()
+	if state, ok := pendingPasskeyRequests[userID]; ok && state.Client == client {
+		delete(pendingPasskeyRequests, userID)
+		log.Info().Str("userID", userID).Msg("Dropped pending passkey request of stopped client")
+	}
+}
+
 // peekPendingPasskey checks if there is a pending passkey request for this user
 // WITHOUT consuming it. Used by /session/qr, /session/passkey-status, and
 // /session/passkey-confirm.
@@ -195,7 +210,11 @@ func sendToUserWebHookWithHmac(webhookurl string, path string, jsonData []byte, 
 		log.Info().Msg("Calling user webhook")
 
 		if path == "" {
-			safeGo("callHookWithHmac", func() { callHookWithHmac(webhookurl, data, userID, encryptedHmacKey) })
+			// Look the client up now: a LoggedOut signals the kill right after
+			// this returns, and the session's teardown deletes the client before
+			// the goroutine would read it.
+			client := clientManager.GetHTTPClient(userID)
+			safeGo("callHookWithHmac", func() { postHookWithHmac(client, webhookurl, data, userID, encryptedHmacKey) })
 		} else {
 			if err := callHookFileWithHmac(webhookurl, data, userID, path, encryptedHmacKey); err != nil {
 				log.Error().Err(err).Msg("Error calling hook file")
@@ -568,6 +587,7 @@ func (s *server) startClient(userID string, textjid string, token string, kill c
 		clientManager.DeleteWhatsmeowClient(userID)
 		clientManager.DeleteMyClient(userID)
 		clientManager.DeleteHTTPClient(userID)
+		deletePendingPasskeyForClient(userID, client)
 		// Temporary connection failures must not disable startup reconnects.
 		// Explicit disconnects and logouts update connected separately.
 		if err := s.clearSessionQRCode(userID); err != nil {
