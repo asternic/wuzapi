@@ -2187,6 +2187,21 @@ func (s *server) SendLocation() http.HandlerFunc {
 }
 
 // Sends Buttons
+func nativeButtonParams(name, params string) (string, string, error) {
+	name = strings.TrimSpace(name)
+	if name == "" || !json.Valid([]byte(params)) {
+		return "", "", errors.New("native button requires a name and valid params_json")
+	}
+	var object map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(params), &object); err != nil || object == nil {
+		return "", "", errors.New("native button params_json must be a JSON object")
+	}
+	return name, params, nil
+}
+
+func voiceCallParams(title string) map[string]string {
+	return map[string]string{"display_text": title}
+}
 func (s *server) SendButtons() http.HandlerFunc {
 
 	type buttonStruct struct {
@@ -2199,9 +2214,12 @@ func (s *server) SendButtons() http.HandlerFunc {
 		URL         string `json:"url"`          // Required for cta_url
 		PhoneNumber string `json:"phone_number"` // Required for cta_call
 		CopyCode    string `json:"copy_code"`    // Required for copy
+		Name        string `json:"name"`
+		ParamsJSON  string `json:"params_json"`
 	}
 
 	type sendButtonsStruct struct {
+		Envelope string `json:"Envelope,omitempty"`
 		Phone         string            `json:"Phone"`
 		Body          string            `json:"Body"`
 		Text          string            `json:"text"`
@@ -2229,6 +2247,12 @@ func (s *server) SendButtons() http.HandlerFunc {
 			return
 		}
 
+		envelope, err := normalizeButtonEnvelope(t.Envelope)
+		if err != nil {
+			s.Respond(w, r, http.StatusBadRequest, err)
+			return
+		}
+
 		body := strings.TrimSpace(t.Body)
 		if body == "" {
 			body = strings.TrimSpace(t.Text)
@@ -2250,7 +2274,7 @@ func (s *server) SendButtons() http.HandlerFunc {
 			if title == "" {
 				title = strings.TrimSpace(btn.ButtonText)
 			}
-			if title == "" {
+			if title == "" && !strings.EqualFold(strings.TrimSpace(btn.Type), "native") {
 				continue
 			}
 
@@ -2275,6 +2299,16 @@ func (s *server) SendButtons() http.HandlerFunc {
 				btnType = "reply"
 			}
 
+			if btnType == "native" {
+				name, params, err := nativeButtonParams(btn.Name, btn.ParamsJSON)
+				if err != nil {
+					s.Respond(w, r, http.StatusBadRequest, err)
+					return
+				}
+				nativeBtns = append(nativeBtns, &waE2E.InteractiveMessage_NativeFlowMessage_NativeFlowButton{Name: proto.String(name), ButtonParamsJSON: proto.String(params)})
+				continue
+			}
+
 			switch btnType {
 			case "reply":
 				name = "quick_reply"
@@ -2285,6 +2319,9 @@ func (s *server) SendButtons() http.HandlerFunc {
 			case "cta_call":
 				name = "cta_call"
 				pm = map[string]string{"display_text": title, "phone_number": btn.PhoneNumber}
+			case "voice_call":
+				name = "voice_call"
+				pm = voiceCallParams(title)
 			case "copy":
 				name = "cta_copy"
 				pm = map[string]string{"display_text": title, "copy_code": btn.CopyCode}
@@ -2389,6 +2426,14 @@ func (s *server) SendButtons() http.HandlerFunc {
 				}},
 			}},
 		}}
+
+		if envelope != "original" {
+			finalMsg, extraNodes, err = buildButtonEnvelope(interactiveMsg, envelope, t.Title)
+			if err != nil {
+				s.Respond(w, r, http.StatusInternalServerError, err)
+				return
+			}
+		}
 
 		resp, err := sendMessageWithRecovery(txtid, client, context.Background(), recipient, finalMsg,
 			whatsmeow.SendRequestExtra{
