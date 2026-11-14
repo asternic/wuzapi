@@ -2219,6 +2219,7 @@ func (s *server) SendButtons() http.HandlerFunc {
 	}
 
 	type sendButtonsStruct struct {
+		Envelope string `json:"Envelope,omitempty"`
 		Phone         string            `json:"Phone"`
 		Body          string            `json:"Body"`
 		Text          string            `json:"text"`
@@ -2243,6 +2244,12 @@ func (s *server) SendButtons() http.HandlerFunc {
 		var t sendButtonsStruct
 		if err := json.NewDecoder(r.Body).Decode(&t); err != nil {
 			s.Respond(w, r, http.StatusBadRequest, errors.New("could not decode Payload"))
+			return
+		}
+
+		envelope, err := normalizeButtonEnvelope(t.Envelope)
+		if err != nil {
+			s.Respond(w, r, http.StatusBadRequest, err)
 			return
 		}
 
@@ -2419,6 +2426,14 @@ func (s *server) SendButtons() http.HandlerFunc {
 				}},
 			}},
 		}}
+
+		if envelope != "original" {
+			finalMsg, extraNodes, err = buildButtonEnvelope(interactiveMsg, envelope, t.Title)
+			if err != nil {
+				s.Respond(w, r, http.StatusInternalServerError, err)
+				return
+			}
+		}
 
 		resp, err := sendMessageWithRecovery(txtid, client, context.Background(), recipient, finalMsg,
 			whatsmeow.SendRequestExtra{
