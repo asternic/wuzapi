@@ -38,12 +38,14 @@ const (
 )
 
 type server struct {
-	db             *sqlx.DB
-	router         *mux.Router
-	exPath         string
-	mode           ServerMode
-	historySavesMu sync.Mutex
-	historySaves   map[historyChatKey]uint64
+	messageSecretsOnce sync.Once
+	hasMessageSecrets  bool
+	db                 *sqlx.DB
+	router             *mux.Router
+	exPath             string
+	mode               ServerMode
+	historySavesMu     sync.Mutex
+	historySaves       map[historyChatKey]uint64
 }
 
 type historyChatKey struct {
