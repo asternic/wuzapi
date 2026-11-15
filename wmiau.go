@@ -36,6 +36,33 @@ import (
 )
 
 // db field declaration as *sqlx.DB
+// historySpecialMessage classifies message kinds that carry no plain text, so they are kept in history.
+func historySpecialMessage(msg *waE2E.Message) (string, string) {
+	switch {
+	case msg.GetEventMessage() != nil:
+		name := msg.GetEventMessage().GetName()
+		if name == "" {
+			name = ":event:"
+		}
+		return "event", name
+	case msg.GetEventInviteMessage() != nil:
+		return "event_invite", msg.GetEventInviteMessage().GetEventTitle()
+	case msg.GetProductMessage() != nil:
+		return "product", msg.GetProductMessage().GetProduct().GetTitle()
+	case msg.GetInteractiveMessage() != nil:
+		body := msg.GetInteractiveMessage().GetBody().GetText()
+		if body == "" {
+			body = ":interactive:"
+		}
+		return "interactive", body
+	case msg.GetInteractiveResponseMessage() != nil:
+		return "interactive_response", msg.GetInteractiveResponseMessage().GetBody().GetText()
+	case msg.GetOrderMessage() != nil:
+		return "order", msg.GetOrderMessage().GetOrderTitle()
+	}
+	return "", ""
+}
+
 type MyClient struct {
 	WAClient       *whatsmeow.Client
 	eventHandlerID uint32
@@ -1200,6 +1227,12 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 							textContent = ":location:"
 						}
 					}
+				}
+			}
+
+			if messageType == "text" {
+				if kind, content := historySpecialMessage(evt.Message); kind != "" {
+					messageType, textContent = kind, content
 				}
 			}
 
