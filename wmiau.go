@@ -35,6 +35,33 @@ import (
 	"sync"
 )
 
+// historySpecialMessage classifies non-text messages so they are retained in history.
+func historySpecialMessage(msg *waE2E.Message) (string, string) {
+	switch {
+	case msg.GetEventMessage() != nil:
+		name := msg.GetEventMessage().GetName()
+		if name == "" {
+			name = ":event:"
+		}
+		return "event", name
+	case msg.GetEventInviteMessage() != nil:
+		return "event_invite", msg.GetEventInviteMessage().GetEventTitle()
+	case msg.GetProductMessage() != nil:
+		return "product", msg.GetProductMessage().GetProduct().GetTitle()
+	case msg.GetInteractiveMessage() != nil:
+		body := msg.GetInteractiveMessage().GetBody().GetText()
+		if body == "" {
+			body = ":interactive:"
+		}
+		return "interactive", body
+	case msg.GetInteractiveResponseMessage() != nil:
+		return "interactive_response", msg.GetInteractiveResponseMessage().GetBody().GetText()
+	case msg.GetOrderMessage() != nil:
+		return "order", msg.GetOrderMessage().GetOrderTitle()
+	}
+	return "", ""
+}
+
 // db field declaration as *sqlx.DB
 type MyClient struct {
 	WAClient       *whatsmeow.Client
@@ -1203,6 +1230,12 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 				}
 			}
 
+			if messageType == "text" {
+				if kind, content := historySpecialMessage(evt.Message); kind != "" {
+					messageType, textContent = kind, content
+				}
+			}
+
 			// Check for replies in regular conversation messages too
 			if messageType == "text" && replyToMessageID == "" {
 				// For regular text messages, check if there's context info indicating a reply
@@ -1442,6 +1475,12 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 							textContent = reaction.GetText()
 							if key := reaction.GetKey(); key != nil {
 								quotedMessageID = key.GetID()
+							}
+						}
+
+						if messageType == "unknown" {
+							if kind, content := historySpecialMessage(message); kind != "" {
+								messageType, textContent = kind, content
 							}
 						}
 
