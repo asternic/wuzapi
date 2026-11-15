@@ -766,6 +766,13 @@
             </div>
 
             <div class="endpoint">
+                <h3><span class="method post">POST</span> <span class="path">/chat/send/event</span></h3>
+                <p>Send a WhatsApp event. JoinLink must be a WhatsApp call link (https://call.whatsapp.com/...). RSVPs arrive as secret-encrypted messages that WuzAPI already decrypts. Rendering requires the corresponding whatsmeow event stanza change.</p>
+                <p>Phone, Name, and StartTime (Unix seconds) are required. Optional fields: Description, EndTime (Unix seconds), JoinLink, ExtraGuestsAllowed, IsScheduleCall, HasReminder, ReminderOffsetSec, Location (Name, Address, Latitude, Longitude), and Id.</p>
+                <p>Stdio: <code>chat.send.event</code>. A successful response contains Details, Id, and Timestamp.</p>
+            </div>
+
+            <div class="endpoint">
                 <h3><span class="method post">POST</span> <span class="path">/chat/send/text</span></h3>
                 <p>Sends a text message to a contact or group.</p>
                 

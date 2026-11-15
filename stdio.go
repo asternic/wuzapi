@@ -300,6 +300,9 @@ func (ss *stdioServer) routeRequest(req *jsonRpcRequest) {
 		httpPath = "/session/hmac/config"
 
 	// Messaging
+	case "chat.send.event":
+		httpMethod = "POST"
+		httpPath = "/chat/send/event"
 	case "chat.send.text":
 		httpMethod = "POST"
 		httpPath = "/chat/send/text"
