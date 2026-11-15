@@ -282,8 +282,29 @@ func (s *server) trimMessageHistory(tx *sqlx.Tx, userID, chatJID string, limit i
             )`
 	}
 
-	if _, err := tx.Exec(querySecrets, userID, chatJID, limit); err != nil {
-		return fmt.Errorf("failed to trim message secrets: %w", err)
+	if s.db.DriverName() != "postgres" {
+		s.messageSecretsOnce.Do(func() {
+			if err := tx.Get(&s.hasMessageSecrets, `SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'whatsmeow_message_secrets')`); err != nil {
+				log.Warn().Err(err).Msg("Failed to check message secrets table")
+			}
+		})
+	}
+	if s.db.DriverName() == "postgres" || s.hasMessageSecrets {
+		// PostgreSQL aborts the transaction after a statement error, so isolate
+		// this optional cleanup from the history insert and retention trim.
+		if _, err := tx.Exec("SAVEPOINT trim_message_secrets"); err != nil {
+			log.Warn().Err(err).Msg("Failed to create message secrets savepoint")
+		} else {
+			if _, err := tx.Exec(querySecrets, userID, chatJID, limit); err != nil {
+				log.Warn().Err(err).Msg("Failed to trim message secrets")
+				if _, rollbackErr := tx.Exec("ROLLBACK TO SAVEPOINT trim_message_secrets"); rollbackErr != nil {
+					return fmt.Errorf("failed to roll back message secrets trim: %w", rollbackErr)
+				}
+			}
+			if _, err := tx.Exec("RELEASE SAVEPOINT trim_message_secrets"); err != nil {
+				return fmt.Errorf("failed to release message secrets savepoint: %w", err)
+			}
+		}
 	}
 
 	if _, err := tx.Exec(queryHistory, userID, chatJID, limit); err != nil {
