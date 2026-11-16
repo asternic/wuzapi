@@ -2324,7 +2324,7 @@ func (s *server) SendButtons() http.HandlerFunc {
 				pm = voiceCallParams(title)
 			case "copy":
 				name = "cta_copy"
-				pm = map[string]string{"display_text": title, "copy_code": btn.CopyCode}
+				pm = copyButtonParams(title, id, btn.CopyCode)
 			default:
 				continue
 			}
@@ -8212,4 +8212,8 @@ func (s *server) publishSentMessageEvent(token, userID, txtid string, recipient 
 
 	// Publish directly to RabbitMQ (bypassing subscription check for sent messages)
 	go sendToGlobalRabbit(jsonData, token, userID)
+}
+
+func copyButtonParams(title, id, code string) map[string]string {
+	return map[string]string{"display_text": title, "id": id, "copy_code": code}
 }

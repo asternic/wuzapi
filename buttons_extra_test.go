@@ -21,3 +21,10 @@ func TestVoiceCallParams(t *testing.T) {
 		t.Fatalf("unexpected params: %v", got)
 	}
 }
+
+func TestCopyButtonParams(t *testing.T) {
+	got := copyButtonParams("Copy", "copy-id", "code")
+	if got["display_text"] != "Copy" || got["id"] != "copy-id" || got["copy_code"] != "code" {
+		t.Fatalf("unexpected params: %v", got)
+	}
+}
