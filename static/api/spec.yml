@@ -1556,6 +1556,31 @@ paths:
             application/json:
               schema:
                 example: {"code":200,"data":{"Details":"Sent","Id":"3EB06F9067F80BAB89FF","Timestamp":"2022-05-10T12:49:08-03:00"},"success":true}
+  /chat/send/raw:
+    post:
+      tags: [Chat]
+      summary: Send Raw Message
+      description: Send a WhatsApp protobuf message as JSON. Unknown protobuf fields are discarded; at least one known field is required.
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                Phone: {type: string, description: Destination JID or phone digits}
+                Message: {type: object, description: WhatsApp Message protobuf JSON}
+                Id: {type: string, description: Optional message ID}
+              required: [Phone, Message]
+      responses:
+        200:
+          description: Message sent; returns Details, Id, and Timestamp
+        400:
+          description: Invalid request
+        500:
+          description: Session or send failure
   /chat/send/text:
     post:
       tags:

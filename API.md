@@ -1011,6 +1011,16 @@ session's `token`:
 ```
 
 
+## Send Raw Message
+
+Endpoint: _/chat/send/raw_ (POST; user token required). Stdio method: `chat.send.raw`.
+
+Send a WhatsApp protobuf message as JSON. Unknown protobuf fields are discarded; at least one known field is required.
+
+`Phone` (required destination), `Message` (required protobuf JSON object), and `Id` (optional message ID).
+
+A successful response contains `Details`, `Id`, and `Timestamp`.
+
 ## Send Text Message
 
 Sends a text message or reply. For replies, ContextInfo data should be completed with the StanzaID (ID of the message we are replying to), and Participant (user JID we are replying to). If ID is 
