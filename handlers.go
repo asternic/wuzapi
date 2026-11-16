@@ -1443,6 +1443,8 @@ func jpegThumbnail(img image.Image, width, height uint) ([]byte, error) {
 func (s *server) SendImage() http.HandlerFunc {
 
 	type imageStruct struct {
+		StatusJidList []string `json:"StatusJidList,omitempty"`
+		Contacts      []string `json:"Contacts,omitempty"`
 		Phone         string
 		Image         string
 		Caption       string
@@ -1485,6 +1487,12 @@ func (s *server) SendImage() http.HandlerFunc {
 		recipient, err := validateMessageFields(r.Context(), clientManager.GetWhatsmeowClient(txtid), t.Phone, t.ContextInfo.StanzaID, t.ContextInfo.Participant)
 		if err != nil {
 			log.Error().Msg(fmt.Sprintf("%s", err))
+			s.Respond(w, r, http.StatusBadRequest, err)
+			return
+		}
+
+		statusExtra, err := imageStatusSendExtra(recipient, t.StatusJidList, t.Contacts)
+		if err != nil {
 			s.Respond(w, r, http.StatusBadRequest, err)
 			return
 		}
@@ -1584,7 +1592,8 @@ func (s *server) SendImage() http.HandlerFunc {
 			msg.ImageMessage.ContextInfo.IsForwarded = proto.Bool(true)
 		}
 
-		resp, err = sendMessageWithRecovery(txtid, clientManager.GetWhatsmeowClient(txtid), context.Background(), recipient, msg, whatsmeow.SendRequestExtra{ID: msgid})
+		statusExtra.ID = msgid
+		resp, err = sendMessageWithRecovery(txtid, clientManager.GetWhatsmeowClient(txtid), context.Background(), recipient, msg, statusExtra)
 		if err != nil {
 			s.Respond(w, r, http.StatusInternalServerError, errors.New(fmt.Sprintf("Error sending message: %v", err)))
 			return
