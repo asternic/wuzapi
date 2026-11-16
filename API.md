@@ -1015,7 +1015,7 @@ session's `token`:
 
 Endpoint: _/chat/send/raw_ (POST; user token required). Stdio method: `chat.send.raw`.
 
-Send a WhatsApp protobuf message as JSON. Unknown protobuf fields are discarded; at least one known field is required.
+Send a WhatsApp protobuf message as JSON. Experimental: unknown protobuf fields and empty messages are rejected. Internal protocolMessage, senderKeyDistributionMessage, fastRatchetKeySenderKeyDistributionMessage, and deviceSentMessage fields are rejected at any nesting level; use dedicated API operations for edits and revokes. Other recognized protobuf content is passed through without type-specific validation; WhatsApp acceptance and rendering are not guaranteed. Successful sends are saved when history is enabled and publish the standard sent-message event to RabbitMQ when configured.
 
 `Phone` (required destination), `Message` (required protobuf JSON object), and `Id` (optional message ID).
 

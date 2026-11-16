@@ -6,6 +6,10 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strconv"
+
+	"go.mau.fi/whatsmeow/types"
+	"go.mau.fi/whatsmeow/types/events"
 
 	"go.mau.fi/whatsmeow"
 	"go.mau.fi/whatsmeow/proto/waE2E"
@@ -58,6 +62,9 @@ func (s *server) SendRawMessage() http.HandlerFunc {
 			s.Respond(w, r, http.StatusInternalServerError, fmt.Errorf("failed to send raw message: %v", err))
 			return
 		}
+		info := r.Context().Value("userinfo").(Values)
+		s.recordRawMessage(info, recipient, msgid, msg, resp)
+		s.publishSentMessageEvent(info.Get("Token"), txtid, txtid, recipient, msgid, msg, resp.Timestamp, rawMessageType(s, msg))
 		data, _ := json.Marshal(map[string]interface{}{"Details": "Sent", "Id": msgid, "Timestamp": resp.Timestamp})
 		s.Respond(w, r, http.StatusOK, string(data))
 	}
@@ -65,17 +72,98 @@ func (s *server) SendRawMessage() http.HandlerFunc {
 
 func decodeRawMessage(raw json.RawMessage) (*waE2E.Message, error) {
 	var msg waE2E.Message
-	if err := (protojson.UnmarshalOptions{DiscardUnknown: true}).Unmarshal(raw, &msg); err != nil {
+	if err := (protojson.UnmarshalOptions{RecursionLimit: 100}).Unmarshal(raw, &msg); err != nil {
 		return nil, fmt.Errorf("invalid Message: %v", err)
 	}
 	if isEmptyMessage(&msg) {
 		return nil, errors.New("Message has no known content")
 	}
+	if err := validateRawFields(msg.ProtoReflect()); err != nil {
+		return nil, err
+	}
 	return &msg, nil
 }
 
 func isEmptyMessage(m *waE2E.Message) bool {
-	empty := true
-	m.ProtoReflect().Range(func(_ protoreflect.FieldDescriptor, _ protoreflect.Value) bool { empty = false; return false })
-	return empty
+	return !rawHasFields(m.ProtoReflect())
+}
+
+// Inspect all nested protobuf messages, including quoted messages and wrappers.
+// Keep this a denylist so new experimental content types remain usable.
+func validateRawFields(m protoreflect.Message) error {
+	var invalid error
+	m.Range(func(fd protoreflect.FieldDescriptor, v protoreflect.Value) bool {
+		switch fd.FullName() {
+		case "WAWebProtobufsE2E.Message.protocolMessage",
+			"WAWebProtobufsE2E.Message.senderKeyDistributionMessage",
+			"WAWebProtobufsE2E.Message.fastRatchetKeySenderKeyDistributionMessage",
+			"WAWebProtobufsE2E.Message.deviceSentMessage":
+			invalid = fmt.Errorf("Message field %s is internal; use dedicated API operations where available", fd.Name())
+			return false
+		}
+		if fd.Message() != nil && !fd.IsMap() {
+			if fd.IsList() {
+				list := v.List()
+				for i := 0; i < list.Len() && invalid == nil; i++ {
+					invalid = validateRawFields(list.Get(i).Message())
+				}
+			} else {
+				invalid = validateRawFields(v.Message())
+			}
+		}
+		return invalid == nil
+	})
+	return invalid
+}
+
+func rawMessageType(s *server, msg *waE2E.Message) string {
+	msg = (&events.Message{RawMessage: msg}).UnwrapRaw().Message
+	if action, ok := outgoingAction(msg); ok {
+		return action.messageType
+	}
+	kind := s.getMessageType(msg)
+	if kind == "text" && msg.Conversation == nil && msg.ExtendedTextMessage == nil {
+		return "raw"
+	}
+	return kind
+}
+
+func (s *server) recordRawMessage(info Values, chat types.JID, id string, msg *waE2E.Message, resp whatsmeow.SendResponse) {
+	if _, ok := outgoingAction(msg); ok {
+		resp.ID = id
+		s.saveOutgoingAction(info, chat, resp, msg)
+		return
+	}
+	content := (&events.Message{RawMessage: msg}).UnwrapRaw().Message
+	text := content.GetConversation()
+	switch {
+	case content.ExtendedTextMessage != nil:
+		text = content.GetExtendedTextMessage().GetText()
+	case content.ImageMessage != nil:
+		text = content.GetImageMessage().GetCaption()
+	case content.VideoMessage != nil:
+		text = content.GetVideoMessage().GetCaption()
+	case content.DocumentMessage != nil:
+		text = content.GetDocumentMessage().GetCaption()
+	case content.ContactMessage != nil:
+		text = content.GetContactMessage().GetDisplayName()
+	case content.LocationMessage != nil:
+		text = content.GetLocationMessage().GetName()
+	}
+	limit, _ := strconv.Atoi(info.Get("History"))
+	s.saveOutgoingMessageToHistory(info.Get("Id"), chat.String(), id, rawMessageType(s, msg), text, "", resp.Timestamp, limit, content)
+}
+
+// A wrapper or nested empty object alone is not message content.
+func rawHasFields(m protoreflect.Message) bool {
+	found := false
+	m.Range(func(fd protoreflect.FieldDescriptor, v protoreflect.Value) bool {
+		if fd.Message() != nil && !fd.IsList() && !fd.IsMap() {
+			found = rawHasFields(v.Message())
+		} else {
+			found = true
+		}
+		return !found
+	})
+	return found
 }
