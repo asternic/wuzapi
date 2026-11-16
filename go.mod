@@ -64,7 +64,7 @@ require (
 	github.com/mattn/go-colorable v0.1.15 // indirect
 	github.com/mattn/go-isatty v0.0.24 // indirect
 	go.mau.fi/libsignal v0.2.2 // indirect
-	go.mau.fi/util v0.10.1 // indirect
+	go.mau.fi/util v0.10.1
 	golang.org/x/crypto v0.57.0 // indirect
 	golang.org/x/net v0.59.0
 	golang.org/x/sys v0.48.0
