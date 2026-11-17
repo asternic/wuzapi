@@ -1011,6 +1011,16 @@ session's `token`:
 ```
 
 
+## Send Event
+
+Endpoint: _/chat/send/event_ (POST; user token required). Stdio method: `chat.send.event`.
+
+Send a WhatsApp event. JoinLink must be a WhatsApp call link (https://call.whatsapp.com/...). RSVPs arrive as secret-encrypted messages that WuzAPI already decrypts. Rendering requires the corresponding whatsmeow event stanza change.
+
+`Phone`, `Name`, and `StartTime` (Unix seconds) are required. Optional fields: `Description`, `EndTime` (Unix seconds), `JoinLink`, `ExtraGuestsAllowed`, `IsScheduleCall`, `HasReminder`, `ReminderOffsetSec`, `Location` (Name, Address, Latitude, Longitude), and `Id`.
+
+A successful response contains `Details`, `Id`, and `Timestamp`.
+
 ## Send Raw Message
 
 Endpoint: _/chat/send/raw_ (POST; user token required). Stdio method: `chat.send.raw`.

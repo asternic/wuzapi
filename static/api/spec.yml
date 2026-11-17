@@ -1556,6 +1556,46 @@ paths:
             application/json:
               schema:
                 example: {"code":200,"data":{"Details":"Sent","Id":"3EB06F9067F80BAB89FF","Timestamp":"2022-05-10T12:49:08-03:00"},"success":true}
+  /chat/send/event:
+    post:
+      tags: [Chat]
+      summary: Send Event
+      description: Send a WhatsApp event. JoinLink must be a WhatsApp call link (https://call.whatsapp.com/...). RSVPs arrive as secret-encrypted messages that WuzAPI already decrypts. Rendering requires the corresponding whatsmeow event stanza change.
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                Phone: {type: string, description: Destination JID or phone digits}
+                Name: {type: string}
+                Description: {type: string}
+                StartTime: {type: integer, format: int64, description: Unix seconds}
+                EndTime: {type: integer, format: int64, description: Unix seconds}
+                JoinLink: {type: string, description: WhatsApp call link}
+                ExtraGuestsAllowed: {type: boolean}
+                IsScheduleCall: {type: boolean}
+                HasReminder: {type: boolean}
+                ReminderOffsetSec: {type: integer, format: int64}
+                Location:
+                  type: object
+                  properties:
+                    Name: {type: string}
+                    Address: {type: string}
+                    Latitude: {type: number}
+                    Longitude: {type: number}
+                Id: {type: string}
+              required: [Phone, Name, StartTime]
+      responses:
+        200:
+          description: Message sent; returns Details, Id, and Timestamp
+        400:
+          description: Invalid request
+        500:
+          description: Session or send failure
   /chat/send/raw:
     post:
       tags: [Chat]
