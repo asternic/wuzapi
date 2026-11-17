@@ -773,6 +773,13 @@
             </div>
 
             <div class="endpoint">
+                <h3><span class="method post">POST</span> <span class="path">/chat/send/raw</span></h3>
+                <p>Send a WhatsApp protobuf message as JSON. Experimental: unknown protobuf fields and empty messages are rejected. Internal protocolMessage, senderKeyDistributionMessage, fastRatchetKeySenderKeyDistributionMessage, and deviceSentMessage fields are rejected at any nesting level; use dedicated API operations for edits and revokes. Other recognized protobuf content is passed through without type-specific validation; WhatsApp acceptance and rendering are not guaranteed. Successful sends are saved when history is enabled and publish the standard sent-message event to RabbitMQ when configured.</p>
+                <p>Phone (required destination), Message (required protobuf JSON object), and Id (optional message ID).</p>
+                <p>Stdio: <code>chat.send.raw</code>. A successful response contains Details, Id, and Timestamp.</p>
+            </div>
+
+            <div class="endpoint">
                 <h3><span class="method post">POST</span> <span class="path">/chat/send/text</span></h3>
                 <p>Sends a text message to a contact or group.</p>
                 

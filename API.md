@@ -1021,6 +1021,16 @@ Send a WhatsApp event. JoinLink must be a WhatsApp call link (https://call.whats
 
 A successful response contains `Details`, `Id`, and `Timestamp`.
 
+## Send Raw Message
+
+Endpoint: _/chat/send/raw_ (POST; user token required). Stdio method: `chat.send.raw`.
+
+Send a WhatsApp protobuf message as JSON. Experimental: unknown protobuf fields and empty messages are rejected. Internal protocolMessage, senderKeyDistributionMessage, fastRatchetKeySenderKeyDistributionMessage, and deviceSentMessage fields are rejected at any nesting level; use dedicated API operations for edits and revokes. Other recognized protobuf content is passed through without type-specific validation; WhatsApp acceptance and rendering are not guaranteed. Successful sends are saved when history is enabled and publish the standard sent-message event to RabbitMQ when configured.
+
+`Phone` (required destination), `Message` (required protobuf JSON object), and `Id` (optional message ID).
+
+A successful response contains `Details`, `Id`, and `Timestamp`.
+
 ## Send Text Message
 
 Sends a text message or reply. For replies, ContextInfo data should be completed with the StanzaID (ID of the message we are replying to), and Participant (user JID we are replying to). If ID is 

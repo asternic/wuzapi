@@ -1596,6 +1596,31 @@ paths:
           description: Invalid request
         500:
           description: Session or send failure
+  /chat/send/raw:
+    post:
+      tags: [Chat]
+      summary: Send Raw Message
+      description: Send a WhatsApp protobuf message as JSON. Experimental: unknown protobuf fields and empty messages are rejected. Internal protocolMessage, senderKeyDistributionMessage, fastRatchetKeySenderKeyDistributionMessage, and deviceSentMessage fields are rejected at any nesting level; use dedicated API operations for edits and revokes. Other recognized protobuf content is passed through without type-specific validation; WhatsApp acceptance and rendering are not guaranteed. Successful sends are saved when history is enabled and publish the standard sent-message event to RabbitMQ when configured.
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                Phone: {type: string, description: Destination JID or phone digits}
+                Message: {type: object, description: WhatsApp Message protobuf JSON}
+                Id: {type: string, description: Optional message ID}
+              required: [Phone, Message]
+      responses:
+        200:
+          description: Message sent; returns Details, Id, and Timestamp
+        400:
+          description: Invalid request
+        500:
+          description: Session or send failure
   /chat/send/text:
     post:
       tags:

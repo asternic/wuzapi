@@ -168,6 +168,8 @@ func (m *S3Manager) GetClient(userID string) (*s3.Client, *S3Config, bool) {
 	return client, config, clientOk && configOk
 }
 
+var s3KeyTime = time.Now
+
 // GenerateS3Key generates S3 object key based on message metadata
 func (m *S3Manager) GenerateS3Key(userID, contactJID, messageID string, mimeType string, isIncoming bool) string {
 	// Determine direction
@@ -181,10 +183,10 @@ func (m *S3Manager) GenerateS3Key(userID, contactJID, messageID string, mimeType
 	contactJID = strings.ReplaceAll(contactJID, ":", "_")
 
 	// Get current time
-	now := time.Now()
-	year := now.Format("2025")
-	month := now.Format("05")
-	day := now.Format("25")
+	now := s3KeyTime()
+	year := now.Format("2006")
+	month := now.Format("01")
+	day := now.Format("02")
 
 	// Determine media type folder
 	mediaType := "documents"
