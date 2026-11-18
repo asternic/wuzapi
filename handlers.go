@@ -2219,7 +2219,7 @@ func (s *server) SendButtons() http.HandlerFunc {
 	}
 
 	type sendButtonsStruct struct {
-		Envelope string `json:"Envelope,omitempty"`
+		Envelope      string            `json:"Envelope,omitempty"`
 		Phone         string            `json:"Phone"`
 		Body          string            `json:"Body"`
 		Text          string            `json:"text"`
@@ -8202,6 +8202,11 @@ func (s *server) publishSentMessageEvent(token, userID, txtid string, recipient 
 	postmap := make(map[string]interface{})
 	postmap["type"] = "Message"
 	postmap["event"] = messageEvent
+	if err := s.enqueueChatwootOutbound(context.Background(), chatwootOutboundMessage{
+		InstanceID: userID, MessageID: msgid, ChatJID: recipient.String(), Text: messageText(msg), FromMe: true,
+	}); err != nil {
+		log.Warn().Err(err).Str("instance_id", userID).Str("message_id", msgid).Msg("Could not queue sent message for Chatwoot")
+	}
 
 	// Marshal to JSON
 	jsonData, err := json.Marshal(postmap)
@@ -8212,4 +8217,14 @@ func (s *server) publishSentMessageEvent(token, userID, txtid string, recipient 
 
 	// Publish directly to RabbitMQ (bypassing subscription check for sent messages)
 	go sendToGlobalRabbit(jsonData, token, userID)
+}
+
+func messageText(msg *waE2E.Message) string {
+	if msg.GetConversation() != "" {
+		return msg.GetConversation()
+	}
+	if msg.GetExtendedTextMessage() != nil {
+		return msg.GetExtendedTextMessage().GetText()
+	}
+	return ""
 }

@@ -978,6 +978,20 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 		log.Info().Msg("Received StreamReplaced event")
 		return
 	case *events.Message:
+		if evt.Info.Chat.Server == types.DefaultUserServer || evt.Info.Chat.Server == types.HiddenUserServer {
+			text := evt.Message.GetConversation()
+			if text == "" && evt.Message.GetExtendedTextMessage() != nil {
+				text = evt.Message.GetExtendedTextMessage().GetText()
+			}
+			if text != "" {
+				if err := mycli.s.enqueueChatwootOutbound(context.Background(), chatwootOutboundMessage{
+					InstanceID: mycli.userID, MessageID: evt.Info.ID, ChatJID: evt.Info.Chat.String(),
+					ContactName: evt.Info.PushName, Text: text, FromMe: evt.Info.IsFromMe,
+				}); err != nil {
+					log.Warn().Err(err).Str("instance_id", mycli.userID).Str("message_id", evt.Info.ID).Msg("Could not queue Chatwoot message")
+				}
+			}
+		}
 
 		var s3Config struct {
 			Enabled       string `db:"s3_enabled"`

@@ -323,6 +323,34 @@ Response:
 
 ---
 
+## Chatwoot integration (phase 1a)
+
+Chatwoot is opt-in for each instance. While disabled, it has no effect on
+existing webhooks, RabbitMQ, history, or WhatsApp traffic. The first enabled
+configuration stores the Chatwoot token encrypted and starts a durable worker
+that forwards direct text messages to Chatwoot asynchronously.
+
+The server must have a persistent `WUZAPI_GLOBAL_ENCRYPTION_KEY`; a temporary
+generated key is refused for Chatwoot configuration. HTTPS is required unless
+an internal host is explicitly listed in `WUZAPI_CHATWOOT_INTERNAL_HOSTS`.
+
+| Method | Endpoint | Description |
+| --- | --- | --- |
+| `POST` | `/chatwoot/config` | Validates the Chatwoot account token and creates an API inbox when `inbox_id` is omitted. |
+| `GET` | `/chatwoot/config` | Reads non-secret configuration. The token is never returned. |
+| `DELETE` | `/chatwoot/config` | Disables the local integration and preserves the remote inbox. |
+| `GET` | `/chatwoot/status` | Returns pending/dead queue counts and the latest sanitized error. |
+
+Example with fictional values:
+
+```bash
+curl -sS -X POST http://localhost:8080/chatwoot/config \
+  -H 'Token: INSTANCE_TOKEN' -H 'Content-Type: application/json' \
+  --data '{"enabled":true,"url":"https://chat.example.test","account_id":1,"token":"CHATWOOT_TOKEN","inbox_name":"WuzAPI Support"}'
+```
+
+---
+
 ## HMAC Configuration
 
 The following _HMAC_ endpoints are used to configure and manage HMAC keys for webhook security. HMAC signatures verify that webhooks are authentic and haven't been tampered with.

@@ -112,6 +112,11 @@ func (s *server) routes() {
 	s.router.Handle("/session/hmac/config", c.Then(s.GetHmacConfig())).Methods("GET")
 	s.router.Handle("/session/hmac/config", c.Then(s.DeleteHmacConfig())).Methods("DELETE")
 
+	s.router.Handle("/chatwoot/config", c.Then(s.ConfigureChatwoot())).Methods("POST")
+	s.router.Handle("/chatwoot/config", c.Then(s.GetChatwootConfig())).Methods("GET")
+	s.router.Handle("/chatwoot/config", c.Then(s.DisableChatwoot())).Methods("DELETE")
+	s.router.Handle("/chatwoot/status", c.Then(s.GetChatwootStatus())).Methods("GET")
+
 	s.router.Handle("/chat/send/raw", c.Then(s.SendRawMessage())).Methods("POST")
 	s.router.Handle("/chat/send/text", c.Then(s.SendMessage())).Methods("POST")
 	s.router.Handle("/chat/delete", c.Then(s.DeleteMessage())).Methods("POST")

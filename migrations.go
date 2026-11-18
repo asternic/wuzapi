@@ -372,6 +372,10 @@ func initializeSchema(db *sqlx.DB) error {
 		}
 	}
 
+	if err := initializeChatwootSchema(db); err != nil {
+		return fmt.Errorf("failed to initialize Chatwoot schema: %w", err)
+	}
+
 	return nil
 }
 
