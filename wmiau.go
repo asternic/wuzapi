@@ -1797,7 +1797,9 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 		dowebhook = 1
 		log.Warn().Err(evt.Error).Bool("continuation", evt.Continuation).Msg("Passkey pairing error")
 	default:
-		log.Warn().Str("event", fmt.Sprintf("%+v", evt)).Msg("Unhandled event")
+		// Log only the type: events such as PushName and Contact carry phone
+		// numbers and names.
+		log.Warn().Str("event", fmt.Sprintf("%T", evt)).Msg("Unhandled event")
 	}
 
 	if dowebhook == 1 {
