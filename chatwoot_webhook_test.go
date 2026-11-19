@@ -1,15 +1,19 @@
 package main
 
 import (
+	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/gorilla/mux"
 )
 
 func TestChatwootWebhookVerifiesSignatureAndQueuesOutgoingMessage(t *testing.T) {
@@ -80,6 +84,41 @@ func TestChatwootWebhookDeduplicatesDeliveries(t *testing.T) {
 	var count int
 	if err := s.db.Get(&count, "SELECT COUNT(*) FROM chatwoot_outbox WHERE direction=? AND source_message_id=?", chatwootDirectionInbound, "401"); err != nil || count != 1 {
 		t.Fatalf("deduplicated rows = %d, %v", count, err)
+	}
+}
+
+func TestChatwootInboundWorkerDispatchesTextThroughLocalRouter(t *testing.T) {
+	s := makeTestServer(t)
+	if _, err := s.db.Exec("INSERT INTO users (id,name,token) VALUES ('inbound-instance','Inbound','inbound-token')"); err != nil {
+		t.Fatal(err)
+	}
+	localRouter := mux.NewRouter()
+	localRouter.HandleFunc("/chat/send/text", func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Token") != "inbound-token" {
+			t.Fatalf("token = %q", r.Header.Get("Token"))
+		}
+		var payload struct {
+			Phone string
+			Body  string
+			Id    string
+		}
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			t.Fatal(err)
+		}
+		if payload.Phone != "123@lid" || payload.Body != "agent reply" || payload.Id != deterministicChatwootWhatsAppID(901) {
+			t.Fatalf("payload = %+v", payload)
+		}
+		w.WriteHeader(http.StatusOK)
+	}).Methods(http.MethodPost)
+	s.router = localRouter
+
+	message := chatwootInboundMessage{InstanceID: "inbound-instance", ChatwootMessageID: 901, ConversationID: 201, ChatJID: "123@lid", Text: "agent reply"}
+	if err := s.deliverChatwootInbound(context.Background(), message); err != nil {
+		t.Fatal(err)
+	}
+	var count int
+	if err := s.db.Get(&count, "SELECT COUNT(*) FROM chatwoot_message_map WHERE instance_id=? AND wa_message_id=? AND direction=?", "inbound-instance", deterministicChatwootWhatsAppID(901), chatwootDirectionInbound); err != nil || count != 1 {
+		t.Fatalf("inbound map rows = %d, %v", count, err)
 	}
 }
 
