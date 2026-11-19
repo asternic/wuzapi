@@ -85,7 +85,7 @@ func TestChatwootUploadsMediaAsStreamingMultipart(t *testing.T) {
 		if err := r.ParseMultipartForm(1024); err != nil {
 			t.Fatal(err)
 		}
-		if r.FormValue("content") != "caption" || r.FormValue("message_type") != "incoming" || r.FormValue("private") != "false" {
+		if r.FormValue("content") != "caption" || r.FormValue("message_type") != "incoming" || r.FormValue("private") != "false" || r.FormValue("content_attributes[wuzapi_source]") != "true" {
 			t.Fatalf("unexpected multipart fields: %#v", r.MultipartForm.Value)
 		}
 		files := r.MultipartForm.File["attachments[]"]

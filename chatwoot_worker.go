@@ -822,6 +822,10 @@ func (c *chatwootClient) createConversationMediaMessage(ctx context.Context, con
 			writeErr <- err
 			return
 		}
+		if err := writer.WriteField("content_attributes[wuzapi_source]", "true"); err != nil {
+			writeErr <- err
+			return
+		}
 		part, err := writer.CreateFormFile("attachments[]", media.Name)
 		if err != nil {
 			writeErr <- err
