@@ -13,6 +13,66 @@ servers:
     description: Current host
 
 paths:
+  /chatwoot/config:
+    post:
+      tags: [Chatwoot]
+      summary: Configure the opt-in Chatwoot integration
+      description: Validates the account token, creates or updates an API inbox callback, and stores the Chatwoot token plus callback secret encrypted. Requires WUZAPI_GLOBAL_ENCRYPTION_KEY and WUZAPI_PUBLIC_URL.
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [url, account_id, token]
+              properties:
+                enabled: {type: boolean, default: true}
+                url: {type: string, format: uri, example: https://chat.example.test}
+                account_id: {type: integer, minimum: 1, example: 1}
+                token: {type: string, format: password}
+                inbox_id: {type: integer, minimum: 1, description: Reuse an existing API inbox when set.}
+                inbox_name: {type: string, example: WuzAPI Support}
+      responses:
+        '200': {description: Configuration saved; response includes inbox_id and the generated webhook_url.}
+        '400': {description: Invalid URL, missing persistent encryption key, or Chatwoot validation failed.}
+    get:
+      tags: [Chatwoot]
+      summary: Read non-secret Chatwoot configuration
+      security:
+        - ApiKeyAuth: []
+      responses:
+        '200': {description: Configuration with token_configured and webhook_configured flags only.}
+    delete:
+      tags: [Chatwoot]
+      summary: Disable Chatwoot without deleting its remote inbox
+      security:
+        - ApiKeyAuth: []
+      responses:
+        '200': {description: Integration disabled locally.}
+  /chatwoot/status:
+    get:
+      tags: [Chatwoot]
+      summary: Read Chatwoot queue status
+      security:
+        - ApiKeyAuth: []
+      responses:
+        '200': {description: Pending/dead counts and the latest sanitized failure.}
+  /chatwoot/webhook/{key}:
+    post:
+      tags: [Chatwoot]
+      summary: Receive an HMAC-signed Chatwoot callback
+      description: Public endpoint. It accepts only valid X-Chatwoot-Timestamp and X-Chatwoot-Signature pairs, queues outgoing agent text replies, and never uses an instance token.
+      parameters:
+        - name: key
+          in: path
+          required: true
+          schema: {type: string}
+      responses:
+        '204': {description: Accepted or intentionally ignored as a duplicate, loop, unsupported event, or unmapped conversation.}
+        '401': {description: Invalid or expired signature.}
+        '413': {description: Request body exceeds 1 MiB.}
   /chat/conversations:
     get:
       tags: [Chat]

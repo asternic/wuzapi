@@ -338,6 +338,29 @@
             </div>
         </section>
 
+        <section id="chatwoot">
+            <div class="section-title">
+                <div class="section-icon">💬</div>
+                <h2 class="mb-0">Chatwoot (Consultor fork)</h2>
+            </div>
+            <p>The optional Chatwoot integration synchronizes direct text messages through a durable local queue. It does not replace existing webhooks, RabbitMQ or history, and stays disabled per instance until configured.</p>
+            <div class="alert alert-warning">
+                <strong>Requirements:</strong> set a persistent <code>WUZAPI_GLOBAL_ENCRYPTION_KEY</code> and the public HTTPS <code>WUZAPI_PUBLIC_URL</code> before configuring Chatwoot. Tokens and webhook secrets are encrypted and never returned by the API.
+            </div>
+            <div class="endpoint">
+                <h3><span class="method post">POST</span> <span class="path">/chatwoot/config</span></h3>
+                <p>Validates the Chatwoot account token, creates or reuses an API inbox and registers a signed callback URL.</p>
+                <pre><code class="language-bash">curl -X POST https://wuzapi.example.test/chatwoot/config \
+  -H 'Token: INSTANCE_TOKEN' -H 'Content-Type: application/json' \
+  -d '{"enabled":true,"url":"https://chat.example.test","account_id":1,"token":"CHATWOOT_TOKEN","inbox_name":"WuzAPI Support"}'</code></pre>
+            </div>
+            <div class="endpoint">
+                <h3><span class="method get">GET</span> <span class="path">/chatwoot/status</span></h3>
+                <p>Returns pending and dead-letter counts plus the most recent sanitized delivery error.</p>
+            </div>
+            <p>The callback at <code>/chatwoot/webhook/{key}</code> is public but verifies Chatwoot's timestamped HMAC signature in constant time. It accepts only agent text replies mapped to direct chats; groups, status, broadcast and newsletters remain blocked.</p>
+        </section>
+
         <section id="session">
             <div class="section-title">
                 <div class="section-icon">

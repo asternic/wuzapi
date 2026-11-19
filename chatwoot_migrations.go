@@ -6,6 +6,16 @@ import (
 	"github.com/jmoiron/sqlx"
 )
 
+type chatwootMigration struct {
+	ID   int
+	Name string
+}
+
+var chatwootMigrations = []chatwootMigration{
+	{ID: 1, Name: "foundation"},
+	{ID: 2, Name: "webhook_credentials"},
+}
+
 const chatwootFoundationSQL = `
 CREATE TABLE IF NOT EXISTS chatwoot_config (
     instance_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
@@ -69,30 +79,69 @@ func initializeChatwootSchema(db *sqlx.DB) error {
         id INTEGER PRIMARY KEY, name TEXT NOT NULL, applied_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP)`); err != nil {
 		return err
 	}
-	var applied bool
-	if err := db.Get(&applied, db.Rebind(`SELECT EXISTS(SELECT 1 FROM chatwoot_schema_migrations WHERE id=?)`), 1); err != nil {
+	var applied map[int]bool = make(map[int]bool)
+	var rows []struct {
+		ID int `db:"id"`
+	}
+	if err := db.Select(&rows, `SELECT id FROM chatwoot_schema_migrations`); err != nil {
 		return err
 	}
-	if applied {
-		return nil
+	for _, row := range rows {
+		applied[row.ID] = true
 	}
+	for _, migration := range chatwootMigrations {
+		if applied[migration.ID] {
+			continue
+		}
+		if err := applyChatwootMigration(db, migration); err != nil {
+			return fmt.Errorf("apply Chatwoot migration %d: %w", migration.ID, err)
+		}
+	}
+	return nil
+}
+
+func applyChatwootMigration(db *sqlx.DB, migration chatwootMigration) error {
 	tx, err := db.Beginx()
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
-	if db.DriverName() == "sqlite" {
-		err = applyChatwootSQLiteMigration(tx)
-	} else {
-		_, err = tx.Exec(chatwootFoundationSQL)
+	switch migration.ID {
+	case 1:
+		if db.DriverName() == "sqlite" {
+			err = applyChatwootSQLiteMigration(tx)
+		} else {
+			_, err = tx.Exec(chatwootFoundationSQL)
+		}
+	case 2:
+		err = applyChatwootWebhookCredentialsMigration(db.DriverName(), tx)
+	default:
+		return fmt.Errorf("unknown migration")
 	}
 	if err != nil {
-		return fmt.Errorf("apply foundation: %w", err)
+		return err
 	}
-	if _, err := tx.Exec(db.Rebind(`INSERT INTO chatwoot_schema_migrations (id, name) VALUES (?, ?)`), 1, "foundation"); err != nil {
+	if _, err := tx.Exec(db.Rebind(`INSERT INTO chatwoot_schema_migrations (id, name) VALUES (?, ?)`), migration.ID, migration.Name); err != nil {
 		return err
 	}
 	return tx.Commit()
+}
+
+func applyChatwootWebhookCredentialsMigration(driver string, tx *sqlx.Tx) error {
+	if driver == "sqlite" {
+		if err := addColumnIfNotExistsSQLite(tx, "chatwoot_config", "webhook_key", "TEXT NOT NULL DEFAULT ''"); err != nil {
+			return err
+		}
+		if err := addColumnIfNotExistsSQLite(tx, "chatwoot_config", "webhook_secret", "BLOB"); err != nil {
+			return err
+		}
+		_, err := tx.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_chatwoot_config_webhook_key ON chatwoot_config (webhook_key) WHERE webhook_key <> ''`)
+		return err
+	}
+	_, err := tx.Exec(`ALTER TABLE chatwoot_config ADD COLUMN IF NOT EXISTS webhook_key TEXT NOT NULL DEFAULT '';
+        ALTER TABLE chatwoot_config ADD COLUMN IF NOT EXISTS webhook_secret BYTEA;
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_chatwoot_config_webhook_key ON chatwoot_config (webhook_key) WHERE webhook_key <> '';`)
+	return err
 }
 
 func applyChatwootSQLiteMigration(tx *sqlx.Tx) error {

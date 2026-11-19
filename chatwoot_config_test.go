@@ -24,17 +24,18 @@ func TestChatwootConfigCreatesInboxAndMasksCredentials(t *testing.T) {
 			var payload struct {
 				Name    string `json:"name"`
 				Channel struct {
-					Type string `json:"type"`
+					Type       string `json:"type"`
+					WebhookURL string `json:"webhook_url"`
 				} `json:"channel"`
 			}
 			if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 				t.Fatal(err)
 			}
-			if payload.Name != "WuzAPI Test" || payload.Channel.Type != "api" {
+			if payload.Name != "WuzAPI Test" || payload.Channel.Type != "api" || !strings.HasPrefix(payload.Channel.WebhookURL, "https://wuzapi.example.test/chatwoot/webhook/") {
 				t.Fatalf("unexpected inbox payload: %+v", payload)
 			}
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"id":42,"name":"WuzAPI Test"}`))
+			_, _ = w.Write([]byte(`{"id":42,"name":"WuzAPI Test","channel":{"secret":"fixture-webhook-secret"}}`))
 		default:
 			http.NotFound(w, r)
 		}
@@ -45,6 +46,7 @@ func TestChatwootConfigCreatesInboxAndMasksCredentials(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Setenv("WUZAPI_CHATWOOT_INTERNAL_HOSTS", chatwootURL.Hostname())
+	t.Setenv("WUZAPI_PUBLIC_URL", "https://wuzapi.example.test")
 
 	previousKey, previousPersistent := *globalEncryptionKey, globalEncryptionKeyPersistent
 	*globalEncryptionKey = "0123456789abcdef0123456789abcdef"
@@ -76,14 +78,15 @@ func TestChatwootConfigCreatesInboxAndMasksCredentials(t *testing.T) {
 	}
 
 	var stored struct {
-		Enabled bool   `db:"enabled"`
-		InboxID int64  `db:"inbox_id"`
-		Token   []byte `db:"token"`
+		Enabled       bool   `db:"enabled"`
+		InboxID       int64  `db:"inbox_id"`
+		Token         []byte `db:"token"`
+		WebhookSecret []byte `db:"webhook_secret"`
 	}
-	if err := s.db.Get(&stored, "SELECT enabled, inbox_id, token FROM chatwoot_config WHERE instance_id=?", "chatwoot-instance"); err != nil {
+	if err := s.db.Get(&stored, "SELECT enabled, inbox_id, token, webhook_secret FROM chatwoot_config WHERE instance_id=?", "chatwoot-instance"); err != nil {
 		t.Fatal(err)
 	}
-	if !stored.Enabled || stored.InboxID != 42 || string(stored.Token) == "fixture-chatwoot-token" {
+	if !stored.Enabled || stored.InboxID != 42 || string(stored.Token) == "fixture-chatwoot-token" || string(stored.WebhookSecret) == "fixture-webhook-secret" {
 		t.Fatalf("stored config = %+v", stored)
 	}
 
@@ -94,7 +97,7 @@ func TestChatwootConfigCreatesInboxAndMasksCredentials(t *testing.T) {
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("GET /chatwoot/config = %d: %s", recorder.Code, recorder.Body.String())
 	}
-	if strings.Contains(recorder.Body.String(), "fixture-chatwoot-token") || !strings.Contains(recorder.Body.String(), `"token_configured":true`) {
+	if strings.Contains(recorder.Body.String(), "fixture-chatwoot-token") || strings.Contains(recorder.Body.String(), "fixture-webhook-secret") || !strings.Contains(recorder.Body.String(), `"token_configured":true`) || !strings.Contains(recorder.Body.String(), `"webhook_configured":true`) {
 		t.Fatalf("unsafe config response: %s", recorder.Body.String())
 	}
 }

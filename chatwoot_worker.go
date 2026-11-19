@@ -1,13 +1,16 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
 	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"math/rand"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"os"
 	"strconv"
@@ -20,6 +23,7 @@ import (
 
 const (
 	chatwootDirectionOutbound = "wa_to_cw"
+	chatwootDirectionInbound  = "cw_to_wa"
 	chatwootOutboxPending     = "pending"
 	chatwootOutboxProcessing  = "processing"
 	chatwootOutboxDone        = "done"
@@ -39,10 +43,19 @@ type chatwootOutboundMessage struct {
 	FromMe      bool   `json:"from_me"`
 }
 
+type chatwootInboundMessage struct {
+	InstanceID        string `json:"instance_id"`
+	ChatwootMessageID int64  `json:"chatwoot_message_id"`
+	ConversationID    int64  `json:"conversation_id"`
+	ChatJID           string `json:"chat_jid"`
+	Text              string `json:"text"`
+}
+
 type chatwootOutboxRow struct {
 	ID              int64     `db:"id"`
 	InstanceID      string    `db:"instance_id"`
 	SourceMessageID string    `db:"source_message_id"`
+	Direction       string    `db:"direction"`
 	Payload         []byte    `db:"payload"`
 	Attempts        int       `db:"attempts"`
 	CreatedAt       time.Time `db:"created_at"`
@@ -68,6 +81,13 @@ func (s *server) enqueueChatwootOutbound(ctx context.Context, message chatwootOu
 	if !ok || requireDirectChat(jid) != nil || message.InstanceID == "" || message.MessageID == "" || strings.TrimSpace(message.Text) == "" {
 		return nil
 	}
+	var sentFromChatwoot bool
+	if err := s.db.GetContext(ctx, &sentFromChatwoot, s.db.Rebind(`SELECT EXISTS(SELECT 1 FROM chatwoot_message_map WHERE instance_id=? AND wa_message_id=? AND direction=?)`), message.InstanceID, message.MessageID, chatwootDirectionInbound); err != nil {
+		return err
+	}
+	if sentFromChatwoot {
+		return nil
+	}
 	message.ChatJID = jid.ToNonAD().String()
 	payload, err := json.Marshal(message)
 	if err != nil {
@@ -89,12 +109,27 @@ func (s *server) processNextChatwootOutbox(ctx context.Context) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	var message chatwootOutboundMessage
-	if err := json.Unmarshal(row.Payload, &message); err != nil {
-		return true, s.finishChatwootOutbox(row, fmt.Errorf("invalid queued payload"))
+	var deliveryErr error
+	switch row.Direction {
+	case chatwootDirectionOutbound:
+		var message chatwootOutboundMessage
+		if err := json.Unmarshal(row.Payload, &message); err != nil {
+			deliveryErr = fmt.Errorf("invalid queued payload")
+		} else {
+			deliveryErr = s.deliverChatwootOutbound(ctx, message)
+		}
+	case chatwootDirectionInbound:
+		var message chatwootInboundMessage
+		if err := json.Unmarshal(row.Payload, &message); err != nil {
+			deliveryErr = fmt.Errorf("invalid queued payload")
+		} else {
+			deliveryErr = s.deliverChatwootInbound(ctx, message)
+		}
+	default:
+		deliveryErr = fmt.Errorf("invalid queued direction")
 	}
-	if err := s.deliverChatwootOutbound(ctx, message); err != nil {
-		return true, s.finishChatwootOutbox(row, err)
+	if deliveryErr != nil {
+		return true, s.finishChatwootOutbox(row, deliveryErr)
 	}
 	return true, s.completeChatwootOutbox(row.ID)
 }
@@ -161,7 +196,7 @@ func (s *server) claimChatwootOutbox(ctx context.Context) (chatwootOutboxRow, er
 		lockSuffix = " FOR UPDATE SKIP LOCKED"
 	}
 	var candidates []chatwootOutboxRow
-	query := s.db.Rebind(`SELECT id, instance_id, source_message_id, payload, attempts, created_at
+	query := s.db.Rebind(`SELECT id, instance_id, source_message_id, direction, payload, attempts, created_at
         FROM chatwoot_outbox WHERE state=? AND next_attempt_at <= CURRENT_TIMESTAMP ORDER BY id LIMIT 16` + lockSuffix)
 	if err := tx.SelectContext(ctx, &candidates, query, chatwootOutboxPending); err != nil {
 		return chatwootOutboxRow{}, err
@@ -198,6 +233,61 @@ func (s *server) claimChatwootOutbox(ctx context.Context) (chatwootOutboxRow, er
 		return row, nil
 	}
 	return chatwootOutboxRow{}, errChatwootOutboxEmpty
+}
+
+func (s *server) enqueueChatwootInbound(ctx context.Context, message chatwootInboundMessage) error {
+	jid, ok := parseJID(message.ChatJID)
+	if !ok || requireDirectChat(jid) != nil || message.InstanceID == "" || message.ChatwootMessageID <= 0 || strings.TrimSpace(message.Text) == "" {
+		return nil
+	}
+	message.ChatJID = jid.ToNonAD().String()
+	payload, err := json.Marshal(message)
+	if err != nil {
+		return err
+	}
+	query := s.db.Rebind(`INSERT INTO chatwoot_outbox (instance_id, direction, state, lock_key, source_message_id, payload)
+        SELECT ?, ?, ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM chatwoot_config WHERE instance_id=? AND enabled=?)
+        ON CONFLICT (instance_id, direction, source_message_id) DO NOTHING`)
+	_, err = s.db.ExecContext(ctx, query, message.InstanceID, chatwootDirectionInbound, chatwootOutboxPending,
+		message.InstanceID+":"+message.ChatJID, strconv.FormatInt(message.ChatwootMessageID, 10), payload, message.InstanceID, true)
+	return err
+}
+
+func deterministicChatwootWhatsAppID(chatwootMessageID int64) string {
+	sum := sha256.Sum256([]byte("chatwoot:" + strconv.FormatInt(chatwootMessageID, 10)))
+	return strings.ToUpper(fmt.Sprintf("%x", sum[:]))[:32]
+}
+
+func (s *server) deliverChatwootInbound(ctx context.Context, message chatwootInboundMessage) error {
+	jid, ok := parseJID(message.ChatJID)
+	if !ok {
+		return errors.New("mapped Chatwoot destination is invalid")
+	}
+	if err := requireDirectChat(jid); err != nil {
+		return err
+	}
+	waMessageID := deterministicChatwootWhatsAppID(message.ChatwootMessageID)
+	mapQuery := s.db.Rebind(`INSERT INTO chatwoot_message_map (instance_id, wa_message_id, chatwoot_message_id, conversation_id, direction)
+        VALUES (?, ?, ?, ?, ?) ON CONFLICT (instance_id, wa_message_id) DO NOTHING`)
+	if _, err := s.db.Exec(mapQuery, message.InstanceID, waMessageID, message.ChatwootMessageID, message.ConversationID, chatwootDirectionInbound); err != nil {
+		return err
+	}
+	var token string
+	if err := s.db.Get(&token, s.db.Rebind(`SELECT token FROM users WHERE id=?`), message.InstanceID); err != nil {
+		return errors.New("Chatwoot instance no longer exists")
+	}
+	body, err := json.Marshal(map[string]string{"Phone": jid.String(), "Body": message.Text, "Id": waMessageID})
+	if err != nil {
+		return err
+	}
+	request := httptest.NewRequest(http.MethodPost, "/chat/send/text", bytes.NewReader(body))
+	request.Header.Set("Token", token)
+	recorder := httptest.NewRecorder()
+	s.router.ServeHTTP(recorder, request)
+	if recorder.Code < http.StatusOK || recorder.Code >= http.StatusMultipleChoices {
+		return fmt.Errorf("WhatsApp send failed with HTTP %d", recorder.Code)
+	}
+	return nil
 }
 
 func (s *server) recoverExpiredChatwootOutbox(ctx context.Context, tx sqlExecer) error {
@@ -402,6 +492,10 @@ func (c *chatwootClient) findReusableConversation(ctx context.Context, contactID
 	}
 	path := "/api/v1/accounts/" + strconv.FormatInt(c.accountID, 10) + "/contacts/" + strconv.FormatInt(contactID, 10) + "/conversations"
 	if err := c.doJSON(ctx, http.MethodGet, path, nil, &response); err != nil {
+		var httpErr chatwootHTTPError
+		if errors.As(err, &httpErr) && httpErr.Status() == http.StatusNotFound {
+			return 0, nil
+		}
 		return 0, err
 	}
 	for _, conversation := range response.Payload {

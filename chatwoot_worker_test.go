@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -52,6 +53,7 @@ func TestChatwootWorkerDeliversOneQueuedDirectTextMessage(t *testing.T) {
 		}
 	}))
 	defer chatwoot.Close()
+	allowChatwootTestHost(t, chatwoot.URL)
 
 	s := makeTestServer(t)
 	configureChatwootForWorker(t, s, "worker-instance", chatwoot.URL)
@@ -110,6 +112,7 @@ func TestChatwootWorkerReusesExistingBridgeContact(t *testing.T) {
 		}
 	}))
 	defer chatwoot.Close()
+	allowChatwootTestHost(t, chatwoot.URL)
 
 	s := makeTestServer(t)
 	configureChatwootForWorker(t, s, "bridge-instance", chatwoot.URL)
@@ -164,6 +167,21 @@ func TestChatwootDisabledDoesNotQueueMessages(t *testing.T) {
 	var count int
 	if err := s.db.Get(&count, "SELECT COUNT(*) FROM chatwoot_outbox"); err != nil || count != 0 {
 		t.Fatalf("queued %d rows, %v", count, err)
+	}
+}
+
+func TestChatwootDoesNotRequeueItsOwnWhatsAppEcho(t *testing.T) {
+	s := makeTestServer(t)
+	configureChatwootForWorker(t, s, "echo-instance", "https://chatwoot.example.test")
+	if _, err := s.db.Exec(s.db.Rebind(`INSERT INTO chatwoot_message_map (instance_id, wa_message_id, chatwoot_message_id, conversation_id, direction) VALUES (?, ?, ?, ?, ?)`), "echo-instance", "echo-id", 301, 201, chatwootDirectionInbound); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.enqueueChatwootOutbound(context.Background(), chatwootOutboundMessage{InstanceID: "echo-instance", MessageID: "echo-id", ChatJID: "5511999999999@s.whatsapp.net", Text: "fixture", FromMe: true}); err != nil {
+		t.Fatal(err)
+	}
+	var count int
+	if err := s.db.Get(&count, "SELECT COUNT(*) FROM chatwoot_outbox"); err != nil || count != 0 {
+		t.Fatalf("queued echo rows = %d, %v", count, err)
 	}
 }
 
@@ -250,7 +268,7 @@ func TestChatwootSchemaUsesItsOwnMigrationRegistry(t *testing.T) {
 			t.Fatal(err)
 		}
 		var count int
-		if err := db.Get(&count, "SELECT COUNT(*) FROM chatwoot_schema_migrations"); err != nil || count != 1 {
+		if err := db.Get(&count, "SELECT COUNT(*) FROM chatwoot_schema_migrations"); err != nil || count != 2 {
 			t.Fatalf("Chatwoot migration count = %d, %v", count, err)
 		}
 	})
@@ -275,4 +293,13 @@ func configureChatwootForWorker(t *testing.T, s *server, instanceID, baseURL str
 	if _, err := s.db.Exec(s.db.Rebind(`INSERT INTO chatwoot_config (instance_id, enabled, url, account_id, token, inbox_id, inbox_name) VALUES (?, ?, ?, ?, ?, ?, ?)`), instanceID, true, baseURL, 1, token, 44, "Fixture"); err != nil {
 		t.Fatal(err)
 	}
+}
+
+func allowChatwootTestHost(t *testing.T, baseURL string) {
+	t.Helper()
+	parsed, err := url.Parse(baseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("WUZAPI_CHATWOOT_INTERNAL_HOSTS", parsed.Hostname())
 }

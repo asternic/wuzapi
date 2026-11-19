@@ -28,12 +28,14 @@ type chatwootConfigRequest struct {
 }
 
 type chatwootConfigRecord struct {
-	Enabled   bool   `db:"enabled"`
-	URL       string `db:"url"`
-	AccountID int64  `db:"account_id"`
-	Token     []byte `db:"token"`
-	InboxID   int64  `db:"inbox_id"`
-	InboxName string `db:"inbox_name"`
+	Enabled       bool   `db:"enabled"`
+	URL           string `db:"url"`
+	AccountID     int64  `db:"account_id"`
+	Token         []byte `db:"token"`
+	InboxID       int64  `db:"inbox_id"`
+	InboxName     string `db:"inbox_name"`
+	WebhookKey    string `db:"webhook_key"`
+	WebhookSecret []byte `db:"webhook_secret"`
 }
 
 func (s *server) ConfigureChatwoot() http.HandlerFunc {
@@ -46,6 +48,11 @@ func (s *server) ConfigureChatwoot() http.HandlerFunc {
 		}
 		if !globalEncryptionKeyPersistent {
 			s.Respond(w, r, http.StatusBadRequest, errors.New("WUZAPI_GLOBAL_ENCRYPTION_KEY must be configured before Chatwoot can be enabled"))
+			return
+		}
+		publicURL, err := validateChatwootPublicURL(os.Getenv("WUZAPI_PUBLIC_URL"))
+		if err != nil {
+			s.Respond(w, r, http.StatusBadRequest, err)
 			return
 		}
 		baseURL, err := validateChatwootURL(request.URL)
@@ -66,11 +73,35 @@ func (s *server) ConfigureChatwoot() http.HandlerFunc {
 			s.Respond(w, r, http.StatusBadRequest, errors.New("could not validate the Chatwoot account or token"))
 			return
 		}
+		var current chatwootConfigRecord
+		_ = s.db.Get(&current, s.db.Rebind(`SELECT enabled, url, account_id, token, inbox_id, inbox_name, webhook_key, webhook_secret FROM chatwoot_config WHERE instance_id=?`), instanceID)
+		webhookKey := current.WebhookKey
+		if webhookKey == "" {
+			webhookKey, err = GenerateRandomID()
+			if err != nil {
+				s.Respond(w, r, http.StatusInternalServerError, errors.New("could not create the Chatwoot webhook key"))
+				return
+			}
+		}
+		webhookURL := publicURL + "/chatwoot/webhook/" + webhookKey
 		inboxID := request.InboxID
+		var webhookSecret string
 		if inboxID == 0 {
-			inboxID, err = client.createAPIInbox(r.Context(), request.InboxName)
+			inboxID, webhookSecret, err = client.createAPIInbox(r.Context(), request.InboxName, webhookURL)
 			if err != nil {
 				s.Respond(w, r, http.StatusBadRequest, errors.New("could not create the Chatwoot inbox"))
+				return
+			}
+		} else {
+			webhookSecret, err = client.updateAPIInboxWebhook(r.Context(), inboxID, webhookURL)
+			if err != nil {
+				s.Respond(w, r, http.StatusBadRequest, errors.New("could not update the Chatwoot inbox webhook"))
+				return
+			}
+		}
+		if webhookSecret == "" {
+			if len(current.WebhookSecret) == 0 {
+				s.Respond(w, r, http.StatusBadRequest, errors.New("Chatwoot did not return an inbox webhook secret"))
 				return
 			}
 		}
@@ -79,19 +110,29 @@ func (s *server) ConfigureChatwoot() http.HandlerFunc {
 			s.Respond(w, r, http.StatusInternalServerError, errors.New("could not encrypt the Chatwoot token"))
 			return
 		}
-		query := s.db.Rebind(`INSERT INTO chatwoot_config (instance_id, enabled, url, account_id, token, inbox_id, inbox_name, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+		var encryptedWebhookSecret []byte
+		if webhookSecret != "" {
+			encryptedWebhookSecret, err = encryptHMACKey(webhookSecret)
+			if err != nil {
+				s.Respond(w, r, http.StatusInternalServerError, errors.New("could not encrypt the Chatwoot webhook secret"))
+				return
+			}
+		} else {
+			encryptedWebhookSecret = current.WebhookSecret
+		}
+		query := s.db.Rebind(`INSERT INTO chatwoot_config (instance_id, enabled, url, account_id, token, inbox_id, inbox_name, webhook_key, webhook_secret, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
             ON CONFLICT (instance_id) DO UPDATE SET enabled=EXCLUDED.enabled, url=EXCLUDED.url,
             account_id=EXCLUDED.account_id, token=EXCLUDED.token, inbox_id=EXCLUDED.inbox_id,
-            inbox_name=EXCLUDED.inbox_name, updated_at=CURRENT_TIMESTAMP`)
-		if _, err := s.db.Exec(query, instanceID, request.Enabled, baseURL, request.AccountID, encryptedToken, inboxID, request.InboxName); err != nil {
+            inbox_name=EXCLUDED.inbox_name, webhook_key=EXCLUDED.webhook_key, webhook_secret=EXCLUDED.webhook_secret, updated_at=CURRENT_TIMESTAMP`)
+		if _, err := s.db.Exec(query, instanceID, request.Enabled, baseURL, request.AccountID, encryptedToken, inboxID, request.InboxName, webhookKey, encryptedWebhookSecret); err != nil {
 			s.Respond(w, r, http.StatusInternalServerError, errors.New("could not save the Chatwoot configuration"))
 			return
 		}
 		if request.Enabled {
 			s.ensureChatwootWorker()
 		}
-		s.Respond(w, r, http.StatusOK, fmt.Sprintf(`{"Details":"Chatwoot configuration saved","inbox_id":%d}`, inboxID))
+		s.Respond(w, r, http.StatusOK, fmt.Sprintf(`{"Details":"Chatwoot configuration saved","inbox_id":%d,"webhook_url":%q}`, inboxID, webhookURL))
 	}
 }
 
@@ -99,17 +140,18 @@ func (s *server) GetChatwootConfig() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		instanceID := r.Context().Value("userinfo").(Values).Get("Id")
 		var config chatwootConfigRecord
-		if err := s.db.Get(&config, s.db.Rebind(`SELECT enabled, url, account_id, token, inbox_id, inbox_name FROM chatwoot_config WHERE instance_id=?`), instanceID); err != nil {
+		if err := s.db.Get(&config, s.db.Rebind(`SELECT enabled, url, account_id, token, inbox_id, inbox_name, webhook_key, webhook_secret FROM chatwoot_config WHERE instance_id=?`), instanceID); err != nil {
 			s.Respond(w, r, http.StatusNotFound, errors.New("Chatwoot is not configured"))
 			return
 		}
 		response, err := json.Marshal(map[string]any{
-			"enabled":          config.Enabled,
-			"url":              config.URL,
-			"account_id":       config.AccountID,
-			"inbox_id":         config.InboxID,
-			"inbox_name":       config.InboxName,
-			"token_configured": len(config.Token) > 0,
+			"enabled":            config.Enabled,
+			"url":                config.URL,
+			"account_id":         config.AccountID,
+			"inbox_id":           config.InboxID,
+			"inbox_name":         config.InboxName,
+			"token_configured":   len(config.Token) > 0,
+			"webhook_configured": len(config.WebhookSecret) > 0,
 		})
 		if err != nil {
 			s.Respond(w, r, http.StatusInternalServerError, errors.New("could not serialize the Chatwoot configuration"))
@@ -173,26 +215,102 @@ type chatwootClient struct {
 	http      *http.Client
 }
 
+type chatwootHTTPError struct {
+	status int
+}
+
+func (e chatwootHTTPError) Error() string {
+	return fmt.Sprintf("Chatwoot returned HTTP %d", e.status)
+}
+
+func (e chatwootHTTPError) Status() int {
+	return e.status
+}
+
 func newChatwootClient(baseURL string, accountID int64, token string) *chatwootClient {
-	return &chatwootClient{baseURL: baseURL, accountID: accountID, token: token, http: &http.Client{Timeout: chatwootRequestTimeout}}
+	parsed, _ := url.Parse(baseURL)
+	return &chatwootClient{baseURL: baseURL, accountID: accountID, token: token, http: newChatwootHTTPClient(parsed.Hostname())}
+}
+
+func newChatwootHTTPClient(allowedHost string) *http.Client {
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.DialContext = func(ctx context.Context, network, address string) (net.Conn, error) {
+		host, port, err := net.SplitHostPort(address)
+		if err != nil {
+			return nil, err
+		}
+		if !strings.EqualFold(host, allowedHost) {
+			return nil, errors.New("Chatwoot request attempted an unexpected host")
+		}
+		ips, err := net.LookupIP(host)
+		if err != nil {
+			return nil, err
+		}
+		allowInternal := chatwootInternalHostAllowed(host)
+		for _, ip := range ips {
+			if isPrivateOrLoopback(ip) && !allowInternal {
+				continue
+			}
+			connection, dialErr := (&net.Dialer{Timeout: 4 * time.Second, KeepAlive: 30 * time.Second}).DialContext(ctx, network, net.JoinHostPort(ip.String(), port))
+			if dialErr == nil {
+				return connection, nil
+			}
+		}
+		return nil, errors.New("Chatwoot host has no allowed reachable address")
+	}
+	return &http.Client{
+		Timeout:   chatwootRequestTimeout,
+		Transport: transport,
+		CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
 }
 
 func (c *chatwootClient) verifyAccount(ctx context.Context) error {
 	return c.doJSON(ctx, http.MethodGet, "/api/v1/accounts/"+strconv.FormatInt(c.accountID, 10), nil, nil)
 }
 
-func (c *chatwootClient) createAPIInbox(ctx context.Context, name string) (int64, error) {
+func (c *chatwootClient) createAPIInbox(ctx context.Context, name, webhookURL string) (int64, string, error) {
 	var response struct {
-		ID int64 `json:"id"`
+		ID      int64  `json:"id"`
+		Secret  string `json:"secret"`
+		Channel struct {
+			Secret string `json:"secret"`
+		} `json:"channel"`
 	}
-	payload := map[string]any{"name": name, "channel": map[string]any{"type": "api"}}
+	payload := map[string]any{"name": name, "channel": map[string]any{"type": "api", "webhook_url": webhookURL}}
 	if err := c.doJSON(ctx, http.MethodPost, "/api/v1/accounts/"+strconv.FormatInt(c.accountID, 10)+"/inboxes", payload, &response); err != nil {
-		return 0, err
+		return 0, "", err
 	}
 	if response.ID <= 0 {
-		return 0, errors.New("Chatwoot did not return an inbox id")
+		return 0, "", errors.New("Chatwoot did not return an inbox id")
 	}
-	return response.ID, nil
+	return response.ID, firstNonEmpty(response.Channel.Secret, response.Secret), nil
+}
+
+func (c *chatwootClient) updateAPIInboxWebhook(ctx context.Context, inboxID int64, webhookURL string) (string, error) {
+	var response struct {
+		Secret  string `json:"secret"`
+		Channel struct {
+			Secret string `json:"secret"`
+		} `json:"channel"`
+	}
+	payload := map[string]any{"channel": map[string]any{"webhook_url": webhookURL}}
+	path := "/api/v1/accounts/" + strconv.FormatInt(c.accountID, 10) + "/inboxes/" + strconv.FormatInt(inboxID, 10)
+	if err := c.doJSON(ctx, http.MethodPatch, path, payload, &response); err != nil {
+		return "", err
+	}
+	return firstNonEmpty(response.Channel.Secret, response.Secret), nil
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if value != "" {
+			return value
+		}
+	}
+	return ""
 }
 
 func (c *chatwootClient) doJSON(ctx context.Context, method, path string, payload, target any) error {
@@ -218,7 +336,7 @@ func (c *chatwootClient) doJSON(ctx context.Context, method, path string, payloa
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
-		return fmt.Errorf("Chatwoot returned HTTP %d", resp.StatusCode)
+		return chatwootHTTPError{status: resp.StatusCode}
 	}
 	if target != nil {
 		body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20+1))
@@ -248,6 +366,14 @@ func validateChatwootURL(value string) (string, error) {
 		return strings.TrimRight(parsed.String(), "/"), nil
 	}
 	return "", errors.New("Chatwoot URL must use HTTPS unless its host is allowlisted internally")
+}
+
+func validateChatwootPublicURL(value string) (string, error) {
+	parsed, err := url.Parse(strings.TrimSpace(value))
+	if err != nil || parsed.Scheme != "https" || parsed.Hostname() == "" || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" {
+		return "", errors.New("WUZAPI_PUBLIC_URL must be an absolute HTTPS URL")
+	}
+	return strings.TrimRight(parsed.String(), "/"), nil
 }
 
 func hostResolvesPrivate(host string) bool {

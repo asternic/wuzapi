@@ -48,6 +48,9 @@ func (s *server) routes() {
 	}
 
 	s.router.Handle("/health", s.GetHealth()).Methods("GET")
+	// This endpoint is authenticated with Chatwoot's per-inbox HMAC, not an
+	// instance token. Keep it before the static fallback and outside authalice.
+	s.router.Handle("/chatwoot/webhook/{key}", s.ChatwootWebhook()).Methods("POST")
 
 	adminRoutes := s.router.PathPrefix("/admin").Subrouter()
 	adminRoutes.Use(s.authadmin)

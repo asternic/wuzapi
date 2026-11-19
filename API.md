@@ -323,16 +323,17 @@ Response:
 
 ---
 
-## Chatwoot integration (phase 1a)
+## Chatwoot integration (phases 1a and 1b)
 
 Chatwoot is opt-in for each instance. While disabled, it has no effect on
 existing webhooks, RabbitMQ, history, or WhatsApp traffic. The first enabled
 configuration stores the Chatwoot token encrypted and starts a durable worker
 that forwards direct text messages to Chatwoot asynchronously.
 
-The server must have a persistent `WUZAPI_GLOBAL_ENCRYPTION_KEY`; a temporary
-generated key is refused for Chatwoot configuration. HTTPS is required unless
-an internal host is explicitly listed in `WUZAPI_CHATWOOT_INTERNAL_HOSTS`.
+The server must have a persistent `WUZAPI_GLOBAL_ENCRYPTION_KEY` and an HTTPS
+`WUZAPI_PUBLIC_URL`; a temporary generated key is refused for Chatwoot
+configuration. HTTPS is required for the Chatwoot API unless an internal host
+is explicitly listed in `WUZAPI_CHATWOOT_INTERNAL_HOSTS`.
 
 | Method | Endpoint | Description |
 | --- | --- | --- |
@@ -340,6 +341,7 @@ an internal host is explicitly listed in `WUZAPI_CHATWOOT_INTERNAL_HOSTS`.
 | `GET` | `/chatwoot/config` | Reads non-secret configuration. The token is never returned. |
 | `DELETE` | `/chatwoot/config` | Disables the local integration and preserves the remote inbox. |
 | `GET` | `/chatwoot/status` | Returns pending/dead queue counts and the latest sanitized error. |
+| `POST` | `/chatwoot/webhook/{key}` | Public Chatwoot callback; authenticated only with the inbox HMAC. |
 
 Example with fictional values:
 
@@ -348,6 +350,13 @@ curl -sS -X POST http://localhost:8080/chatwoot/config \
   -H 'Token: INSTANCE_TOKEN' -H 'Content-Type: application/json' \
   --data '{"enabled":true,"url":"https://chat.example.test","account_id":1,"token":"CHATWOOT_TOKEN","inbox_name":"WuzAPI Support"}'
 ```
+
+Chatwoot callbacks must include `X-Chatwoot-Timestamp` and
+`X-Chatwoot-Signature`. WuzAPI verifies
+`sha256=HMAC-SHA256(inbox_secret, "{timestamp}.{raw_body}")` in constant time,
+rejects callbacks outside five minutes, and enqueues valid agent text replies
+without blocking the HTTP request. Groups, status, broadcast and newsletter
+destinations remain rejected.
 
 ---
 
