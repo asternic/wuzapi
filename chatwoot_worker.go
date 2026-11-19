@@ -8,7 +8,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"math/rand"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -18,7 +20,10 @@ import (
 	"time"
 
 	"github.com/rs/zerolog/log"
+	"go.mau.fi/whatsmeow"
+	"go.mau.fi/whatsmeow/proto/waE2E"
 	"go.mau.fi/whatsmeow/types"
+	"google.golang.org/protobuf/proto"
 )
 
 const (
@@ -35,20 +40,49 @@ const (
 var chatwootWorkerPollInterval = time.Second
 
 type chatwootOutboundMessage struct {
-	InstanceID  string `json:"instance_id"`
-	MessageID   string `json:"message_id"`
-	ChatJID     string `json:"chat_jid"`
-	ContactName string `json:"contact_name,omitempty"`
-	Text        string `json:"text"`
-	FromMe      bool   `json:"from_me"`
+	InstanceID  string                 `json:"instance_id"`
+	MessageID   string                 `json:"message_id"`
+	ChatJID     string                 `json:"chat_jid"`
+	ContactName string                 `json:"contact_name,omitempty"`
+	Text        string                 `json:"text"`
+	FromMe      bool                   `json:"from_me"`
+	Media       *chatwootWhatsAppMedia `json:"media,omitempty"`
+}
+
+func chatwootMessageText(message *waE2E.Message) string {
+	if message.GetConversation() != "" {
+		return message.GetConversation()
+	}
+	if message.GetExtendedTextMessage() != nil {
+		return message.GetExtendedTextMessage().GetText()
+	}
+	if message.GetImageMessage() != nil {
+		return message.GetImageMessage().GetCaption()
+	}
+	if message.GetVideoMessage() != nil {
+		return message.GetVideoMessage().GetCaption()
+	}
+	if message.GetDocumentMessage() != nil {
+		return message.GetDocumentMessage().GetCaption()
+	}
+	return ""
+}
+
+type chatwootWhatsAppMedia struct {
+	Kind     string `json:"kind"`
+	MimeType string `json:"mime_type"`
+	FileName string `json:"file_name"`
+	Payload  []byte `json:"payload"`
 }
 
 type chatwootInboundMessage struct {
-	InstanceID        string `json:"instance_id"`
-	ChatwootMessageID int64  `json:"chatwoot_message_id"`
-	ConversationID    int64  `json:"conversation_id"`
-	ChatJID           string `json:"chat_jid"`
-	Text              string `json:"text"`
+	InstanceID        string              `json:"instance_id"`
+	ChatwootMessageID int64               `json:"chatwoot_message_id"`
+	AttachmentIndex   int                 `json:"attachment_index"`
+	ConversationID    int64               `json:"conversation_id"`
+	ChatJID           string              `json:"chat_jid"`
+	Text              string              `json:"text"`
+	Attachment        *chatwootAttachment `json:"attachment,omitempty"`
 }
 
 type chatwootOutboxRow struct {
@@ -78,7 +112,7 @@ type chatwootContact struct {
 
 func (s *server) enqueueChatwootOutbound(ctx context.Context, message chatwootOutboundMessage) error {
 	jid, ok := parseJID(message.ChatJID)
-	if !ok || requireDirectChat(jid) != nil || message.InstanceID == "" || message.MessageID == "" || strings.TrimSpace(message.Text) == "" {
+	if !ok || requireDirectChat(jid) != nil || message.InstanceID == "" || message.MessageID == "" || (strings.TrimSpace(message.Text) == "" && message.Media == nil) {
 		return nil
 	}
 	var sentFromChatwoot bool
@@ -237,7 +271,7 @@ func (s *server) claimChatwootOutbox(ctx context.Context) (chatwootOutboxRow, er
 
 func (s *server) enqueueChatwootInbound(ctx context.Context, message chatwootInboundMessage) error {
 	jid, ok := parseJID(message.ChatJID)
-	if !ok || requireDirectChat(jid) != nil || message.InstanceID == "" || message.ChatwootMessageID <= 0 || strings.TrimSpace(message.Text) == "" {
+	if !ok || requireDirectChat(jid) != nil || message.InstanceID == "" || message.ChatwootMessageID <= 0 || (strings.TrimSpace(message.Text) == "" && message.Attachment == nil) {
 		return nil
 	}
 	message.ChatJID = jid.ToNonAD().String()
@@ -249,12 +283,16 @@ func (s *server) enqueueChatwootInbound(ctx context.Context, message chatwootInb
         SELECT ?, ?, ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM chatwoot_config WHERE instance_id=? AND enabled=?)
         ON CONFLICT (instance_id, direction, source_message_id) DO NOTHING`)
 	_, err = s.db.ExecContext(ctx, query, message.InstanceID, chatwootDirectionInbound, chatwootOutboxPending,
-		message.InstanceID+":"+message.ChatJID, strconv.FormatInt(message.ChatwootMessageID, 10), payload, message.InstanceID, true)
+		message.InstanceID+":"+message.ChatJID, fmt.Sprintf("%d:%d", message.ChatwootMessageID, message.AttachmentIndex), payload, message.InstanceID, true)
 	return err
 }
 
-func deterministicChatwootWhatsAppID(chatwootMessageID int64) string {
-	sum := sha256.Sum256([]byte("chatwoot:" + strconv.FormatInt(chatwootMessageID, 10)))
+func deterministicChatwootWhatsAppID(chatwootMessageID int64, attachmentIndex ...int) string {
+	index := 0
+	if len(attachmentIndex) > 0 {
+		index = attachmentIndex[0]
+	}
+	sum := sha256.Sum256([]byte(fmt.Sprintf("chatwoot:%d:%d", chatwootMessageID, index)))
 	return strings.ToUpper(fmt.Sprintf("%x", sum[:]))[:32]
 }
 
@@ -266,15 +304,18 @@ func (s *server) deliverChatwootInbound(ctx context.Context, message chatwootInb
 	if err := requireDirectChat(jid); err != nil {
 		return err
 	}
-	waMessageID := deterministicChatwootWhatsAppID(message.ChatwootMessageID)
-	mapQuery := s.db.Rebind(`INSERT INTO chatwoot_message_map (instance_id, wa_message_id, chatwoot_message_id, conversation_id, direction)
-        VALUES (?, ?, ?, ?, ?) ON CONFLICT (instance_id, wa_message_id) DO NOTHING`)
-	if _, err := s.db.Exec(mapQuery, message.InstanceID, waMessageID, message.ChatwootMessageID, message.ConversationID, chatwootDirectionInbound); err != nil {
+	waMessageID := deterministicChatwootWhatsAppID(message.ChatwootMessageID, message.AttachmentIndex)
+	mapQuery := s.db.Rebind(`INSERT INTO chatwoot_message_map (instance_id, wa_message_id, chatwoot_message_id, chatwoot_attachment_index, conversation_id, direction)
+        VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT (instance_id, wa_message_id) DO NOTHING`)
+	if _, err := s.db.Exec(mapQuery, message.InstanceID, waMessageID, message.ChatwootMessageID, message.AttachmentIndex, message.ConversationID, chatwootDirectionInbound); err != nil {
 		return err
 	}
 	var token string
 	if err := s.db.Get(&token, s.db.Rebind(`SELECT token FROM users WHERE id=?`), message.InstanceID); err != nil {
 		return errors.New("Chatwoot instance no longer exists")
+	}
+	if message.Attachment != nil {
+		return s.sendChatwootAttachmentToWhatsApp(ctx, message, jid, waMessageID)
 	}
 	body, err := json.Marshal(map[string]string{"Phone": jid.String(), "Body": message.Text, "Id": waMessageID})
 	if err != nil {
@@ -287,6 +328,78 @@ func (s *server) deliverChatwootInbound(ctx context.Context, message chatwootInb
 	if recorder.Code < http.StatusOK || recorder.Code >= http.StatusMultipleChoices {
 		return fmt.Errorf("WhatsApp send failed with HTTP %d", recorder.Code)
 	}
+	return nil
+}
+
+func (s *server) sendChatwootAttachmentToWhatsApp(ctx context.Context, message chatwootInboundMessage, recipient types.JID, waMessageID string) error {
+	var config chatwootConfigRecord
+	if err := s.db.Get(&config, s.db.Rebind(`SELECT enabled, url, account_id, token, inbox_id, inbox_name, attachment_hosts FROM chatwoot_config WHERE instance_id=?`), message.InstanceID); err != nil || !config.Enabled {
+		return errors.New("Chatwoot is not enabled for this instance")
+	}
+	media, err := downloadChatwootAttachment(ctx, *message.Attachment, config)
+	if err != nil {
+		return err
+	}
+	defer media.Close()
+	client := clientManager.GetWhatsmeowClient(message.InstanceID)
+	if client == nil {
+		return errors.New("WhatsApp session is unavailable")
+	}
+	messageType := strings.ToLower(message.Attachment.FileType)
+	if messageType == "" {
+		messageType = "file"
+	}
+	var kind whatsmeow.MediaType
+	switch messageType {
+	case "image", "sticker":
+		kind = whatsmeow.MediaImage
+	case "video":
+		kind = whatsmeow.MediaVideo
+	case "audio":
+		kind = whatsmeow.MediaAudio
+	default:
+		kind = whatsmeow.MediaDocument
+	}
+	uploaded, err := uploadMedia(ctx, client, media, kind)
+	if err != nil {
+		return err
+	}
+	mimeType := media.MIME
+	if mimeType == "" {
+		mimeType = message.Attachment.MimeType
+	}
+	if mimeType == "" {
+		mimeType = "application/octet-stream"
+	}
+	var outbound *waE2E.Message
+	switch kind {
+	case whatsmeow.MediaImage:
+		thumbnail, thumbnailErr := mediaThumbnail(ctx, media)
+		if thumbnailErr != nil {
+			return thumbnailErr
+		}
+		outbound = &waE2E.Message{ImageMessage: &waE2E.ImageMessage{URL: proto.String(uploaded.URL), DirectPath: proto.String(uploaded.DirectPath), MediaKey: uploaded.MediaKey, Mimetype: proto.String(mimeType), FileEncSHA256: uploaded.FileEncSHA256, FileSHA256: uploaded.FileSHA256, FileLength: proto.Uint64(uint64(media.Size)), Caption: proto.String(message.Text), JPEGThumbnail: thumbnail}}
+	case whatsmeow.MediaVideo:
+		outbound = &waE2E.Message{VideoMessage: &waE2E.VideoMessage{URL: proto.String(uploaded.URL), DirectPath: proto.String(uploaded.DirectPath), MediaKey: uploaded.MediaKey, Mimetype: proto.String(mimeType), FileEncSHA256: uploaded.FileEncSHA256, FileSHA256: uploaded.FileSHA256, FileLength: proto.Uint64(uint64(media.Size)), Caption: proto.String(message.Text)}}
+	case whatsmeow.MediaAudio:
+		outbound = &waE2E.Message{AudioMessage: &waE2E.AudioMessage{URL: proto.String(uploaded.URL), DirectPath: proto.String(uploaded.DirectPath), MediaKey: uploaded.MediaKey, Mimetype: proto.String(mimeType), FileEncSHA256: uploaded.FileEncSHA256, FileSHA256: uploaded.FileSHA256, FileLength: proto.Uint64(uint64(media.Size)), PTT: proto.Bool(false)}}
+	default:
+		fileName := message.Attachment.FileName
+		if fileName == "" {
+			fileName = media.Name
+		}
+		outbound = &waE2E.Message{DocumentMessage: &waE2E.DocumentMessage{URL: proto.String(uploaded.URL), DirectPath: proto.String(uploaded.DirectPath), MediaKey: uploaded.MediaKey, Mimetype: proto.String(mimeType), FileEncSHA256: uploaded.FileEncSHA256, FileSHA256: uploaded.FileSHA256, FileLength: proto.Uint64(uint64(media.Size)), FileName: proto.String(fileName), Caption: proto.String(message.Text)}}
+	}
+	response, err := sendMessageWithRecovery(message.InstanceID, client, ctx, recipient, outbound, whatsmeow.SendRequestExtra{ID: waMessageID})
+	if err != nil {
+		return err
+	}
+	var history int
+	_ = s.db.Get(&history, s.db.Rebind(`SELECT history FROM users WHERE id=?`), message.InstanceID)
+	s.saveOutgoingMessageToHistory(message.InstanceID, recipient.String(), waMessageID, s.getMessageType(outbound), message.Text, "", response.Timestamp, history, outbound)
+	var token string
+	_ = s.db.Get(&token, s.db.Rebind(`SELECT token FROM users WHERE id=?`), message.InstanceID)
+	s.publishSentMessageEvent(token, message.InstanceID, message.InstanceID, recipient, waMessageID, outbound, response.Timestamp)
 	return nil
 }
 
@@ -363,7 +476,7 @@ func (s *server) deliverChatwootOutbound(ctx context.Context, message chatwootOu
 		return nil
 	}
 	var config chatwootConfigRecord
-	if err := s.db.Get(&config, s.db.Rebind(`SELECT enabled, url, account_id, token, inbox_id, inbox_name FROM chatwoot_config WHERE instance_id=?`), message.InstanceID); err != nil || !config.Enabled {
+	if err := s.db.Get(&config, s.db.Rebind(`SELECT enabled, url, account_id, token, inbox_id, inbox_name, attachment_hosts FROM chatwoot_config WHERE instance_id=?`), message.InstanceID); err != nil || !config.Enabled {
 		return errors.New("Chatwoot is not enabled for this instance")
 	}
 	token, err := decryptHMACKey(config.Token)
@@ -379,7 +492,20 @@ func (s *server) deliverChatwootOutbound(ctx context.Context, message chatwootOu
 	if message.FromMe {
 		messageType = "outgoing"
 	}
-	chatwootMessageID, err := client.createConversationMessage(ctx, conversationID, message.Text, messageType, "WAID:"+message.MessageID)
+	var chatwootMessageID int64
+	if message.Media != nil {
+		media, err := s.downloadWhatsAppMediaForChatwoot(ctx, message.InstanceID, *message.Media)
+		if err != nil {
+			return err
+		}
+		defer media.Close()
+		chatwootMessageID, err = client.createConversationMediaMessage(ctx, conversationID, message.Text, messageType, "WAID:"+message.MessageID, media)
+		if err != nil {
+			return err
+		}
+	} else {
+		chatwootMessageID, err = client.createConversationMessage(ctx, conversationID, message.Text, messageType, "WAID:"+message.MessageID)
+	}
 	if err != nil {
 		return err
 	}
@@ -390,6 +516,117 @@ func (s *server) deliverChatwootOutbound(ctx context.Context, message chatwootOu
 	_ = contactID
 	_ = sourceID
 	return nil
+}
+
+func chatwootWhatsAppMediaFromMessage(message *waE2E.Message) (*chatwootWhatsAppMedia, error) {
+	var (
+		kind     string
+		mimeType string
+		fileName string
+		payload  *waE2E.Message
+	)
+	switch {
+	case message.GetImageMessage() != nil:
+		kind, mimeType = "image", message.GetImageMessage().GetMimetype()
+		payload = &waE2E.Message{ImageMessage: message.GetImageMessage()}
+	case message.GetVideoMessage() != nil:
+		kind, mimeType = "video", message.GetVideoMessage().GetMimetype()
+		payload = &waE2E.Message{VideoMessage: message.GetVideoMessage()}
+	case message.GetAudioMessage() != nil:
+		kind, mimeType = "audio", message.GetAudioMessage().GetMimetype()
+		payload = &waE2E.Message{AudioMessage: message.GetAudioMessage()}
+	case message.GetDocumentMessage() != nil:
+		kind, mimeType = "document", message.GetDocumentMessage().GetMimetype()
+		fileName = message.GetDocumentMessage().GetFileName()
+		payload = &waE2E.Message{DocumentMessage: message.GetDocumentMessage()}
+	case message.GetStickerMessage() != nil:
+		kind, mimeType = "sticker", message.GetStickerMessage().GetMimetype()
+		payload = &waE2E.Message{StickerMessage: message.GetStickerMessage()}
+	default:
+		return nil, nil
+	}
+	encoded, err := proto.Marshal(payload)
+	if err != nil {
+		return nil, err
+	}
+	return &chatwootWhatsAppMedia{Kind: kind, MimeType: mimeType, FileName: fileName, Payload: encoded}, nil
+}
+
+func (s *server) downloadWhatsAppMediaForChatwoot(parent context.Context, instanceID string, source chatwootWhatsAppMedia) (*mediaFile, error) {
+	client := clientManager.GetWhatsmeowClient(instanceID)
+	if client == nil {
+		return nil, errors.New("WhatsApp session is unavailable")
+	}
+	message := &waE2E.Message{}
+	if err := proto.Unmarshal(source.Payload, message); err != nil {
+		return nil, errors.New("invalid queued WhatsApp media")
+	}
+	var downloadable whatsmeow.DownloadableMessage
+	switch source.Kind {
+	case "image":
+		downloadable = message.GetImageMessage()
+	case "video":
+		downloadable = message.GetVideoMessage()
+	case "audio":
+		downloadable = message.GetAudioMessage()
+	case "document":
+		downloadable = message.GetDocumentMessage()
+	case "sticker":
+		downloadable = message.GetStickerMessage()
+	}
+	if downloadable == nil {
+		return nil, errors.New("queued WhatsApp media is unavailable")
+	}
+	ctx, cancel, err := mediaContext(parent)
+	if err != nil {
+		return nil, err
+	}
+	defer cancel()
+	ctx, timeoutCancel := context.WithTimeout(ctx, chatwootMediaDownloadTimeout(source.Kind))
+	defer timeoutCancel()
+	store, _ := getMediaStore()
+	release, err := store.acquire(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
+	name := source.FileName
+	if name == "" {
+		name = "whatsapp-" + source.Kind
+	}
+	media, file, err := store.create(name, source.MimeType)
+	if err != nil {
+		return nil, err
+	}
+	err = client.DownloadToFile(ctx, downloadable, file)
+	closeErr := file.Close()
+	if err == nil {
+		err = closeErr
+	}
+	if err == nil {
+		err = media.refresh()
+	}
+	if err == nil && media.Size > chatwootAttachmentLimit(source.Kind) {
+		err = errors.New("WhatsApp media exceeds the allowed size")
+	}
+	if err != nil {
+		media.Close()
+		return nil, err
+	}
+	return media, nil
+}
+
+func chatwootMediaDownloadTimeout(kind string) time.Duration {
+	switch kind {
+	case "image", "sticker":
+		return downloadTimeoutImage
+	case "audio":
+		return downloadTimeoutAudio
+	case "video", "document":
+		return downloadTimeoutDocument
+	default:
+		return downloadTimeoutDocument
+	}
 }
 
 func (s *server) ensureChatwootConversation(ctx context.Context, client *chatwootClient, inboxID int64, message chatwootOutboundMessage) (int64, string, int64, error) {
@@ -557,6 +794,72 @@ func (c *chatwootClient) createConversationMessage(ctx context.Context, conversa
 	if response.ID <= 0 {
 		return 0, errors.New("Chatwoot did not return a message id")
 	}
+	return response.ID, nil
+}
+
+func (c *chatwootClient) createConversationMediaMessage(ctx context.Context, conversationID int64, content, messageType, sourceID string, media *mediaFile) (int64, error) {
+	reader, err := media.Open()
+	if err != nil {
+		return 0, err
+	}
+	defer reader.Close()
+	pipeReader, pipeWriter := io.Pipe()
+	writer := multipart.NewWriter(pipeWriter)
+	writeErr := make(chan error, 1)
+	go func() {
+		defer close(writeErr)
+		defer pipeWriter.Close()
+		defer writer.Close()
+		if err := writer.WriteField("content", content); err != nil {
+			writeErr <- err
+			return
+		}
+		if err := writer.WriteField("message_type", messageType); err != nil {
+			writeErr <- err
+			return
+		}
+		if err := writer.WriteField("private", "false"); err != nil {
+			writeErr <- err
+			return
+		}
+		part, err := writer.CreateFormFile("attachments[]", media.Name)
+		if err != nil {
+			writeErr <- err
+			return
+		}
+		_, err = io.Copy(part, reader)
+		writeErr <- err
+	}()
+	path := "/api/v1/accounts/" + strconv.FormatInt(c.accountID, 10) + "/conversations/" + strconv.FormatInt(conversationID, 10) + "/messages"
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+path, pipeReader)
+	if err != nil {
+		pipeReader.Close()
+		return 0, err
+	}
+	req.Header.Set("Authorization", "Bearer "+c.token)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	resp, err := c.http.Do(req)
+	if err != nil {
+		pipeReader.Close()
+		return 0, err
+	}
+	defer resp.Body.Close()
+	if err := <-writeErr; err != nil {
+		return 0, err
+	}
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+		return 0, chatwootHTTPError{status: resp.StatusCode}
+	}
+	var response struct {
+		ID int64 `json:"id"`
+	}
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&response); err != nil {
+		return 0, err
+	}
+	if response.ID <= 0 {
+		return 0, errors.New("Chatwoot did not return a message id")
+	}
+	_ = sourceID // retained in the map; multipart endpoint has no source_id parameter.
 	return response.ID, nil
 }
 

@@ -19,23 +19,25 @@ import (
 const chatwootRequestTimeout = 15 * time.Second
 
 type chatwootConfigRequest struct {
-	Enabled   bool   `json:"enabled"`
-	URL       string `json:"url"`
-	AccountID int64  `json:"account_id"`
-	Token     string `json:"token"`
-	InboxID   int64  `json:"inbox_id"`
-	InboxName string `json:"inbox_name"`
+	Enabled         bool     `json:"enabled"`
+	URL             string   `json:"url"`
+	AccountID       int64    `json:"account_id"`
+	Token           string   `json:"token"`
+	InboxID         int64    `json:"inbox_id"`
+	InboxName       string   `json:"inbox_name"`
+	AttachmentHosts []string `json:"attachment_hosts"`
 }
 
 type chatwootConfigRecord struct {
-	Enabled       bool   `db:"enabled"`
-	URL           string `db:"url"`
-	AccountID     int64  `db:"account_id"`
-	Token         []byte `db:"token"`
-	InboxID       int64  `db:"inbox_id"`
-	InboxName     string `db:"inbox_name"`
-	WebhookKey    string `db:"webhook_key"`
-	WebhookSecret []byte `db:"webhook_secret"`
+	Enabled         bool   `db:"enabled"`
+	URL             string `db:"url"`
+	AccountID       int64  `db:"account_id"`
+	Token           []byte `db:"token"`
+	InboxID         int64  `db:"inbox_id"`
+	InboxName       string `db:"inbox_name"`
+	WebhookKey      string `db:"webhook_key"`
+	WebhookSecret   []byte `db:"webhook_secret"`
+	AttachmentHosts string `db:"attachment_hosts"`
 }
 
 func (s *server) ConfigureChatwoot() http.HandlerFunc {
@@ -60,6 +62,11 @@ func (s *server) ConfigureChatwoot() http.HandlerFunc {
 			s.Respond(w, r, http.StatusBadRequest, err)
 			return
 		}
+		attachmentHosts, err := normalizeChatwootAttachmentHosts(request.AttachmentHosts)
+		if err != nil {
+			s.Respond(w, r, http.StatusBadRequest, err)
+			return
+		}
 		if request.AccountID <= 0 || strings.TrimSpace(request.Token) == "" {
 			s.Respond(w, r, http.StatusBadRequest, errors.New("account_id and token are required"))
 			return
@@ -74,7 +81,7 @@ func (s *server) ConfigureChatwoot() http.HandlerFunc {
 			return
 		}
 		var current chatwootConfigRecord
-		_ = s.db.Get(&current, s.db.Rebind(`SELECT enabled, url, account_id, token, inbox_id, inbox_name, webhook_key, webhook_secret FROM chatwoot_config WHERE instance_id=?`), instanceID)
+		_ = s.db.Get(&current, s.db.Rebind(`SELECT enabled, url, account_id, token, inbox_id, inbox_name, webhook_key, webhook_secret, attachment_hosts FROM chatwoot_config WHERE instance_id=?`), instanceID)
 		webhookKey := current.WebhookKey
 		if webhookKey == "" {
 			webhookKey, err = GenerateRandomID()
@@ -120,12 +127,17 @@ func (s *server) ConfigureChatwoot() http.HandlerFunc {
 		} else {
 			encryptedWebhookSecret = current.WebhookSecret
 		}
-		query := s.db.Rebind(`INSERT INTO chatwoot_config (instance_id, enabled, url, account_id, token, inbox_id, inbox_name, webhook_key, webhook_secret, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+		attachmentHostsJSON, err := json.Marshal(attachmentHosts)
+		if err != nil {
+			s.Respond(w, r, http.StatusInternalServerError, errors.New("could not serialize Chatwoot attachment hosts"))
+			return
+		}
+		query := s.db.Rebind(`INSERT INTO chatwoot_config (instance_id, enabled, url, account_id, token, inbox_id, inbox_name, webhook_key, webhook_secret, attachment_hosts, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
             ON CONFLICT (instance_id) DO UPDATE SET enabled=EXCLUDED.enabled, url=EXCLUDED.url,
             account_id=EXCLUDED.account_id, token=EXCLUDED.token, inbox_id=EXCLUDED.inbox_id,
-            inbox_name=EXCLUDED.inbox_name, webhook_key=EXCLUDED.webhook_key, webhook_secret=EXCLUDED.webhook_secret, updated_at=CURRENT_TIMESTAMP`)
-		if _, err := s.db.Exec(query, instanceID, request.Enabled, baseURL, request.AccountID, encryptedToken, inboxID, request.InboxName, webhookKey, encryptedWebhookSecret); err != nil {
+            inbox_name=EXCLUDED.inbox_name, webhook_key=EXCLUDED.webhook_key, webhook_secret=EXCLUDED.webhook_secret, attachment_hosts=EXCLUDED.attachment_hosts, updated_at=CURRENT_TIMESTAMP`)
+		if _, err := s.db.Exec(query, instanceID, request.Enabled, baseURL, request.AccountID, encryptedToken, inboxID, request.InboxName, webhookKey, encryptedWebhookSecret, string(attachmentHostsJSON)); err != nil {
 			s.Respond(w, r, http.StatusInternalServerError, errors.New("could not save the Chatwoot configuration"))
 			return
 		}
@@ -140,7 +152,7 @@ func (s *server) GetChatwootConfig() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		instanceID := r.Context().Value("userinfo").(Values).Get("Id")
 		var config chatwootConfigRecord
-		if err := s.db.Get(&config, s.db.Rebind(`SELECT enabled, url, account_id, token, inbox_id, inbox_name, webhook_key, webhook_secret FROM chatwoot_config WHERE instance_id=?`), instanceID); err != nil {
+		if err := s.db.Get(&config, s.db.Rebind(`SELECT enabled, url, account_id, token, inbox_id, inbox_name, webhook_key, webhook_secret, attachment_hosts FROM chatwoot_config WHERE instance_id=?`), instanceID); err != nil {
 			s.Respond(w, r, http.StatusNotFound, errors.New("Chatwoot is not configured"))
 			return
 		}
@@ -152,6 +164,7 @@ func (s *server) GetChatwootConfig() http.HandlerFunc {
 			"inbox_name":         config.InboxName,
 			"token_configured":   len(config.Token) > 0,
 			"webhook_configured": len(config.WebhookSecret) > 0,
+			"attachment_hosts":   chatwootAttachmentHosts(config),
 		})
 		if err != nil {
 			s.Respond(w, r, http.StatusInternalServerError, errors.New("could not serialize the Chatwoot configuration"))
@@ -399,4 +412,36 @@ func chatwootInternalHostAllowed(host string) bool {
 		}
 	}
 	return net.ParseIP(host) != nil && false
+}
+
+func normalizeChatwootAttachmentHosts(hosts []string) ([]string, error) {
+	result := make([]string, 0, len(hosts))
+	seen := make(map[string]struct{}, len(hosts))
+	for _, rawHost := range hosts {
+		host := strings.ToLower(strings.TrimSpace(rawHost))
+		if host == "" {
+			continue
+		}
+		if strings.Contains(host, "://") || strings.ContainsAny(host, "/?#@") || strings.Contains(host, ":") {
+			return nil, errors.New("attachment_hosts must contain hostnames only")
+		}
+		if _, ok := seen[host]; ok {
+			continue
+		}
+		seen[host] = struct{}{}
+		result = append(result, host)
+	}
+	return result, nil
+}
+
+func chatwootAttachmentHosts(config chatwootConfigRecord) []string {
+	hosts := []string{}
+	if parsed, err := url.Parse(config.URL); err == nil && parsed.Hostname() != "" {
+		hosts = append(hosts, strings.ToLower(parsed.Hostname()))
+	}
+	var configured []string
+	if json.Unmarshal([]byte(config.AttachmentHosts), &configured) == nil {
+		hosts = append(hosts, configured...)
+	}
+	return hosts
 }

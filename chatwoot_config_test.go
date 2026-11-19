@@ -65,7 +65,7 @@ func TestChatwootConfigCreatesInboxAndMasksCredentials(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	body := `{"enabled":true,"url":"` + chatwoot.URL + `","account_id":1,"token":"fixture-chatwoot-token","inbox_name":"WuzAPI Test"}`
+	body := `{"enabled":true,"url":"` + chatwoot.URL + `","account_id":1,"token":"fixture-chatwoot-token","inbox_name":"WuzAPI Test","attachment_hosts":["storage.example.test"]}`
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodPost, "/chatwoot/config", strings.NewReader(body))
 	request.Header.Set("Token", "chatwoot-instance-token")
@@ -97,7 +97,7 @@ func TestChatwootConfigCreatesInboxAndMasksCredentials(t *testing.T) {
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("GET /chatwoot/config = %d: %s", recorder.Code, recorder.Body.String())
 	}
-	if strings.Contains(recorder.Body.String(), "fixture-chatwoot-token") || strings.Contains(recorder.Body.String(), "fixture-webhook-secret") || !strings.Contains(recorder.Body.String(), `"token_configured":true`) || !strings.Contains(recorder.Body.String(), `"webhook_configured":true`) {
+	if strings.Contains(recorder.Body.String(), "fixture-chatwoot-token") || strings.Contains(recorder.Body.String(), "fixture-webhook-secret") || !strings.Contains(recorder.Body.String(), `"token_configured":true`) || !strings.Contains(recorder.Body.String(), `"webhook_configured":true`) || !strings.Contains(recorder.Body.String(), `"storage.example.test"`) {
 		t.Fatalf("unsafe config response: %s", recorder.Body.String())
 	}
 }

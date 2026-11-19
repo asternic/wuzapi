@@ -268,7 +268,7 @@ func TestChatwootSchemaUsesItsOwnMigrationRegistry(t *testing.T) {
 			t.Fatal(err)
 		}
 		var count int
-		if err := db.Get(&count, "SELECT COUNT(*) FROM chatwoot_schema_migrations"); err != nil || count != 2 {
+		if err := db.Get(&count, "SELECT COUNT(*) FROM chatwoot_schema_migrations"); err != nil || count != 4 {
 			t.Fatalf("Chatwoot migration count = %d, %v", count, err)
 		}
 	})

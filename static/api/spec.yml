@@ -34,6 +34,10 @@ paths:
                 token: {type: string, format: password}
                 inbox_id: {type: integer, minimum: 1, description: Reuse an existing API inbox when set.}
                 inbox_name: {type: string, example: WuzAPI Support}
+                attachment_hosts:
+                  type: array
+                  description: Additional HTTPS storage hostnames allowed for Chatwoot attachments. Redirects are revalidated; media is streamed through private temporary files.
+                  items: {type: string, example: storage.example.test}
       responses:
         '200': {description: Configuration saved; response includes inbox_id and the generated webhook_url.}
         '400': {description: Invalid URL, missing persistent encryption key, or Chatwoot validation failed.}

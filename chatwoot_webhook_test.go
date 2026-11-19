@@ -29,7 +29,7 @@ func TestChatwootWebhookVerifiesSignatureAndQueuesOutgoingMessage(t *testing.T) 
 		t.Fatalf("webhook status = %d: %s", recorder.Code, recorder.Body.String())
 	}
 	var count int
-	if err := s.db.Get(&count, "SELECT COUNT(*) FROM chatwoot_outbox WHERE direction=? AND source_message_id=?", chatwootDirectionInbound, "301"); err != nil || count != 1 {
+	if err := s.db.Get(&count, "SELECT COUNT(*) FROM chatwoot_outbox WHERE direction=? AND source_message_id=?", chatwootDirectionInbound, "301:0"); err != nil || count != 1 {
 		t.Fatalf("queued inbound count = %d, %v", count, err)
 	}
 }
@@ -82,8 +82,41 @@ func TestChatwootWebhookDeduplicatesDeliveries(t *testing.T) {
 		}
 	}
 	var count int
-	if err := s.db.Get(&count, "SELECT COUNT(*) FROM chatwoot_outbox WHERE direction=? AND source_message_id=?", chatwootDirectionInbound, "401"); err != nil || count != 1 {
+	if err := s.db.Get(&count, "SELECT COUNT(*) FROM chatwoot_outbox WHERE direction=? AND source_message_id=?", chatwootDirectionInbound, "401:0"); err != nil || count != 1 {
 		t.Fatalf("deduplicated rows = %d, %v", count, err)
+	}
+}
+
+func TestChatwootWebhookQueuesEachAttachmentWithCaptionOnlyOnce(t *testing.T) {
+	s := makeTestServer(t)
+	key := configureChatwootWebhook(t, s, "webhook-media", "webhook-media-token", "webhook-secret", 44)
+	if _, err := s.db.Exec(s.db.Rebind(`INSERT INTO chatwoot_contact_map (instance_id, chat_jid, contact_id, source_id, conversation_id) VALUES (?, ?, ?, ?, ?)`), "webhook-media", "123@lid", 101, "wuzapi:123@lid", 201); err != nil {
+		t.Fatal(err)
+	}
+	body := `{"event":"message_created","id":501,"message_type":"outgoing","private":false,"inbox":{"id":44},"conversation":{"id":201},"content":"caption","content_attributes":{},"attachments":[{"data_url":"https://storage.example.test/one","file_type":"image","file_name":"one.png"},{"data_url":"https://storage.example.test/two","file_type":"file","file_name":"two.pdf"}]}`
+	recorder := httptest.NewRecorder()
+	s.router.ServeHTTP(recorder, signedChatwootRequest(t, key, body, "webhook-secret", time.Now().UTC()))
+	if recorder.Code != http.StatusNoContent {
+		t.Fatalf("webhook status = %d: %s", recorder.Code, recorder.Body.String())
+	}
+	var rows []struct {
+		SourceMessageID string `db:"source_message_id"`
+		Payload         []byte `db:"payload"`
+	}
+	if err := s.db.Select(&rows, "SELECT source_message_id, payload FROM chatwoot_outbox WHERE direction=? ORDER BY source_message_id", chatwootDirectionInbound); err != nil || len(rows) != 2 {
+		t.Fatalf("attachment rows = %+v, %v", rows, err)
+	}
+	for index, row := range rows {
+		var message chatwootInboundMessage
+		if err := json.Unmarshal(row.Payload, &message); err != nil {
+			t.Fatal(err)
+		}
+		if row.SourceMessageID != []string{"501:0", "501:1"}[index] || message.Attachment == nil || message.AttachmentIndex != index {
+			t.Fatalf("attachment row = %+v / %+v", row, message)
+		}
+		if message.Text != []string{"caption", ""}[index] {
+			t.Fatalf("attachment caption = %q", message.Text)
+		}
 	}
 }
 

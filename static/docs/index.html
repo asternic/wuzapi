@@ -358,6 +358,7 @@
                 <h3><span class="method get">GET</span> <span class="path">/chatwoot/status</span></h3>
                 <p>Returns pending and dead-letter counts plus the most recent sanitized delivery error.</p>
             </div>
+            <p>Images, videos, audio, documents and stickers are transferred through private temporary files. Configure <code>attachment_hosts</code> only with trusted HTTPS storage hostnames; every redirect is checked again. Audio-to-PTT conversion is planned separately.</p>
             <p>The callback at <code>/chatwoot/webhook/{key}</code> is public but verifies Chatwoot's timestamped HMAC signature in constant time. It accepts only agent text replies mapped to direct chats; groups, status, broadcast and newsletters remain blocked.</p>
         </section>
 

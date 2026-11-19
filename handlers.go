@@ -8202,8 +8202,11 @@ func (s *server) publishSentMessageEvent(token, userID, txtid string, recipient 
 	postmap := make(map[string]interface{})
 	postmap["type"] = "Message"
 	postmap["event"] = messageEvent
-	if err := s.enqueueChatwootOutbound(context.Background(), chatwootOutboundMessage{
-		InstanceID: userID, MessageID: msgid, ChatJID: recipient.String(), Text: messageText(msg), FromMe: true,
+	media, mediaErr := chatwootWhatsAppMediaFromMessage(msg)
+	if mediaErr != nil {
+		log.Warn().Err(mediaErr).Str("instance_id", userID).Str("message_id", msgid).Msg("Could not prepare sent media for Chatwoot")
+	} else if err := s.enqueueChatwootOutbound(context.Background(), chatwootOutboundMessage{
+		InstanceID: userID, MessageID: msgid, ChatJID: recipient.String(), Text: chatwootMessageText(msg), FromMe: true, Media: media,
 	}); err != nil {
 		log.Warn().Err(err).Str("instance_id", userID).Str("message_id", msgid).Msg("Could not queue sent message for Chatwoot")
 	}

@@ -14,6 +14,8 @@ type chatwootMigration struct {
 var chatwootMigrations = []chatwootMigration{
 	{ID: 1, Name: "foundation"},
 	{ID: 2, Name: "webhook_credentials"},
+	{ID: 3, Name: "attachment_hosts"},
+	{ID: 4, Name: "attachment_message_map"},
 }
 
 const chatwootFoundationSQL = `
@@ -115,6 +117,10 @@ func applyChatwootMigration(db *sqlx.DB, migration chatwootMigration) error {
 		}
 	case 2:
 		err = applyChatwootWebhookCredentialsMigration(db.DriverName(), tx)
+	case 3:
+		err = applyChatwootAttachmentHostsMigration(db.DriverName(), tx)
+	case 4:
+		err = applyChatwootAttachmentMessageMapMigration(db.DriverName(), tx)
 	default:
 		return fmt.Errorf("unknown migration")
 	}
@@ -125,6 +131,38 @@ func applyChatwootMigration(db *sqlx.DB, migration chatwootMigration) error {
 		return err
 	}
 	return tx.Commit()
+}
+
+func applyChatwootAttachmentMessageMapMigration(driver string, tx *sqlx.Tx) error {
+	if driver == "sqlite" {
+		if _, err := tx.Exec(`ALTER TABLE chatwoot_message_map RENAME TO chatwoot_message_map_old;
+            CREATE TABLE chatwoot_message_map (
+                instance_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                wa_message_id TEXT NOT NULL DEFAULT '', chatwoot_message_id INTEGER,
+                chatwoot_attachment_index INTEGER NOT NULL DEFAULT 0, conversation_id INTEGER,
+                direction TEXT NOT NULL, created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (instance_id, wa_message_id),
+                UNIQUE (instance_id, chatwoot_message_id, chatwoot_attachment_index));
+            INSERT INTO chatwoot_message_map (instance_id, wa_message_id, chatwoot_message_id, chatwoot_attachment_index, conversation_id, direction, created_at)
+                SELECT instance_id, wa_message_id, chatwoot_message_id, 0, conversation_id, direction, created_at FROM chatwoot_message_map_old;
+            DROP TABLE chatwoot_message_map_old;`); err != nil {
+			return err
+		}
+		return nil
+	}
+	_, err := tx.Exec(`ALTER TABLE chatwoot_message_map ADD COLUMN IF NOT EXISTS chatwoot_attachment_index INTEGER NOT NULL DEFAULT 0;
+        ALTER TABLE chatwoot_message_map DROP CONSTRAINT IF EXISTS chatwoot_message_map_instance_id_chatwoot_message_id_key;
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_chatwoot_message_map_chatwoot_attachment
+            ON chatwoot_message_map (instance_id, chatwoot_message_id, chatwoot_attachment_index);`)
+	return err
+}
+
+func applyChatwootAttachmentHostsMigration(driver string, tx *sqlx.Tx) error {
+	if driver == "sqlite" {
+		return addColumnIfNotExistsSQLite(tx, "chatwoot_config", "attachment_hosts", "TEXT NOT NULL DEFAULT '[]'")
+	}
+	_, err := tx.Exec(`ALTER TABLE chatwoot_config ADD COLUMN IF NOT EXISTS attachment_hosts TEXT NOT NULL DEFAULT '[]'`)
+	return err
 }
 
 func applyChatwootWebhookCredentialsMigration(driver string, tx *sqlx.Tx) error {

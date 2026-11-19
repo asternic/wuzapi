@@ -348,7 +348,7 @@ Example with fictional values:
 ```bash
 curl -sS -X POST http://localhost:8080/chatwoot/config \
   -H 'Token: INSTANCE_TOKEN' -H 'Content-Type: application/json' \
-  --data '{"enabled":true,"url":"https://chat.example.test","account_id":1,"token":"CHATWOOT_TOKEN","inbox_name":"WuzAPI Support"}'
+  --data '{"enabled":true,"url":"https://chat.example.test","account_id":1,"token":"CHATWOOT_TOKEN","inbox_name":"WuzAPI Support","attachment_hosts":["storage.example.test"]}'
 ```
 
 Chatwoot callbacks must include `X-Chatwoot-Timestamp` and
@@ -357,6 +357,17 @@ Chatwoot callbacks must include `X-Chatwoot-Timestamp` and
 rejects callbacks outside five minutes, and enqueues valid agent text replies
 without blocking the HTTP request. Groups, status, broadcast and newsletter
 destinations remain rejected.
+
+`attachment_hosts` is an optional list of HTTPS storage hostnames used by
+Chatwoot attachments. Redirects are revalidated against this allowlist before
+they are downloaded; filesystem paths and arbitrary URLs are never accepted.
+
+Phase 1c forwards images, videos, audio, documents and stickers in both
+directions. WhatsApp media is re-downloaded by the queue worker into a private
+temporary file and uploaded to Chatwoot as streaming multipart data; it does
+not reuse the existing webhook delivery file. Chatwoot attachments are limited
+to 16 MiB for images/audio and 100 MiB for video/documents. Audio transcoding
+to WhatsApp PTT/Opus is deferred to phase 2.
 
 ---
 

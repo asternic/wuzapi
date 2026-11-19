@@ -19,12 +19,13 @@ const (
 )
 
 type chatwootWebhookPayload struct {
-	Event             string         `json:"event"`
-	ID                int64          `json:"id"`
-	MessageType       string         `json:"message_type"`
-	Private           bool           `json:"private"`
-	Content           string         `json:"content"`
-	ContentAttributes map[string]any `json:"content_attributes"`
+	Event             string               `json:"event"`
+	ID                int64                `json:"id"`
+	MessageType       string               `json:"message_type"`
+	Private           bool                 `json:"private"`
+	Content           string               `json:"content"`
+	ContentAttributes map[string]any       `json:"content_attributes"`
+	Attachments       []chatwootAttachment `json:"attachments"`
 	Inbox             struct {
 		ID int64 `json:"id"`
 	} `json:"inbox"`
@@ -67,12 +68,7 @@ func (s *server) ChatwootWebhook() http.HandlerFunc {
 			http.Error(w, "invalid JSON", http.StatusBadRequest)
 			return
 		}
-		if payload.Event != "message_created" || payload.ID <= 0 || payload.MessageType != "outgoing" || payload.Private || payload.Inbox.ID != config.InboxID || payload.Conversation.ID <= 0 || payload.Content == "" || payload.ContentAttributes["wuzapi_source"] == true {
-			w.WriteHeader(http.StatusNoContent)
-			return
-		}
-		var mapped bool
-		if err := s.db.Get(&mapped, s.db.Rebind(`SELECT EXISTS(SELECT 1 FROM chatwoot_message_map WHERE instance_id=? AND chatwoot_message_id=?)`), config.InstanceID, payload.ID); err != nil || mapped {
+		if payload.Event != "message_created" || payload.ID <= 0 || payload.MessageType != "outgoing" || payload.Private || payload.Inbox.ID != config.InboxID || payload.Conversation.ID <= 0 || (payload.Content == "" && len(payload.Attachments) == 0) || payload.ContentAttributes["wuzapi_source"] == true {
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
@@ -81,11 +77,25 @@ func (s *server) ChatwootWebhook() http.HandlerFunc {
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
-		if err := s.enqueueChatwootInbound(r.Context(), chatwootInboundMessage{
-			InstanceID: config.InstanceID, ChatwootMessageID: payload.ID, ConversationID: payload.Conversation.ID, ChatJID: chatJID, Text: payload.Content,
-		}); err != nil {
-			http.Error(w, "queue unavailable", http.StatusServiceUnavailable)
-			return
+		deliveries := len(payload.Attachments)
+		if deliveries == 0 {
+			deliveries = 1
+		}
+		for index := 0; index < deliveries; index++ {
+			var attachment *chatwootAttachment
+			text := payload.Content
+			if len(payload.Attachments) > 0 {
+				attachment = &payload.Attachments[index]
+				if index > 0 {
+					text = ""
+				}
+			}
+			if err := s.enqueueChatwootInbound(r.Context(), chatwootInboundMessage{
+				InstanceID: config.InstanceID, ChatwootMessageID: payload.ID, AttachmentIndex: index, ConversationID: payload.Conversation.ID, ChatJID: chatJID, Text: text, Attachment: attachment,
+			}); err != nil {
+				http.Error(w, "queue unavailable", http.StatusServiceUnavailable)
+				return
+			}
 		}
 		w.WriteHeader(http.StatusNoContent)
 	}
