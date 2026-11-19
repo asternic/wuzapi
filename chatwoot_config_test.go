@@ -97,7 +97,7 @@ func TestChatwootConfigCreatesInboxAndMasksCredentials(t *testing.T) {
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("GET /chatwoot/config = %d: %s", recorder.Code, recorder.Body.String())
 	}
-	if strings.Contains(recorder.Body.String(), "fixture-chatwoot-token") || strings.Contains(recorder.Body.String(), "fixture-webhook-secret") || !strings.Contains(recorder.Body.String(), `"token_configured":true`) || !strings.Contains(recorder.Body.String(), `"webhook_configured":true`) || !strings.Contains(recorder.Body.String(), `"storage.example.test"`) {
+	if strings.Contains(recorder.Body.String(), "fixture-chatwoot-token") || strings.Contains(recorder.Body.String(), "fixture-webhook-secret") || !strings.Contains(recorder.Body.String(), `"token_configured":true`) || !strings.Contains(recorder.Body.String(), `"webhook_configured":true`) || !strings.Contains(recorder.Body.String(), `"storage.example.test"`) || !strings.Contains(recorder.Body.String(), `"webhook_url":"https://wuzapi.example.test/chatwoot/webhook/`) {
 		t.Fatalf("unsafe config response: %s", recorder.Body.String())
 	}
 }
@@ -187,5 +187,112 @@ func TestChatwootStatusAndDisableKeepRemoteInbox(t *testing.T) {
 	var enabled bool
 	if err := s.db.Get(&enabled, "SELECT enabled FROM chatwoot_config WHERE instance_id=?", "chatwoot-status"); err != nil || enabled {
 		t.Fatalf("enabled = %t, %v", enabled, err)
+	}
+}
+
+func TestChatwootTestConnectionDoesNotPersistConfiguration(t *testing.T) {
+	chatwoot := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/accounts/1" || r.Header.Get("Authorization") != "Bearer test-only-token" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":1}`))
+	}))
+	defer chatwoot.Close()
+	chatwootURL, err := url.Parse(chatwoot.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("WUZAPI_CHATWOOT_INTERNAL_HOSTS", chatwootURL.Hostname())
+
+	s := makeTestServer(t)
+	if _, err := s.db.Exec("INSERT INTO users (id,name,token) VALUES ('chatwoot-test','Chatwoot test','chatwoot-test-token')"); err != nil {
+		t.Fatal(err)
+	}
+	body := `{"url":"` + chatwoot.URL + `","account_id":1,"token":"test-only-token"}`
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/chatwoot/test", strings.NewReader(body))
+	request.Header.Set("Token", "chatwoot-test-token")
+	s.router.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("POST /chatwoot/test = %d: %s", recorder.Code, recorder.Body.String())
+	}
+	var count int
+	if err := s.db.Get(&count, "SELECT COUNT(*) FROM chatwoot_config"); err != nil || count != 0 {
+		t.Fatalf("stored %d configs, %v", count, err)
+	}
+}
+
+func TestChatwootConfigReusesStoredTokenWhenOmitted(t *testing.T) {
+	chatwoot := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "Bearer existing-token" {
+			t.Fatalf("Authorization = %q", r.Header.Get("Authorization"))
+		}
+		switch r.URL.Path {
+		case "/api/v1/accounts/1":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"id":1}`))
+		case "/api/v1/accounts/1/inboxes/44":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"id":44,"channel":{"secret":"existing-webhook-secret"}}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer chatwoot.Close()
+	chatwootURL, err := url.Parse(chatwoot.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("WUZAPI_CHATWOOT_INTERNAL_HOSTS", chatwootURL.Hostname())
+	t.Setenv("WUZAPI_PUBLIC_URL", "https://wuzapi.example.test")
+	previousKey, previousPersistent := *globalEncryptionKey, globalEncryptionKeyPersistent
+	*globalEncryptionKey = "0123456789abcdef0123456789abcdef"
+	globalEncryptionKeyPersistent = true
+	t.Cleanup(func() {
+		*globalEncryptionKey = previousKey
+		globalEncryptionKeyPersistent = previousPersistent
+	})
+	s := makeTestServer(t)
+	if _, err := s.db.Exec("INSERT INTO users (id,name,token) VALUES ('chatwoot-update','Chatwoot update','chatwoot-update-token')"); err != nil {
+		t.Fatal(err)
+	}
+	encryptedToken, err := encryptHMACKey("existing-token")
+	if err != nil {
+		t.Fatal(err)
+	}
+	encryptedSecret, err := encryptHMACKey("existing-webhook-secret")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.db.Exec(s.db.Rebind(`INSERT INTO chatwoot_config (instance_id, enabled, url, account_id, token, inbox_id, inbox_name, webhook_key, webhook_secret, attachment_hosts) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`), "chatwoot-update", true, chatwoot.URL, 1, encryptedToken, 44, "Old", "existing-key", encryptedSecret, `[]`); err != nil {
+		t.Fatal(err)
+	}
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/chatwoot/config", strings.NewReader(`{"enabled":true,"url":"`+chatwoot.URL+`","account_id":1,"inbox_id":44,"inbox_name":"Updated","attachment_hosts":["storage.example.test"]}`))
+	request.Header.Set("Token", "chatwoot-update-token")
+	s.router.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("POST /chatwoot/config = %d: %s", recorder.Code, recorder.Body.String())
+	}
+	var name string
+	if err := s.db.Get(&name, "SELECT inbox_name FROM chatwoot_config WHERE instance_id=?", "chatwoot-update"); err != nil || name != "Updated" {
+		t.Fatalf("inbox_name = %q, %v", name, err)
+	}
+}
+
+func TestAdminChatwootStatusTargetsRequestedInstance(t *testing.T) {
+	s := makeTestServer(t)
+	*adminToken = "admin-chatwoot-token"
+	if _, err := s.db.Exec("INSERT INTO users (id,name,token) VALUES ('admin-chatwoot','Admin target','user-token')"); err != nil {
+		t.Fatal(err)
+	}
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/admin/users/admin-chatwoot/chatwoot/status", nil)
+	request.Header.Set("Authorization", "admin-chatwoot-token")
+	s.router.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("admin status = %d: %s", recorder.Code, recorder.Body.String())
 	}
 }

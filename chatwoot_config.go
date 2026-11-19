@@ -14,6 +14,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/gorilla/mux"
 )
 
 const chatwootRequestTimeout = 15 * time.Second
@@ -67,21 +69,33 @@ func (s *server) ConfigureChatwoot() http.HandlerFunc {
 			s.Respond(w, r, http.StatusBadRequest, err)
 			return
 		}
-		if request.AccountID <= 0 || strings.TrimSpace(request.Token) == "" {
-			s.Respond(w, r, http.StatusBadRequest, errors.New("account_id and token are required"))
+		if request.AccountID <= 0 {
+			s.Respond(w, r, http.StatusBadRequest, errors.New("account_id is required"))
 			return
 		}
 		if request.InboxName == "" {
 			request.InboxName = "WuzAPI " + instanceID
 		}
 
-		client := newChatwootClient(baseURL, request.AccountID, request.Token)
+		var current chatwootConfigRecord
+		_ = s.db.Get(&current, s.db.Rebind(`SELECT enabled, url, account_id, token, inbox_id, inbox_name, webhook_key, webhook_secret, attachment_hosts FROM chatwoot_config WHERE instance_id=?`), instanceID)
+		token := strings.TrimSpace(request.Token)
+		if token == "" && len(current.Token) > 0 {
+			token, err = decryptHMACKey(current.Token)
+			if err != nil {
+				s.Respond(w, r, http.StatusInternalServerError, errors.New("could not decrypt the existing Chatwoot token"))
+				return
+			}
+		}
+		if token == "" {
+			s.Respond(w, r, http.StatusBadRequest, errors.New("token is required for a new Chatwoot configuration"))
+			return
+		}
+		client := newChatwootClient(baseURL, request.AccountID, token)
 		if err := client.verifyAccount(r.Context()); err != nil {
 			s.Respond(w, r, http.StatusBadRequest, errors.New("could not validate the Chatwoot account or token"))
 			return
 		}
-		var current chatwootConfigRecord
-		_ = s.db.Get(&current, s.db.Rebind(`SELECT enabled, url, account_id, token, inbox_id, inbox_name, webhook_key, webhook_secret, attachment_hosts FROM chatwoot_config WHERE instance_id=?`), instanceID)
 		webhookKey := current.WebhookKey
 		if webhookKey == "" {
 			webhookKey, err = GenerateRandomID()
@@ -112,7 +126,7 @@ func (s *server) ConfigureChatwoot() http.HandlerFunc {
 				return
 			}
 		}
-		encryptedToken, err := encryptHMACKey(request.Token)
+		encryptedToken, err := encryptHMACKey(token)
 		if err != nil {
 			s.Respond(w, r, http.StatusInternalServerError, errors.New("could not encrypt the Chatwoot token"))
 			return
@@ -165,12 +179,54 @@ func (s *server) GetChatwootConfig() http.HandlerFunc {
 			"token_configured":   len(config.Token) > 0,
 			"webhook_configured": len(config.WebhookSecret) > 0,
 			"attachment_hosts":   chatwootAttachmentHosts(config),
+			"webhook_url":        chatwootWebhookURL(config.WebhookKey),
 		})
 		if err != nil {
 			s.Respond(w, r, http.StatusInternalServerError, errors.New("could not serialize the Chatwoot configuration"))
 			return
 		}
 		s.Respond(w, r, http.StatusOK, string(response))
+	}
+}
+
+func (s *server) TestChatwootConnection() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var request chatwootConfigRequest
+		if err := decodeAPIRequest(r.Body, &request); err != nil {
+			s.Respond(w, r, http.StatusBadRequest, err)
+			return
+		}
+		baseURL, err := validateChatwootURL(request.URL)
+		if err != nil {
+			s.Respond(w, r, http.StatusBadRequest, err)
+			return
+		}
+		if request.AccountID <= 0 || strings.TrimSpace(request.Token) == "" {
+			s.Respond(w, r, http.StatusBadRequest, errors.New("account_id and token are required"))
+			return
+		}
+		if err := newChatwootClient(baseURL, request.AccountID, request.Token).verifyAccount(r.Context()); err != nil {
+			s.Respond(w, r, http.StatusBadRequest, errors.New("could not validate the Chatwoot account or token"))
+			return
+		}
+		s.Respond(w, r, http.StatusOK, `{"Details":"Chatwoot connection succeeded"}`)
+	}
+}
+
+func (s *server) adminChatwootHandler(handler http.Handler) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		instanceID := mux.Vars(r)["id"]
+		if instanceID == "" {
+			s.Respond(w, r, http.StatusBadRequest, errors.New("missing user id"))
+			return
+		}
+		var exists bool
+		if err := s.db.Get(&exists, s.db.Rebind(`SELECT EXISTS(SELECT 1 FROM users WHERE id=?)`), instanceID); err != nil || !exists {
+			s.Respond(w, r, http.StatusNotFound, errors.New("user not found"))
+			return
+		}
+		contextWithInstance := context.WithValue(r.Context(), "userinfo", Values{m: map[string]string{"Id": instanceID}})
+		handler.ServeHTTP(w, r.WithContext(contextWithInstance))
 	}
 }
 
@@ -387,6 +443,17 @@ func validateChatwootPublicURL(value string) (string, error) {
 		return "", errors.New("WUZAPI_PUBLIC_URL must be an absolute HTTPS URL")
 	}
 	return strings.TrimRight(parsed.String(), "/"), nil
+}
+
+func chatwootWebhookURL(key string) string {
+	if key == "" {
+		return ""
+	}
+	publicURL, err := validateChatwootPublicURL(os.Getenv("WUZAPI_PUBLIC_URL"))
+	if err != nil {
+		return ""
+	}
+	return publicURL + "/chatwoot/webhook/" + key
 }
 
 func hostResolvesPrivate(host string) bool {

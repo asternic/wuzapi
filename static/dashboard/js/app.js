@@ -304,6 +304,15 @@ document.addEventListener('DOMContentLoaded', function() {
     loadS3Config();
   });
 
+  // Chatwoot Configuration
+  document.getElementById('chatwootConfig').addEventListener('click', function() {
+    $('#modalChatwootConfig').modal('show');
+    loadChatwootConfig();
+  });
+  document.getElementById('saveChatwootConfig').addEventListener('click', saveChatwootConfig);
+  document.getElementById('testChatwootConnection').addEventListener('click', testChatwootConnection);
+  document.getElementById('disableChatwootConfig').addEventListener('click', disableChatwootConfig);
+
   // History Configuration
   document.getElementById('historyConfig').addEventListener('click', function() {
     $('#modalHistoryConfig').modal({
@@ -1895,6 +1904,159 @@ async function deleteS3Config() {
     console.error('Error:', error);
   } finally {
     $('#deleteS3Config').removeClass('loading disabled');
+  }
+}
+
+function chatwootHeaders(includeContentType = false) {
+  const headers = new Headers();
+  headers.append('token', getLocalStorageItem('token'));
+  if (includeContentType) {
+    headers.append('Content-Type', 'application/json');
+  }
+  return headers;
+}
+
+function chatwootAttachmentHostsFromInput() {
+  return $('#chatwootAttachmentHosts').val()
+    .split(',')
+    .map(host => host.trim())
+    .filter(Boolean);
+}
+
+function setChatwootQueueStatus(status) {
+  const target = $('#chatwootQueueStatus');
+  if (!status) {
+    target.addClass('hidden').text('');
+    return;
+  }
+  const lastError = status.last_error ? ` Latest failure: ${status.last_error}` : '';
+  target.removeClass('hidden').text(`Queue: ${status.pending || 0} pending, ${status.dead || 0} dead.${lastError}`);
+}
+
+async function loadChatwootConfig() {
+  $('#chatwootToken').val('');
+  $('#chatwootTokenStatus').text('Token not configured.');
+  $('#chatwootWebhookStatus').text('Callback secret not configured.');
+  $('#chatwootWebhookUrl').val('');
+  $('#disableChatwootConfig').hide();
+  setChatwootQueueStatus(null);
+  try {
+    const [configRes, statusRes] = await Promise.all([
+      fetch(baseUrl + '/chatwoot/config', { headers: chatwootHeaders() }),
+      fetch(baseUrl + '/chatwoot/status', { headers: chatwootHeaders() })
+    ]);
+    const config = await configRes.json();
+    if (config.success && config.data) {
+      const data = config.data;
+      $('#chatwootUrl').val(data.url || '');
+      $('#chatwootAccountId').val(data.account_id || '');
+      $('#chatwootInboxId').val(data.inbox_id || '');
+      $('#chatwootInboxName').val(data.inbox_name || '');
+      $('#chatwootAttachmentHosts').val((data.attachment_hosts || []).filter(host => host !== new URL(data.url).hostname).join(', '));
+      $('#chatwootTokenStatus').text(data.token_configured ? 'Token configured. Enter a new value only to replace it.' : 'Token not configured.');
+      $('#chatwootWebhookStatus').text(data.webhook_configured ? 'Callback secret configured.' : 'Callback secret not configured.');
+      $('#chatwootWebhookUrl').val(data.webhook_url || '');
+      $('#disableChatwootConfig').toggle(!!data.enabled);
+    }
+    const status = await statusRes.json();
+    if (status.success) {
+      setChatwootQueueStatus(status.data);
+    }
+  } catch (error) {
+    console.error('Error loading Chatwoot config:', error);
+    showError('Error loading Chatwoot configuration');
+  }
+}
+
+async function saveChatwootConfig() {
+  const config = {
+    enabled: true,
+    url: $('#chatwootUrl').val().trim(),
+    account_id: parseInt($('#chatwootAccountId').val(), 10),
+    token: $('#chatwootToken').val(),
+    inbox_id: parseInt($('#chatwootInboxId').val(), 10) || 0,
+    inbox_name: $('#chatwootInboxName').val().trim(),
+    attachment_hosts: chatwootAttachmentHostsFromInput()
+  };
+  if (!config.url || !config.account_id || (!config.token && $('#chatwootTokenStatus').text().includes('not configured'))) {
+    showError('Chatwoot URL and account ID are required. A token is required on first configuration.');
+    return;
+  }
+  $('#saveChatwootConfig').addClass('loading disabled');
+  try {
+    const res = await fetch(baseUrl + '/chatwoot/config', {
+      method: 'POST', headers: chatwootHeaders(true), body: JSON.stringify(config)
+    });
+    const data = await res.json();
+    if (data.success) {
+      $('#chatwootToken').val('');
+      $('#chatwootWebhookUrl').val(data.data.webhook_url || '');
+      showSuccess('Chatwoot configuration saved.');
+      await loadChatwootConfig();
+    } else {
+      showError('Failed to save Chatwoot configuration: ' + (data.error || 'Unknown error'));
+    }
+  } catch (error) {
+    console.error('Error saving Chatwoot config:', error);
+    showError('Error saving Chatwoot configuration');
+  } finally {
+    $('#saveChatwootConfig').removeClass('loading disabled');
+  }
+}
+
+async function testChatwootConnection() {
+  const config = {
+    enabled: false,
+    url: $('#chatwootUrl').val().trim(),
+    account_id: parseInt($('#chatwootAccountId').val(), 10),
+    token: $('#chatwootToken').val(),
+    inbox_id: parseInt($('#chatwootInboxId').val(), 10) || 0,
+    inbox_name: $('#chatwootInboxName').val().trim(),
+    attachment_hosts: chatwootAttachmentHostsFromInput()
+  };
+  if (!config.url || !config.account_id || !config.token) {
+    showError('Enter a URL, account ID and token to test the connection.');
+    return;
+  }
+  $('#testChatwootConnection').addClass('loading disabled');
+  try {
+    const res = await fetch(baseUrl + '/chatwoot/test', {
+      method: 'POST', headers: chatwootHeaders(true), body: JSON.stringify(config)
+    });
+    const data = await res.json();
+    if (data.success) {
+      showSuccess('Chatwoot connection succeeded. Configuration remains disabled.');
+      $('#chatwootToken').val('');
+    } else {
+      showError('Chatwoot connection failed: ' + (data.error || 'Unknown error'));
+    }
+  } catch (error) {
+    console.error('Error testing Chatwoot connection:', error);
+    showError('Error testing Chatwoot connection');
+  } finally {
+    $('#testChatwootConnection').removeClass('loading disabled');
+  }
+}
+
+async function disableChatwootConfig() {
+  if (!confirm('Disable Chatwoot for this instance? The remote inbox will be preserved.')) {
+    return;
+  }
+  $('#disableChatwootConfig').addClass('loading disabled');
+  try {
+    const res = await fetch(baseUrl + '/chatwoot/config', { method: 'DELETE', headers: chatwootHeaders() });
+    const data = await res.json();
+    if (data.success) {
+      showSuccess('Chatwoot disabled. The remote inbox was preserved.');
+      await loadChatwootConfig();
+    } else {
+      showError('Failed to disable Chatwoot: ' + (data.error || 'Unknown error'));
+    }
+  } catch (error) {
+    console.error('Error disabling Chatwoot:', error);
+    showError('Error disabling Chatwoot');
+  } finally {
+    $('#disableChatwootConfig').removeClass('loading disabled');
   }
 }
 
