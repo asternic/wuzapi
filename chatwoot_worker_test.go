@@ -155,6 +155,26 @@ func TestChatwootOutboxIsIdempotentAndRejectsNonDirectChats(t *testing.T) {
 	}
 }
 
+func TestChatwootDirectJIDRejectsNonUserDestinations(t *testing.T) {
+	for _, jid := range []types.JID{
+		types.NewJID("120363000000000000", types.GroupServer),
+		types.NewJID("status", types.BroadcastServer),
+		types.NewJID("123", types.NewsletterServer),
+	} {
+		if chatwootDirectJID(jid) {
+			t.Fatalf("chatwootDirectJID(%s) = true, want false", jid)
+		}
+	}
+	for _, jid := range []types.JID{
+		types.NewJID("5511999999999", types.DefaultUserServer),
+		types.NewJID("123", types.HiddenUserServer),
+	} {
+		if !chatwootDirectJID(jid) {
+			t.Fatalf("chatwootDirectJID(%s) = false, want true", jid)
+		}
+	}
+}
+
 func TestChatwootDisabledDoesNotQueueMessages(t *testing.T) {
 	s := makeTestServer(t)
 	if _, err := s.db.Exec("INSERT INTO users (id,name,token) VALUES ('disabled-instance','Disabled','disabled-token')"); err != nil {

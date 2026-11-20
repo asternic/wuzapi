@@ -110,9 +110,15 @@ type chatwootContact struct {
 	ContactInboxes []chatwootContactInbox `json:"contact_inboxes"`
 }
 
+// chatwootDirectJID limits this optional integration to person-to-person chats
+// without changing the upstream API's behavior for groups or other JID types.
+func chatwootDirectJID(jid types.JID) bool {
+	return jid.User != "" && jid.Device == 0 && (jid.Server == types.DefaultUserServer || jid.Server == types.HiddenUserServer)
+}
+
 func (s *server) enqueueChatwootOutbound(ctx context.Context, message chatwootOutboundMessage) error {
 	jid, ok := parseJID(message.ChatJID)
-	if !ok || requireDirectChat(jid) != nil || message.InstanceID == "" || message.MessageID == "" || (strings.TrimSpace(message.Text) == "" && message.Media == nil) {
+	if !ok || !chatwootDirectJID(jid) || message.InstanceID == "" || message.MessageID == "" || (strings.TrimSpace(message.Text) == "" && message.Media == nil) {
 		return nil
 	}
 	var sentFromChatwoot bool
@@ -271,7 +277,7 @@ func (s *server) claimChatwootOutbox(ctx context.Context) (chatwootOutboxRow, er
 
 func (s *server) enqueueChatwootInbound(ctx context.Context, message chatwootInboundMessage) error {
 	jid, ok := parseJID(message.ChatJID)
-	if !ok || requireDirectChat(jid) != nil || message.InstanceID == "" || message.ChatwootMessageID <= 0 || (strings.TrimSpace(message.Text) == "" && message.Attachment == nil) {
+	if !ok || !chatwootDirectJID(jid) || message.InstanceID == "" || message.ChatwootMessageID <= 0 || (strings.TrimSpace(message.Text) == "" && message.Attachment == nil) {
 		return nil
 	}
 	message.ChatJID = jid.ToNonAD().String()
@@ -301,8 +307,8 @@ func (s *server) deliverChatwootInbound(ctx context.Context, message chatwootInb
 	if !ok {
 		return errors.New("mapped Chatwoot destination is invalid")
 	}
-	if err := requireDirectChat(jid); err != nil {
-		return err
+	if !chatwootDirectJID(jid) {
+		return errors.New("mapped Chatwoot destination is not a direct chat")
 	}
 	waMessageID := deterministicChatwootWhatsAppID(message.ChatwootMessageID, message.AttachmentIndex)
 	mapQuery := s.db.Rebind(`INSERT INTO chatwoot_message_map (instance_id, wa_message_id, chatwoot_message_id, chatwoot_attachment_index, conversation_id, direction)
