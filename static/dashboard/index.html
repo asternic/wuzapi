@@ -184,6 +184,12 @@
           <div class="description">Configure HMAC key for webhook security.</div>
         </div>
       </div>
+      <div class="purple card hidden widget" style="cursor: pointer;" id="chatwootConfig">
+        <div class="content"><a class="ui purple right ribbon label">Config</a>
+          <div class="header">Chatwoot</div>
+          <div class="description">Configure the optional Chatwoot inbox and queue.</div>
+        </div>
+      </div>
     </div>
 
     <div class="ui horizontal divider widget"> User </div>
@@ -427,6 +433,59 @@
     <div class="actions">
       <div class="ui cancel button secondary">Close</div>
       <div class="ui positive right labeled icon button">Set<i class="checkmark icon"></i></div>
+    </div>
+  </div>
+
+  <!-- Chatwoot Configuration Modal -->
+  <div class="ui modal" id="modalChatwootConfig"><i class="close icon"></i>
+    <div class="header">Chatwoot Configuration</div>
+    <div class="content">
+      <div class="ui info message">
+        <div class="header">Optional direct-chat inbox</div>
+        <p>Messages are delivered through a durable queue. Tokens and callback secrets are stored encrypted and never shown again.</p>
+      </div>
+      <div class="ui form">
+        <div class="field">
+          <label>Chatwoot URL</label>
+          <input id="chatwootUrl" type="url" placeholder="https://chat.example.test">
+        </div>
+        <div class="two fields">
+          <div class="field">
+            <label>Account ID</label>
+            <input id="chatwootAccountId" type="number" min="1" placeholder="1">
+          </div>
+          <div class="field">
+            <label>Inbox ID (optional)</label>
+            <input id="chatwootInboxId" type="number" min="1" placeholder="Create or reuse automatically">
+          </div>
+        </div>
+        <div class="field">
+          <label>API Token</label>
+          <input id="chatwootToken" type="password" autocomplete="new-password" placeholder="Enter a token to save or replace it">
+          <small id="chatwootTokenStatus">Token not configured.</small>
+        </div>
+        <div class="field">
+          <label>Inbox Name</label>
+          <input id="chatwootInboxName" type="text" placeholder="WuzAPI Support">
+        </div>
+        <div class="field">
+          <label>Attachment Hosts</label>
+          <input id="chatwootAttachmentHosts" type="text" placeholder="storage.example.test, cdn.example.test">
+          <small>Trusted HTTPS storage hostnames only. Redirects are checked again.</small>
+        </div>
+        <div class="field">
+          <label>Webhook URL</label>
+          <input id="chatwootWebhookUrl" type="text" readonly placeholder="Saved configuration generates this URL">
+          <small id="chatwootWebhookStatus">Callback secret not configured.</small>
+        </div>
+        <div class="ui message hidden" id="chatwootQueueStatus"></div>
+      </div>
+    </div>
+    <div class="actions">
+      <div class="ui cancel button secondary">Close</div>
+      <button class="ui button" type="button" id="testChatwootConnection">Test Connection</button>
+      <button class="ui red button" type="button" id="disableChatwootConfig">Disable</button>
+      <button class="ui positive right labeled icon button" type="button" id="saveChatwootConfig">Save and configure inbox<i class="checkmark icon"></i></button>
     </div>
   </div>
 

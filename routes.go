@@ -48,6 +48,9 @@ func (s *server) routes() {
 	}
 
 	s.router.Handle("/health", s.GetHealth()).Methods("GET")
+	// This endpoint is authenticated with Chatwoot's per-inbox HMAC, not an
+	// instance token. Keep it before the static fallback and outside authalice.
+	s.router.Handle("/chatwoot/webhook/{key}", s.ChatwootWebhook()).Methods("POST")
 
 	adminRoutes := s.router.PathPrefix("/admin").Subrouter()
 	adminRoutes.Use(s.authadmin)
@@ -59,6 +62,11 @@ func (s *server) routes() {
 	adminRoutes.Handle("/users/{id}/full", s.DeleteUserComplete()).Methods("DELETE")
 	adminRoutes.Handle("/users/{id}/preserve-devices", s.DeleteUserPreserveDevices()).Methods("DELETE")
 	adminRoutes.Handle("/users/{id}/proxy-pool/release", s.ReleaseUserProxyPool()).Methods("POST")
+	adminRoutes.Handle("/users/{id}/chatwoot", s.adminChatwootHandler(s.ConfigureChatwoot())).Methods("POST")
+	adminRoutes.Handle("/users/{id}/chatwoot", s.adminChatwootHandler(s.GetChatwootConfig())).Methods("GET")
+	adminRoutes.Handle("/users/{id}/chatwoot", s.adminChatwootHandler(s.DisableChatwoot())).Methods("DELETE")
+	adminRoutes.Handle("/users/{id}/chatwoot/test", s.adminChatwootHandler(s.TestChatwootConnection())).Methods("POST")
+	adminRoutes.Handle("/users/{id}/chatwoot/status", s.adminChatwootHandler(s.GetChatwootStatus())).Methods("GET")
 	adminRoutes.Handle("/proxy-pool", s.ListProxyPool()).Methods("GET")
 	adminRoutes.Handle("/proxy-pool", s.AddProxyPoolEntry()).Methods("POST")
 	adminRoutes.Handle("/proxy-pool/{id}", s.EditProxyPoolEntry()).Methods("PUT")
@@ -111,6 +119,12 @@ func (s *server) routes() {
 	s.router.Handle("/session/hmac/config", c.Then(s.ConfigureHmac())).Methods("POST")
 	s.router.Handle("/session/hmac/config", c.Then(s.GetHmacConfig())).Methods("GET")
 	s.router.Handle("/session/hmac/config", c.Then(s.DeleteHmacConfig())).Methods("DELETE")
+
+	s.router.Handle("/chatwoot/config", c.Then(s.ConfigureChatwoot())).Methods("POST")
+	s.router.Handle("/chatwoot/config", c.Then(s.GetChatwootConfig())).Methods("GET")
+	s.router.Handle("/chatwoot/config", c.Then(s.DisableChatwoot())).Methods("DELETE")
+	s.router.Handle("/chatwoot/test", c.Then(s.TestChatwootConnection())).Methods("POST")
+	s.router.Handle("/chatwoot/status", c.Then(s.GetChatwootStatus())).Methods("GET")
 
 	s.router.Handle("/chat/send/raw", c.Then(s.SendRawMessage())).Methods("POST")
 	s.router.Handle("/chat/send/text", c.Then(s.SendMessage())).Methods("POST")

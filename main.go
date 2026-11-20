@@ -46,6 +46,9 @@ type server struct {
 	mode               ServerMode
 	historySavesMu     sync.Mutex
 	historySaves       map[historyChatKey]uint64
+	chatwootWorkerCtx  context.Context
+	chatwootWorkerOnce sync.Once
+	chatwootWorkerStop context.CancelFunc
 }
 
 type historyChatKey struct {
@@ -81,8 +84,9 @@ var (
 	socketRecoveryEnabled   = flag.Bool("socketrecovery", true, "Recover sessions after closed socket send errors")
 	appStateRecoveryEnabled = flag.Bool("appstaterecovery", true, "Recover app state collections that fail to sync (full resync, then a request to the primary device)")
 
-	globalHMACKeyEncrypted []byte
-	automaticPresence      = types.PresenceAvailable
+	globalHMACKeyEncrypted        []byte
+	automaticPresence             = types.PresenceAvailable
+	globalEncryptionKeyPersistent bool
 
 	webhookRetryEnabled      = flag.Bool("webhookretry", true, "Enable webhook retry mechanism")
 	webhookRetryCount        = flag.Int("retrycount", 5, "Number of times to retry failed webhooks")
@@ -226,7 +230,7 @@ func newSafeHTTPClient() *http.Client {
 }
 
 func isPrivateOrLoopback(ip net.IP) bool {
-	if ip.IsLoopback() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() {
+	if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() {
 		return true
 	}
 	for _, block := range privateIPBlocks {
@@ -453,6 +457,7 @@ func main() {
 	if *globalEncryptionKey == "" {
 		if v := os.Getenv("WUZAPI_GLOBAL_ENCRYPTION_KEY"); v != "" {
 			*globalEncryptionKey = v
+			globalEncryptionKeyPersistent = true
 			log.Info().Msg("Encryption key loaded from environment variable")
 		} else {
 			// Generate a random key if none provided
@@ -465,6 +470,8 @@ func main() {
 			log.Warn().Msg("No WUZAPI_GLOBAL_ENCRYPTION_KEY provided, generated a temporary random one. " +
 				"Configure a persistent WUZAPI_GLOBAL_ENCRYPTION_KEY before storing encrypted data; data encrypted with this temporary key cannot be recovered after restart.")
 		}
+	} else {
+		globalEncryptionKeyPersistent = true
 	}
 
 	// Check for global webhook in environment variable
@@ -574,6 +581,11 @@ func main() {
 		mode:   serverMode,
 	}
 	s.routes()
+	chatwootWorkerCtx, chatwootWorkerStop := context.WithCancel(context.Background())
+	s.chatwootWorkerCtx = chatwootWorkerCtx
+	s.chatwootWorkerStop = chatwootWorkerStop
+	defer s.stopChatwootWorker()
+	s.ensureChatwootWorker()
 
 	s.connectOnStartup()
 
@@ -611,6 +623,7 @@ func startHTTPMode(s *server) {
 				if store, err := getMediaStore(); err == nil {
 					store.cancel()
 				}
+				s.stopChatwootWorker()
 
 				// Graceful shutdown logic
 				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -653,6 +666,12 @@ func startHTTPMode(s *server) {
 	log.Info().Str("address", *address).Str("port", *port).Msg("Server started. Waiting for connections...")
 
 	select {}
+}
+
+func (s *server) stopChatwootWorker() {
+	if s.chatwootWorkerStop != nil {
+		s.chatwootWorkerStop()
+	}
 }
 
 func startStdioMode(s *server) {
