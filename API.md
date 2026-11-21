@@ -2502,3 +2502,10 @@ no stored messages. History must be enabled. Other users' IDs, chats, and activi
 timestamps are never included.
 
 Stdio method: `chat.history`, with `token` and `chat_jid: "index"`.
+
+## Brazilian ninth digit
+
+Many Brazilian mobile accounts still live under the 12-digit number (55 + area code + 8 digits) while systems store the 13-digit form with the extra 9, or the reverse. Sending to the wrong form fails ("no LID found") or goes nowhere.
+
+For bare Brazilian mobile numbers (`55` + area code + 8 or 9 digits starting with 6-9) that are not already mapped to a LID, send endpoints ask WhatsApp which form exists and send to it. WhatsApp currently answers with the account's LID, which is then used as the recipient. Answers are cached for 24 hours (30 minutes when neither form exists). If WhatsApp cannot answer, the number is used as given. Explicit JIDs (`...@s.whatsapp.net`, `...@lid`) are never changed.
+

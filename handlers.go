@@ -6836,6 +6836,9 @@ func validateMessageFields(ctx context.Context, client *whatsmeow.Client, phone 
 	if err != nil {
 		return types.EmptyJID, err
 	}
+	if client != nil && client.IsConnected() && !strings.ContainsRune(phone, '@') {
+		recipient = resolveBrazilianNumber(ctx, client.IsOnWhatsApp, recipient)
+	}
 
 	if stanzaid != nil {
 		if participant == nil {
