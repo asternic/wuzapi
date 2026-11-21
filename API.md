@@ -2502,3 +2502,26 @@ no stored messages. History must be enabled. Other users' IDs, chats, and activi
 timestamps are never included.
 
 Stdio method: `chat.history`, with `token` and `chat_jid: "index"`.
+
+## Channels, communities and group metrics
+
+All endpoints use the user `token` header and require a connected session.
+
+| Method | Path | Body / query | Notes |
+|---|---|---|---|
+| POST | `/newsletter/create` | `{"Name","Description","Picture"}` | Picture as base64 or data URL. Accepts the channel terms of service once if the first attempt fails. |
+| GET | `/newsletter/info` | `?jid=` or `?code=` (invite code or full channel link) | Metadata, including subscriber count and the viewer role. |
+| GET | `/newsletter/messages` | `?jid=&count=20&before=` | Posts with `ServerID`, `Views`, `Reactions`, `ReactionsTotal`, plus `Totals`. WhatsApp only returns view counts to channel admins. |
+| GET | `/newsletter/updates` | `?jid=&after=&count=` | View/reaction counters for posts after the given `ServerID`. `after` is required: WhatsApp does not answer without it (nor with `since`). |
+| POST | `/newsletter/subscribe` | `{"JID"}` | Subscribes to live updates so `NewsletterLiveUpdate` webhooks fire (previously nothing subscribed). Returns `DurationSeconds`; renew before it expires. |
+| POST | `/newsletter/react` | `{"JID","ServerID","Reaction","MessageID"}` | Empty `Reaction` removes it. |
+| POST | `/newsletter/markviewed` | `{"JID","ServerIDs":[]}` | |
+| GET | `/community/list` | `?type=community\|announcement\|group\|all` | Filters joined groups (default `community`). |
+| POST | `/community/link` / `/community/unlink` | `{"CommunityJID","GroupJID"}` | Requires community admin. The link can take a few seconds to show in `/community/subgroups`. |
+| GET | `/community/subgroups` | `?communityJID=` | Linked groups, including the announcement group (`IsDefaultSubGroup`). |
+| GET | `/community/participants` | `?communityJID=` | Participants across linked groups. To add members to a community, add them to its announcement group with `/group/updateparticipants`. |
+| GET | `/group/members/export` | `?groupJID=&format=csv` | JSON by default; CSV with jid, phone_number, lid, display_name, is_admin, is_super_admin. |
+| GET | `/group/stats` | `?groupJID=&days=30` | Messages per member, per day and per type, active and silent members, computed from this instance's message history (history must be enabled). |
+
+Stdio methods: `newsletter.create`, `newsletter.info`, `newsletter.messages`, `newsletter.updates`, `newsletter.subscribe`, `newsletter.react`, `newsletter.markviewed`, `community.list`, `community.link`, `community.unlink`, `community.subgroups`, `community.participants`, `group.members.export`, `group.stats` (query parameters go in `params`).
+

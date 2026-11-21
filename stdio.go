@@ -26,6 +26,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -532,6 +533,56 @@ func (ss *stdioServer) routeRequest(req *jsonRpcRequest) {
 	case "newsletter.mute":
 		httpMethod = "POST"
 		httpPath = "/newsletter/mute"
+	case "newsletter.create":
+		httpMethod = "POST"
+		httpPath = "/newsletter/create"
+	case "newsletter.info":
+		httpMethod = "GET"
+		httpPath = "/newsletter/info"
+		httpPath += stdioQuery(req.Params, "jid", "code")
+	case "newsletter.messages":
+		httpMethod = "GET"
+		httpPath = "/newsletter/messages"
+		httpPath += stdioQuery(req.Params, "jid", "count", "before")
+	case "newsletter.updates":
+		httpMethod = "GET"
+		httpPath = "/newsletter/updates"
+		httpPath += stdioQuery(req.Params, "jid", "count", "after")
+	case "newsletter.subscribe":
+		httpMethod = "POST"
+		httpPath = "/newsletter/subscribe"
+	case "newsletter.react":
+		httpMethod = "POST"
+		httpPath = "/newsletter/react"
+	case "newsletter.markviewed":
+		httpMethod = "POST"
+		httpPath = "/newsletter/markviewed"
+	case "community.list":
+		httpMethod = "GET"
+		httpPath = "/community/list"
+		httpPath += stdioQuery(req.Params, "type")
+	case "community.link":
+		httpMethod = "POST"
+		httpPath = "/community/link"
+	case "community.unlink":
+		httpMethod = "POST"
+		httpPath = "/community/unlink"
+	case "community.subgroups":
+		httpMethod = "GET"
+		httpPath = "/community/subgroups"
+		httpPath += stdioQuery(req.Params, "communityJID")
+	case "community.participants":
+		httpMethod = "GET"
+		httpPath = "/community/participants"
+		httpPath += stdioQuery(req.Params, "communityJID")
+	case "group.members.export":
+		httpMethod = "GET"
+		httpPath = "/group/members/export"
+		httpPath += stdioQuery(req.Params, "groupJID", "format")
+	case "group.stats":
+		httpMethod = "GET"
+		httpPath = "/group/stats"
+		httpPath += stdioQuery(req.Params, "groupJID", "days")
 
 	// Webhook management
 	case "webhook.get":
@@ -742,4 +793,22 @@ func writeMediaNotification(w io.Writer, body *mediaFile) error {
 	}
 	_, err = io.WriteString(w, "\n")
 	return err
+}
+
+// stdioQuery turns selected params into a query string for GET routes.
+func stdioQuery(params map[string]interface{}, keys ...string) string {
+	query := url.Values{}
+	for _, key := range keys {
+		if value, ok := params[key]; ok && value != nil {
+			if f, isFloat := value.(float64); isFloat && f == float64(int64(f)) {
+				query.Set(key, strconv.FormatInt(int64(f), 10))
+			} else {
+				query.Set(key, fmt.Sprint(value))
+			}
+		}
+	}
+	if len(query) == 0 {
+		return ""
+	}
+	return "?" + query.Encode()
 }
