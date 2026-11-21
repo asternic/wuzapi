@@ -1693,6 +1693,9 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 		log.Info().Str("messageID", evt.MessageID).Msg("Media retry event")
 	case *events.GroupInfo:
 		postmap["type"] = "GroupInfo"
+		if changes := groupParticipantChanges(evt); len(changes) > 0 {
+			postmap["groupParticipants"] = changes
+		}
 		dowebhook = 1
 		log.Info().Str("jid", evt.JID.String()).Msg("Group info updated")
 	case *events.JoinedGroup:

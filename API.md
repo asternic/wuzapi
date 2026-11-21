@@ -2502,3 +2502,17 @@ no stored messages. History must be enabled. Other users' IDs, chats, and activi
 timestamps are never included.
 
 Stdio method: `chat.history`, with `token` and `chat_jid: "index"`.
+
+## Group participant changes in GroupInfo webhooks
+
+`GroupInfo` webhook payloads keep the raw event in `event` and, when members change, also include a flat summary similar to WAHA's `group.v2.participants`, so integrations do not need to diff the raw event:
+
+```json
+"groupParticipants": [
+  {"group": "120363000000000000@g.us", "action": "join", "participants": ["111@lid"], "author": "222@lid", "authorPN": "5511900000000@s.whatsapp.net", "joinReason": "invite"},
+  {"group": "120363000000000000@g.us", "action": "leave", "participants": ["333@lid"]}
+]
+```
+
+`action` is `join`, `leave`, `promote` or `demote`. Name, topic and settings changes do not add this field.
+
