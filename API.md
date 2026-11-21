@@ -1168,7 +1168,9 @@ an `Id` does not provide idempotency and does not replace an existing history ro
 
 ## Send Audio Message
 
-Sends an Audio message. Audio must be in Opus format and base64 encoded in embedded format.
+Sends an Audio message, base64 encoded in embedded format or as an HTTP URL.
+
+When FFmpeg is installed (it is in the Docker image), audio WhatsApp would not play is converted automatically: voice notes (`ptt`, the default) become Ogg/Opus, so browser recordings (WebM from Chrome/Firefox, MP4/AAC from Safari) work as voice notes; regular audio files that are not Ogg/Opus, MP3, AAC/M4A or AMR are converted too. When `Seconds` or `Waveform` are omitted they are filled from the audio, so voice notes show their duration and waveform. Inputs that are already compatible are sent unchanged. Set `"convert": false` to send the bytes as given. Inputs that cannot be probed keep the previous behavior; inputs without an audio stream return 422.
 
 Endpoint: _/chat/send/audio_
 
@@ -1213,7 +1215,9 @@ curl -X POST -H 'Token: 1234ABCD' -H 'Content-Type: application/json' --data '{"
 
 ## Send Video Message
 
-Sends a Video message. Video must be in mp4 or 3gpp and base64 encoded in embedded format. You can optionally specify a text Caption and a JpegThumbnail
+Sends a Video message, base64 encoded in embedded format or as an HTTP URL. You can optionally specify a text Caption and a JpegThumbnail.
+
+When FFmpeg is installed, videos that are not MP4 with H.264 video (and AAC audio, if any) — for example WebM recorded by browsers, MOV or HEVC from phones — are converted to MP4 H.264/AAC (max 1280 px wide). Duration, width and height are filled in, and a thumbnail is generated when JpegThumbnail is omitted. Set `"convert": false` to send the bytes as given.
 
 Endpoint: _/chat/send/video_
 

@@ -1248,6 +1248,7 @@ func (s *server) SendAudio() http.HandlerFunc {
 		Id            string
 		PTT           *bool  `json:"ptt,omitempty"`
 		MimeType      string `json:"mimetype,omitempty"`
+		Convert       *bool  `json:"convert,omitempty"` // default true; false sends the bytes unchanged
 		Seconds       uint32
 		Waveform      []byte
 		ContextInfo   waE2E.ContextInfo
@@ -1339,6 +1340,24 @@ func (s *server) SendAudio() http.HandlerFunc {
 			} else {
 				mime = "audio/mpeg"
 			}
+		}
+
+		// convert browser recordings (WebM, MP4/AAC...) to Ogg/Opus and fill
+		// duration/waveform so voice notes play and look native on phones.
+		prepared, err := prepareOutgoingAudio(r.Context(), media, ptt, t.Convert == nil || *t.Convert)
+		if err != nil {
+			s.Respond(w, r, http.StatusUnprocessableEntity, err)
+			return
+		}
+		if prepared.Media != nil {
+			defer prepared.Media.Close()
+			media, mime = prepared.Media, prepared.Mime
+		}
+		if t.Seconds == 0 {
+			t.Seconds = prepared.Seconds
+		}
+		if len(t.Waveform) == 0 {
+			t.Waveform = prepared.Waveform
 		}
 
 		uploaded, err = uploadMedia(r.Context(), client, media, whatsmeow.MediaAudio)
@@ -1784,6 +1803,7 @@ func (s *server) SendVideo() http.HandlerFunc {
 		Id            string
 		JPEGThumbnail []byte
 		MimeType      string
+		Convert       *bool `json:"convert,omitempty"` // default true; false sends the bytes unchanged
 		ContextInfo   waE2E.ContextInfo
 		MentionAll    bool
 		QuotedMessage *waE2E.Message `json:"QuotedMessage,omitempty"`
@@ -1852,6 +1872,22 @@ func (s *server) SendVideo() http.HandlerFunc {
 			return
 		}
 
+		// WebM/MOV/HEVC from browsers and iPhones become MP4 (H.264/AAC).
+		prepared, err := prepareOutgoingVideo(r.Context(), media, t.Convert == nil || *t.Convert)
+		if err != nil {
+			s.Respond(w, r, http.StatusUnprocessableEntity, err)
+			return
+		}
+		if prepared.Media != nil {
+			defer prepared.Media.Close()
+			media, sniffed, t.MimeType = prepared.Media, videoMime, ""
+		}
+		if len(t.JPEGThumbnail) == 0 && prepared.Seconds > 0 {
+			if thumb, err := videoThumbnail(r.Context(), media.Path); err == nil {
+				t.JPEGThumbnail = thumb
+			}
+		}
+
 		uploaded, err = uploadMedia(r.Context(), clientManager.GetWhatsmeowClient(txtid), media, whatsmeow.MediaVideo)
 		if err != nil {
 			s.Respond(w, r, http.StatusInternalServerError, errors.New(fmt.Sprintf("failed to upload file: %v", err)))
@@ -1874,6 +1910,12 @@ func (s *server) SendVideo() http.HandlerFunc {
 			FileLength:    proto.Uint64(uint64(media.Size)),
 			JPEGThumbnail: t.JPEGThumbnail,
 		}}
+		if prepared.Seconds > 0 {
+			msg.VideoMessage.Seconds = proto.Uint32(prepared.Seconds)
+		}
+		if prepared.Width > 0 && prepared.Height > 0 {
+			msg.VideoMessage.Width, msg.VideoMessage.Height = proto.Uint32(prepared.Width), proto.Uint32(prepared.Height)
+		}
 
 		if t.ContextInfo.StanzaID != nil {
 			var qm *waE2E.Message
