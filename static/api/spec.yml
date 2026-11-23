@@ -626,6 +626,7 @@ paths:
         The following _webhook_ endpoints are used to get or set the webhook that will be called whenever a message or event is received. Available event types are:
 
         * Message
+        * SendMessage (sent through the API; payload has "source": "api")
         * ReadReceipt
         * Presence
         * HistorySync
@@ -653,6 +654,7 @@ paths:
         The following _webhook_ endpoints are used to get or set the webhook that will be called whenever a message or event is received. Available event types are:
 
         * Message
+        * SendMessage (sent through the API; payload has "source": "api")
         * ReadReceipt
         * Presence
         * HistorySync
@@ -699,6 +701,7 @@ paths:
         The following _webhook_ endpoints are used to get or set the webhook that will be called whenever a message or event is received. Available event types are:
 
         * Message
+        * SendMessage (sent through the API; payload has "source": "api")
         * ReadReceipt
         * Presence
         * HistorySync

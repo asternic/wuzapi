@@ -267,6 +267,7 @@ curl -s -X POST -H 'Authorization: {{WUZAPI_ADMIN_TOKEN}}' http://localhost:8080
 The following _webhook_ endpoints are used to get or set the webhook that will be called whenever a message or event is received. Available event types are:
 
 * Message
+* SendMessage (message sent through the API, delivered with `source: "api"`)
 * ReadReceipt
 * HistorySync
 * ChatPresence

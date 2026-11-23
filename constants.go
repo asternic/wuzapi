@@ -4,6 +4,7 @@ package main
 var supportedEventTypes = []string{
 	// Messages and Communication
 	"Message",
+	"SendMessage",
 	"UndecryptableMessage",
 	"Receipt",
 	"MediaRetry",

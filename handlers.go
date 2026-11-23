@@ -8212,4 +8212,16 @@ func (s *server) publishSentMessageEvent(token, userID, txtid string, recipient 
 
 	// Publish directly to RabbitMQ (bypassing subscription check for sent messages)
 	go sendToGlobalRabbit(jsonData, token, userID)
+
+	// Deliver the same message to the user's webhook as a SendMessage event.
+	// Opt-in: only users subscribed to SendMessage (or All) receive it, so the
+	// existing Message consumers do not see API sends as received messages.
+	if mycli := clientManager.GetMyClient(userID); mycli != nil {
+		hookmap := map[string]interface{}{
+			"type":   "SendMessage",
+			"event":  messageEvent,
+			"source": "api",
+		}
+		safeGo("sendSendMessageEvent", func() { sendEventWithWebHook(mycli, hookmap, "") })
+	}
 }
