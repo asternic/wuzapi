@@ -626,6 +626,9 @@ paths:
         The following _webhook_ endpoints are used to get or set the webhook that will be called whenever a message or event is received. Available event types are:
 
         * Message
+        * LabelEdit
+        * LabelAssociationChat
+        * LabelAssociationMessage
         * ReadReceipt
         * Presence
         * HistorySync
@@ -653,6 +656,9 @@ paths:
         The following _webhook_ endpoints are used to get or set the webhook that will be called whenever a message or event is received. Available event types are:
 
         * Message
+        * LabelEdit
+        * LabelAssociationChat
+        * LabelAssociationMessage
         * ReadReceipt
         * Presence
         * HistorySync
@@ -699,6 +705,9 @@ paths:
         The following _webhook_ endpoints are used to get or set the webhook that will be called whenever a message or event is received. Available event types are:
 
         * Message
+        * LabelEdit
+        * LabelAssociationChat
+        * LabelAssociationMessage
         * ReadReceipt
         * Presence
         * HistorySync
