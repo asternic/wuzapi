@@ -87,3 +87,16 @@ func TestSetDisconnectedState(t *testing.T) {
 		}
 	})
 }
+
+// SendMessage is the opt-in event for messages sent through the API.
+func TestSendMessageEventIsSupported(t *testing.T) {
+	if !isValidEventType("SendMessage") {
+		t.Fatal("SendMessage must be a supported event type")
+	}
+	if checkIfSubscribedToEvent([]string{"Message"}, "SendMessage", "u") {
+		t.Fatal("Message subscribers must not receive SendMessage")
+	}
+	if !checkIfSubscribedToEvent([]string{"SendMessage"}, "SendMessage", "u") || !checkIfSubscribedToEvent([]string{"All"}, "SendMessage", "u") {
+		t.Fatal("SendMessage and All subscribers must receive SendMessage")
+	}
+}
