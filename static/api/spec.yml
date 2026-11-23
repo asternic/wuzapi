@@ -626,6 +626,17 @@ paths:
         The following _webhook_ endpoints are used to get or set the webhook that will be called whenever a message or event is received. Available event types are:
 
         * Message
+        * Archive
+        * Pin
+        * Mute
+        * Star
+        * DeleteChat
+        * ClearChat
+        * MarkChatAsRead
+        * DeleteForMe
+        * Contact
+        * PushName
+        * BusinessName
         * ReadReceipt
         * Presence
         * HistorySync
@@ -653,6 +664,17 @@ paths:
         The following _webhook_ endpoints are used to get or set the webhook that will be called whenever a message or event is received. Available event types are:
 
         * Message
+        * Archive
+        * Pin
+        * Mute
+        * Star
+        * DeleteChat
+        * ClearChat
+        * MarkChatAsRead
+        * DeleteForMe
+        * Contact
+        * PushName
+        * BusinessName
         * ReadReceipt
         * Presence
         * HistorySync
@@ -699,6 +721,17 @@ paths:
         The following _webhook_ endpoints are used to get or set the webhook that will be called whenever a message or event is received. Available event types are:
 
         * Message
+        * Archive
+        * Pin
+        * Mute
+        * Star
+        * DeleteChat
+        * ClearChat
+        * MarkChatAsRead
+        * DeleteForMe
+        * Contact
+        * PushName
+        * BusinessName
         * ReadReceipt
         * Presence
         * HistorySync

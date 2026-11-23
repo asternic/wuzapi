@@ -71,6 +71,19 @@ var supportedEventTypes = []string{
 	// Facebook/Meta Bridge
 	"FBMessage",
 
+	// Chat state and contacts (app state)
+	"Archive",
+	"Pin",
+	"Mute",
+	"Star",
+	"DeleteChat",
+	"ClearChat",
+	"MarkChatAsRead",
+	"DeleteForMe",
+	"Contact",
+	"PushName",
+	"BusinessName",
+
 	// Special - receives all events
 	"All",
 }
