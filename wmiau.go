@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"reflect"
 	"runtime/debug"
 	"strconv"
 	"strings"
@@ -1699,6 +1700,72 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 		postmap["type"] = "JoinedGroup"
 		dowebhook = 1
 		log.Info().Str("jid", evt.JID.String()).Msg("Joined group")
+	case *events.Archive:
+		if appStateFromFullSync(evt) {
+			break
+		}
+		postmap["type"] = "Archive"
+		dowebhook = 1
+	case *events.Pin:
+		if appStateFromFullSync(evt) {
+			break
+		}
+		postmap["type"] = "Pin"
+		dowebhook = 1
+	case *events.Mute:
+		if appStateFromFullSync(evt) {
+			break
+		}
+		postmap["type"] = "Mute"
+		dowebhook = 1
+	case *events.Star:
+		if appStateFromFullSync(evt) {
+			break
+		}
+		postmap["type"] = "Star"
+		dowebhook = 1
+	case *events.DeleteChat:
+		if appStateFromFullSync(evt) {
+			break
+		}
+		postmap["type"] = "DeleteChat"
+		dowebhook = 1
+	case *events.ClearChat:
+		if appStateFromFullSync(evt) {
+			break
+		}
+		postmap["type"] = "ClearChat"
+		dowebhook = 1
+	case *events.MarkChatAsRead:
+		if appStateFromFullSync(evt) {
+			break
+		}
+		postmap["type"] = "MarkChatAsRead"
+		dowebhook = 1
+	case *events.DeleteForMe:
+		if appStateFromFullSync(evt) {
+			break
+		}
+		postmap["type"] = "DeleteForMe"
+		dowebhook = 1
+	case *events.Contact:
+		if appStateFromFullSync(evt) {
+			break
+		}
+		postmap["type"] = "Contact"
+		dowebhook = 1
+	case *events.PushName:
+		if appStateFromFullSync(evt) {
+			break
+		}
+		postmap["type"] = "PushName"
+		dowebhook = 1
+	case *events.BusinessName:
+		if appStateFromFullSync(evt) {
+			break
+		}
+		postmap["type"] = "BusinessName"
+		dowebhook = 1
 	case *events.Picture:
 		postmap["type"] = "Picture"
 		dowebhook = 1
@@ -1803,4 +1870,17 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 	if dowebhook == 1 {
 		sendEventWithWebHook(mycli, postmap, path)
 	}
+}
+
+// appStateFromFullSync reports whether an app state event comes from a full
+// sync (a snapshot replayed after pairing or resync) rather than from a change
+// made on a device. Snapshots are not delivered to webhooks: a single resync
+// would otherwise produce one event per label, pinned chat, or contact.
+func appStateFromFullSync(evt interface{}) bool {
+	v := reflect.Indirect(reflect.ValueOf(evt))
+	if v.Kind() != reflect.Struct {
+		return false
+	}
+	f := v.FieldByName("FromFullSync")
+	return f.IsValid() && f.Kind() == reflect.Bool && f.Bool()
 }

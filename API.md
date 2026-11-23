@@ -267,6 +267,17 @@ curl -s -X POST -H 'Authorization: {{WUZAPI_ADMIN_TOKEN}}' http://localhost:8080
 The following _webhook_ endpoints are used to get or set the webhook that will be called whenever a message or event is received. Available event types are:
 
 * Message
+* Archive
+* Pin
+* Mute
+* Star
+* DeleteChat
+* ClearChat
+* MarkChatAsRead
+* DeleteForMe
+* Contact
+* PushName
+* BusinessName
 * ReadReceipt
 * HistorySync
 * ChatPresence
@@ -469,6 +480,17 @@ You can subscribe to different types of messages so they are POSTED to your conf
 Available message types to subscribe to are: 
 
 * Message
+* Archive
+* Pin
+* Mute
+* Star
+* DeleteChat
+* ClearChat
+* MarkChatAsRead
+* DeleteForMe
+* Contact
+* PushName
+* BusinessName
 * ReadReceipt
 * HistorySync
 * ChatPresence
