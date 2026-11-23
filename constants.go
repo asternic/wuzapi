@@ -71,6 +71,11 @@ var supportedEventTypes = []string{
 	// Facebook/Meta Bridge
 	"FBMessage",
 
+	// Labels (app state)
+	"LabelEdit",
+	"LabelAssociationChat",
+	"LabelAssociationMessage",
+
 	// Special - receives all events
 	"All",
 }
