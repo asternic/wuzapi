@@ -41,6 +41,17 @@ func specialHistoryCases() []struct {
 		{"empty-response", "interactive_response", "", &waE2E.Message{InteractiveResponseMessage: &waE2E.InteractiveResponseMessage{}}},
 		{"order", "order", "Order", &waE2E.Message{OrderMessage: &waE2E.OrderMessage{OrderTitle: proto.String("Order")}}},
 		{"empty-order", "order", "", &waE2E.Message{OrderMessage: &waE2E.OrderMessage{}}},
+		{"template", "template", "Your bill is ready", &waE2E.Message{TemplateMessage: &waE2E.TemplateMessage{HydratedTemplate: &waE2E.TemplateMessage_HydratedFourRowTemplate{HydratedContentText: proto.String("Your bill is ready")}}}},
+		{"empty-template", "template", ":template:", &waE2E.Message{TemplateMessage: &waE2E.TemplateMessage{}}},
+		{"list", "list", "Pick one", &waE2E.Message{ListMessage: &waE2E.ListMessage{Title: proto.String("Menu"), Description: proto.String("Pick one")}}},
+		{"list-title", "list", "Menu", &waE2E.Message{ListMessage: &waE2E.ListMessage{Title: proto.String("Menu")}}},
+		{"empty-list", "list", ":list:", &waE2E.Message{ListMessage: &waE2E.ListMessage{}}},
+		{"buttons", "buttons", "Choose", &waE2E.Message{ButtonsMessage: &waE2E.ButtonsMessage{ContentText: proto.String("Choose")}}},
+		{"empty-buttons", "buttons", ":buttons:", &waE2E.Message{ButtonsMessage: &waE2E.ButtonsMessage{}}},
+		{"template-reply", "template_button_reply", "Yes", &waE2E.Message{TemplateButtonReplyMessage: &waE2E.TemplateButtonReplyMessage{SelectedID: proto.String("yes-id"), SelectedDisplayText: proto.String("Yes")}}},
+		{"template-reply-id", "template_button_reply", "yes-id", &waE2E.Message{TemplateButtonReplyMessage: &waE2E.TemplateButtonReplyMessage{SelectedID: proto.String("yes-id")}}},
+		{"buttons-response", "buttons_response", "btn-1", &waE2E.Message{ButtonsResponseMessage: &waE2E.ButtonsResponseMessage{SelectedButtonID: proto.String("btn-1")}}},
+		{"list-response", "list_response", "row-1", &waE2E.Message{ListResponseMessage: &waE2E.ListResponseMessage{SingleSelectReply: &waE2E.ListResponseMessage_SingleSelectReply{SelectedRowID: proto.String("row-1")}}}},
 	}
 }
 
@@ -57,6 +68,21 @@ func TestHistorySpecialMessage(t *testing.T) {
 		if kind, text := historySpecialMessage(msg); kind != "" || text != "" {
 			t.Fatalf("non-special message classified as %q, %q", kind, text)
 		}
+	}
+}
+
+// A template carries its content in one of several formats; all of them must yield the body text.
+func TestHistorySpecialTemplateFormats(t *testing.T) {
+	cases := map[string]*waE2E.TemplateMessage{
+		"hydrated-four-row": {Format: &waE2E.TemplateMessage_HydratedFourRowTemplate_{HydratedFourRowTemplate: &waE2E.TemplateMessage_HydratedFourRowTemplate{HydratedContentText: proto.String("Body")}}},
+		"interactive":       {Format: &waE2E.TemplateMessage_InteractiveMessageTemplate{InteractiveMessageTemplate: &waE2E.InteractiveMessage{Body: &waE2E.InteractiveMessage_Body{Text: proto.String("Body")}}}},
+	}
+	for name, tpl := range cases {
+		t.Run(name, func(t *testing.T) {
+			if kind, text := historySpecialMessage(&waE2E.Message{TemplateMessage: tpl}); kind != "template" || text != "Body" {
+				t.Fatalf("got %q, %q; want template, Body", kind, text)
+			}
+		})
 	}
 }
 

@@ -58,8 +58,51 @@ func historySpecialMessage(msg *waE2E.Message) (string, string) {
 		return "interactive_response", msg.GetInteractiveResponseMessage().GetBody().GetText()
 	case msg.GetOrderMessage() != nil:
 		return "order", msg.GetOrderMessage().GetOrderTitle()
+	case msg.GetTemplateMessage() != nil:
+		body := templateMessageText(msg.GetTemplateMessage())
+		if body == "" {
+			body = ":template:"
+		}
+		return "template", body
+	case msg.GetListMessage() != nil:
+		body := msg.GetListMessage().GetDescription()
+		if body == "" {
+			body = msg.GetListMessage().GetTitle()
+		}
+		if body == "" {
+			body = ":list:"
+		}
+		return "list", body
+	case msg.GetButtonsMessage() != nil:
+		body := msg.GetButtonsMessage().GetContentText()
+		if body == "" {
+			body = ":buttons:"
+		}
+		return "buttons", body
+	case msg.GetTemplateButtonReplyMessage() != nil:
+		reply := msg.GetTemplateButtonReplyMessage()
+		if text := reply.GetSelectedDisplayText(); text != "" {
+			return "template_button_reply", text
+		}
+		return "template_button_reply", reply.GetSelectedID()
+	case msg.GetButtonsResponseMessage() != nil:
+		return "buttons_response", msg.GetButtonsResponseMessage().GetSelectedButtonID()
+	case msg.GetListResponseMessage() != nil:
+		return "list_response", msg.GetListResponseMessage().GetSingleSelectReply().GetSelectedRowID()
 	}
 	return "", ""
+}
+
+// templateMessageText returns the body text of a business template message,
+// whichever of its formats carries the content.
+func templateMessageText(tpl *waE2E.TemplateMessage) string {
+	if text := tpl.GetHydratedTemplate().GetHydratedContentText(); text != "" {
+		return text
+	}
+	if text := tpl.GetHydratedFourRowTemplate().GetHydratedContentText(); text != "" {
+		return text
+	}
+	return tpl.GetInteractiveMessageTemplate().GetBody().GetText()
 }
 
 // db field declaration as *sqlx.DB
